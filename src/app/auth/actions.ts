@@ -71,8 +71,6 @@ export async function signIn(values: z.infer<typeof signInSchema>) {
                     if (Array.isArray(adminEmails) && adminEmails.includes(user.email!)) {
                         role = 'admin';
                     }
-                } else {
-                    console.log("Admin config document ('admin/user') not found. No users will be granted admin access.");
                 }
             } catch (err) {
                 console.error("Firestore admin check failed:", err);
