@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { signOut } from '@/app/auth/actions';
+import { Badge } from './ui/badge';
 
 export function UserNav({ session }: { session: any }) {
 
@@ -36,11 +37,19 @@ export function UserNav({ session }: { session: any }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">Signed In As</p>
-            <p className="text-xs leading-none text-muted-foreground truncate">
+          <div className="flex flex-col space-y-2">
+            <p className="text-xs leading-none text-muted-foreground">
+              Signed in as
+            </p>
+            <p className="text-sm font-medium leading-none truncate">
               {session.email}
             </p>
+             <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Role:</span>
+              <Badge variant={session.role === 'admin' ? 'default' : 'secondary'} className="capitalize">
+                {session.role}
+              </Badge>
+            </div>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
