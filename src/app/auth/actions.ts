@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 import { auth } from '@/lib/firebase/config';
-import { adminAuth } from '@/lib/firebase/server';
+import { adminDb } from '@/lib/firebase/server';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { createSession, deleteSession } from '@/lib/session';
 import { redirect } from 'next/navigation';
@@ -31,9 +31,8 @@ export async function signUp(values: z.infer<typeof signUpSchema>) {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // Here you can set a default role for new users if needed.
-    // For now, we'll just create a session.
-    await createSession(user.uid);
+    // Create session with default 'user' role. Pass email to session.
+    await createSession(user.uid, user.email!, 'user');
     
   } catch (error: any) {
     console.error('SIGN UP ERROR:', error);
@@ -58,21 +57,30 @@ export async function signIn(values: z.infer<typeof signInSchema>) {
     try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
-        let role = 'user';
+        let role = 'user'; // Default role
 
-        // Check for admin role only if adminAuth is initialized
-        if (adminAuth) {
-          try {
-            const decodedToken = await adminAuth.verifyIdToken(await user.getIdToken());
-            role = decodedToken.role || 'user';
-          } catch (verifyError) {
-             // This can happen if the token is from a different project, or if custom claims are not set.
-             // We can safely ignore it and default to 'user' role.
-             console.warn("Could not verify user token with admin SDK, defaulting to 'user' role.");
-          }
+        // Check if user is an admin from Firestore
+        if (adminDb) {
+            try {
+                // Check a document in the 'admins' collection.
+                // This document is expected to have an array field 'emails'.
+                const adminRef = adminDb.collection('admins').doc('users');
+                const adminDoc = await adminRef.get();
+                if (adminDoc.exists) {
+                    const adminEmails = adminDoc.data()?.emails || [];
+                    if (Array.isArray(adminEmails) && adminEmails.includes(user.email!)) {
+                        role = 'admin';
+                    }
+                } else {
+                    console.log("Admin config document ('admins/users') not found. No users will be granted admin access.");
+                }
+            } catch (err) {
+                console.error("Firestore admin check failed:", err);
+                // Fail safe to user role if there's an error.
+            }
         }
         
-        await createSession(user.uid, role);
+        await createSession(user.uid, user.email!, role);
 
     } catch (error: any) {
         console.error('SIGN IN ERROR:', error);

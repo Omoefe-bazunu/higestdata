@@ -29,7 +29,7 @@ export function UserNav({ session }: { session: any }) {
           <Avatar className="h-8 w-8">
             <AvatarImage src="/avatars/01.png" alt="User avatar" />
             <AvatarFallback>
-              {session.uid?.charAt(0).toUpperCase() ?? <User />}
+              {session.email?.charAt(0).toUpperCase() ?? <User />}
             </AvatarFallback>
           </Avatar>
         </Button>
@@ -37,9 +37,9 @@ export function UserNav({ session }: { session: any }) {
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">Signed In</p>
+            <p className="text-sm font-medium leading-none">Signed In As</p>
             <p className="text-xs leading-none text-muted-foreground truncate">
-              {session.uid}
+              {session.email}
             </p>
           </div>
         </DropdownMenuLabel>
