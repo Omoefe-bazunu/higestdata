@@ -6,12 +6,14 @@ import {
   Banknote,
   Bitcoin,
   ChevronDown,
-  CreditCard,
-  HeartPulse,
+  GraduationCap,
   LayoutDashboard,
+  Phone,
+  Receipt,
   Repeat,
   ShieldCheck,
   Smartphone,
+  Wifi,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -41,7 +43,7 @@ export default function AppSidebar() {
   const pathname = usePathname();
 
   const isTradingActive = ['/buy-crypto', '/sell-crypto', '/buy-gift-card', '/sell-gift-card'].includes(pathname);
-  const isServicesActive = ['/pay-bills', '/airtime-to-cash'].includes(pathname);
+  const isServicesActive = ['/pay-bills', '/buy-airtime', '/buy-data', '/education', '/airtime-to-cash'].includes(pathname);
   
   return (
     <div className="hidden border-r bg-card md:block">
@@ -87,8 +89,11 @@ export default function AppSidebar() {
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent className="ml-7 flex flex-col gap-1">
-                 <NavLink href="/pay-bills" icon={<div className="h-4 w-4" />}>Pay Bills</NavLink>
-                 <NavLink href="/airtime-to-cash" icon={<div className="h-4 w-4" />}>Airtime to Cash</NavLink>
+                 <NavLink href="/pay-bills" icon={<Receipt className="h-4 w-4" />}>Pay Bills</NavLink>
+                 <NavLink href="/buy-airtime" icon={<Phone className="h-4 w-4" />}>Buy Airtime</NavLink>
+                 <NavLink href="/buy-data" icon={<Wifi className="h-4 w-4" />}>Buy Data</NavLink>
+                 <NavLink href="/education" icon={<GraduationCap className="h-4 w-4" />}>Education</NavLink>
+                 <NavLink href="/airtime-to-cash" icon={<Repeat className="h-4 w-4" />}>Airtime to Cash</NavLink>
               </CollapsibleContent>
             </Collapsible>
 
