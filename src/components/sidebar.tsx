@@ -13,6 +13,7 @@ import {
   Repeat,
   ShieldCheck,
   Smartphone,
+  UserCog,
   Wifi,
 } from "lucide-react";
 
@@ -39,7 +40,7 @@ const NavLink = ({ href, children, icon }: { href: string, children: React.React
 };
 
 
-export default function AppSidebar() {
+export default function AppSidebar({ session }: { session: any }) {
   const pathname = usePathname();
 
   const isTradingActive = ['/buy-crypto', '/sell-crypto', '/buy-gift-card', '/sell-gift-card'].includes(pathname);
@@ -54,7 +55,7 @@ export default function AppSidebar() {
             <span className="">FinTest</span>
           </Link>
         </div>
-        <div className="flex-1">
+        <div className="flex-1 overflow-y-auto">
           <nav className="grid items-start px-2 text-sm font-medium lg:px-4">
             <NavLink href="/" icon={<LayoutDashboard className="h-4 w-4" />}>
               Dashboard
@@ -102,6 +103,13 @@ export default function AppSidebar() {
             </NavLink>
           </nav>
         </div>
+        {session?.role === 'admin' && (
+          <div className="mt-auto p-4">
+             <NavLink href="/admin/dashboard" icon={<UserCog className="h-4 w-4" />}>
+                Admin Panel
+              </NavLink>
+          </div>
+        )}
       </div>
     </div>
   );

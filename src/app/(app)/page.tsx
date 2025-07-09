@@ -37,13 +37,13 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>KYC Status</CardTitle>
-            <CardDescription>Your identity verification status.</CardDescription>
+            <CardTitle>Fraud Protection</CardTitle>
+            <CardDescription>Your account security status.</CardDescription>
           </CardHeader>
           <CardContent>
              <div className="flex items-center gap-2">
-                <Badge variant="default" className="bg-accent text-accent-foreground">Verified</Badge>
-                <p className="text-sm font-medium">Your account is fully verified.</p>
+                <Badge variant="default" className="bg-accent text-accent-foreground">Active</Badge>
+                <p className="text-sm font-medium">AI monitoring is enabled.</p>
             </div>
           </CardContent>
         </Card>
