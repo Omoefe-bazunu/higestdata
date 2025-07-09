@@ -71,12 +71,12 @@ export const mockTransactionHistory = `- $50.00 to "Netflix" (2 days ago)
 - $75.00 from "John Doe" (12 days ago)`;
 
 export const giftCardBrands = [
-  { value: 'amazon', label: 'Amazon', image: 'https://placehold.co/100x60', data-ai-hint: 'amazon logo' },
-  { value: 'steam', label: 'Steam', image: 'https://placehold.co/100x60', data-ai-hint: 'steam logo' },
-  { value: 'google-play', label: 'Google Play', image: 'https://placehold.co/100x60', data-ai-hint: 'google play' },
-  { value: 'apple', label: 'Apple/iTunes', image: 'https://placehold.co/100x60', data-ai-hint: 'apple logo' },
-  { value: 'vanilla', label: 'Vanilla Visa', image: 'https://placehold.co/100x60', data-ai-hint: 'vanilla visa' },
-  { value: 'razer-gold', label: 'Razer Gold', image: 'https://placehold.co/100x60', data-ai-hint: 'razer gold' },
+  { value: 'amazon', label: 'Amazon', image: 'https://placehold.co/100x60', 'data-ai-hint': 'amazon logo' },
+  { value: 'steam', label: 'Steam', image: 'https://placehold.co/100x60', 'data-ai-hint': 'steam logo' },
+  { value: 'google-play', label: 'Google Play', image: 'https://placehold.co/100x60', 'data-ai-hint': 'google play' },
+  { value: 'apple', label: 'Apple/iTunes', image: 'https://placehold.co/100x60', 'data-ai-hint': 'apple logo' },
+  { value: 'vanilla', label: 'Vanilla Visa', image: 'https://placehold.co/100x60', 'data-ai-hint': 'vanilla visa' },
+  { value: 'razer-gold', label: 'Razer Gold', image: 'https://placehold.co/100x60', 'data-ai-hint': 'razer gold' },
 ];
 
 export const cryptoCurrencies = [
