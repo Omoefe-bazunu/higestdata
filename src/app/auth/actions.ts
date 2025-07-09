@@ -18,6 +18,42 @@ const signInSchema = z.object({
     password: z.string().min(1, 'Password is required'),
 });
 
+/**
+ * Checks if a user is an admin by verifying their email against a list in Firestore.
+ * @param email The user's email to check.
+ * @returns A promise that resolves to true if the user is an admin, false otherwise.
+ */
+async function isAdmin(email: string): Promise<boolean> {
+  // If the admin database isn't configured, no one can be an admin.
+  if (!adminDb) {
+    return false;
+  }
+
+  try {
+    // Your logic: Look in 'admin' collection for a document with ID 'user'.
+    const adminDocRef = adminDb.collection('admin').doc('user');
+    const adminDoc = await adminDocRef.get();
+
+    if (!adminDoc.exists) {
+      console.warn("Admin definition document 'admin/user' not found in Firestore.");
+      return false;
+    }
+
+    // Your logic: Check for an array field named 'email'.
+    const adminData = adminDoc.data();
+    const adminEmails = adminData?.email || [];
+    
+    // Your logic: Check if the user's email is in that array.
+    return Array.isArray(adminEmails) && adminEmails.includes(email);
+
+  } catch (error) {
+    console.error("Error while checking admin status:", error);
+    // For security, if anything goes wrong, default to not being an admin.
+    return false;
+  }
+}
+
+
 export async function signUp(values: z.infer<typeof signUpSchema>) {
   const validatedFields = signUpSchema.safeParse(values);
 
@@ -31,7 +67,7 @@ export async function signUp(values: z.infer<typeof signUpSchema>) {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // Create session with default 'user' role. Pass email to session.
+    // Create session with default 'user' role.
     await createSession(user.uid, user.email!, 'user');
     
   } catch (error: any) {
@@ -57,26 +93,10 @@ export async function signIn(values: z.infer<typeof signInSchema>) {
     try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
-        let role = 'user'; // Default role
-
-        // Check if user is an admin from Firestore
-        if (adminDb) {
-            try {
-                // Check a document in the 'admin' collection with ID 'user'.
-                // This document is expected to have an array field 'email'.
-                const adminRef = adminDb.collection('admin').doc('user');
-                const adminDoc = await adminRef.get();
-                if (adminDoc.exists) {
-                    const adminEmails = adminDoc.data()?.email || [];
-                    if (Array.isArray(adminEmails) && adminEmails.includes(user.email!)) {
-                        role = 'admin';
-                    }
-                }
-            } catch (err) {
-                console.error("Firestore admin check failed:", err);
-                // Fail safe to user role if there's an error.
-            }
-        }
+        
+        // Use our simple, clear function to check if the user is an admin.
+        const userIsAdmin = await isAdmin(user.email!);
+        const role = userIsAdmin ? 'admin' : 'user';
         
         await createSession(user.uid, user.email!, role);
 
