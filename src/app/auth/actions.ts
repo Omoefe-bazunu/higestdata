@@ -62,17 +62,17 @@ export async function signIn(values: z.infer<typeof signInSchema>) {
         // Check if user is an admin from Firestore
         if (adminDb) {
             try {
-                // Check a document in the 'admins' collection.
-                // This document is expected to have an array field 'emails'.
-                const adminRef = adminDb.collection('admins').doc('users');
+                // Check a document in the 'admin' collection with ID 'user'.
+                // This document is expected to have an array field 'email'.
+                const adminRef = adminDb.collection('admin').doc('user');
                 const adminDoc = await adminRef.get();
                 if (adminDoc.exists) {
-                    const adminEmails = adminDoc.data()?.emails || [];
+                    const adminEmails = adminDoc.data()?.email || [];
                     if (Array.isArray(adminEmails) && adminEmails.includes(user.email!)) {
                         role = 'admin';
                     }
                 } else {
-                    console.log("Admin config document ('admins/users') not found. No users will be granted admin access.");
+                    console.log("Admin config document ('admin/user') not found. No users will be granted admin access.");
                 }
             } catch (err) {
                 console.error("Firestore admin check failed:", err);
