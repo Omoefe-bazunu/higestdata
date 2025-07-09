@@ -58,13 +58,21 @@ export async function signIn(values: z.infer<typeof signInSchema>) {
     try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
-        
-        // Check for admin role
-        const token = await adminAuth.createCustomToken(user.uid);
-        const decodedToken = await adminAuth.verifyIdToken(await user.getIdToken());
-        const role = decodedToken.role || 'user';
+        let role = 'user';
 
-        await createSession(user.uid, role as string);
+        // Check for admin role only if adminAuth is initialized
+        if (adminAuth) {
+          try {
+            const decodedToken = await adminAuth.verifyIdToken(await user.getIdToken());
+            role = decodedToken.role || 'user';
+          } catch (verifyError) {
+             // This can happen if the token is from a different project, or if custom claims are not set.
+             // We can safely ignore it and default to 'user' role.
+             console.warn("Could not verify user token with admin SDK, defaulting to 'user' role.");
+          }
+        }
+        
+        await createSession(user.uid, role);
 
     } catch (error: any) {
         console.error('SIGN IN ERROR:', error);
