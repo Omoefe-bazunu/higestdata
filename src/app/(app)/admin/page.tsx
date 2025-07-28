@@ -23,19 +23,19 @@ export default function AdminPage() {
           <TabsTrigger value="gift-cards">Gift Card Rates</TabsTrigger>
           <TabsTrigger value="airtime-data">Airtime/Data Rates</TabsTrigger>
         </TabsList>
-        <TabsContent value="dashboard" className="mt-6">
+        <TabsContent value="dashboard" className="mt-8">
           <AdminDashboardTab />
         </TabsContent>
-        <TabsContent value="transactions" className="mt-6">
+        <TabsContent value="transactions" className="mt-8">
           <AllTransactionsTab />
         </TabsContent>
-        <TabsContent value="crypto" className="mt-6">
+        <TabsContent value="crypto" className="mt-8">
           <CryptoSettingsTab />
         </TabsContent>
-        <TabsContent value="gift-cards" className="mt-6">
+        <TabsContent value="gift-cards" className="mt-8">
           <GiftCardRatesTab />
         </TabsContent>
-        <TabsContent value="airtime-data" className="mt-6">
+        <TabsContent value="airtime-data" className="mt-8">
           <AirtimeDataRatesTab />
         </TabsContent>
       </Tabs>
