@@ -23,9 +23,9 @@ function Logo() {
        <Image
   src="https://firebasestorage.googleapis.com/v0/b/higestdata.firebasestorage.app/o/HIGHEST%20ICON%20COLORED.png?alt=media&token=4946037d-3ef0-4f52-a671-88a6e732ac1e"
   alt="Website Logo"
-  width={48} // or your exact desired width in pixels
-  height={48} // or your exact desired height in pixels
-  priority // ensures it's loaded early
+  width={32}
+  height={32}
+  priority
   className="object-contain"
 />
       <span className="text-xl font-bold font-headline text-primary">Highest Data</span>
