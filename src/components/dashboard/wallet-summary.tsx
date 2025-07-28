@@ -9,7 +9,7 @@ export default async function WalletSummary() {
   return (
     <Card className="shadow-lg">
       <CardHeader>
-        <CardTitle className="text-muted-foreground font-medium">Wallet Balance</CardTitle>
+        <CardTitle className="text-muted-foreground text center font-medium">Wallet Balance</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="flex flex-col sm:items-center sm:justify-between gap-4">
