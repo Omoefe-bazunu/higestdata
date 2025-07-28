@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -59,6 +60,11 @@ export default function CryptoSettingsTab() {
             description: "Wallet address has been copied.",
         });
     }
+    
+  const handleProfitMarginChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseFloat(e.target.value);
+    setProfitMargin(isNaN(value) ? 0 : value);
+  };
 
   return (
     <div className="space-y-6">
@@ -101,7 +107,7 @@ export default function CryptoSettingsTab() {
                   id="profit-margin"
                   type="number"
                   value={profitMargin}
-                  onChange={(e) => setProfitMargin(parseFloat(e.target.value))}
+                  onChange={handleProfitMarginChange}
                   step="0.1"
                 />
               </div>
