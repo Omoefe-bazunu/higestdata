@@ -16,7 +16,7 @@ export default function AdminPage() {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full">
-        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 md:grid-cols-5">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="transactions">All Transactions</TabsTrigger>
           <TabsTrigger value="crypto">Crypto Rates</TabsTrigger>
