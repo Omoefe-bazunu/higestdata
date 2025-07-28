@@ -2,6 +2,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +18,12 @@ const ADMIN_WALLETS = {
     ETH: '0x1234567890123456789012345678901234567890',
     USDT: '0xabcdef1234567890abcdef1234567890abcdef',
 };
+
+const CRYPTO_OPTIONS = [
+    { value: 'BTC', label: 'Bitcoin (BTC)', icon: 'https://cryptoicons.org/api/color/btc/200' },
+    { value: 'ETH', label: 'Ethereum (ETH)', icon: 'https://cryptoicons.org/api/color/eth/200' },
+    { value: 'USDT', label: 'Tether (USDT)', icon: 'https://cryptoicons.org/api/color/usdt/200' },
+]
 
 
 function CryptoTradeForm({ type }: { type: 'Buy' | 'Sell' }) {
@@ -35,18 +42,30 @@ function CryptoTradeForm({ type }: { type: 'Buy' | 'Sell' }) {
         });
     }
 
+    const selectedCrypto = CRYPTO_OPTIONS.find(c => c.value === crypto);
+
     return (
         <form className="space-y-6">
             <div className="space-y-2">
                 <Label htmlFor="crypto">Cryptocurrency</Label>
                 <Select name="crypto" value={crypto} onValueChange={setCrypto}>
                     <SelectTrigger id="crypto">
-                        <SelectValue placeholder="Select Crypto" />
+                         <SelectValue>
+                            <div className="flex items-center gap-2">
+                                {selectedCrypto && <Image src={selectedCrypto.icon} alt={selectedCrypto.label} width={20} height={20} className="rounded-full" data-ai-hint="crypto currency" />}
+                                <span>{selectedCrypto ? selectedCrypto.label : 'Select Crypto'}</span>
+                            </div>
+                        </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="BTC">Bitcoin (BTC)</SelectItem>
-                        <SelectItem value="ETH">Ethereum (ETH)</SelectItem>
-                        <SelectItem value="USDT">Tether (USDT)</SelectItem>
+                        {CRYPTO_OPTIONS.map(option => (
+                             <SelectItem key={option.value} value={option.value}>
+                                <div className="flex items-center gap-2">
+                                    <Image src={option.icon} alt={option.label} width={20} height={20} className="rounded-full" data-ai-hint="crypto currency" />
+                                    <span>{option.label}</span>
+                                </div>
+                            </SelectItem>
+                        ))}
                     </SelectContent>
                 </Select>
             </div>
@@ -105,10 +124,6 @@ function CryptoTradeForm({ type }: { type: 'Buy' | 'Sell' }) {
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Current Rate</span>
                   <span className="font-semibold text-primary">1 {crypto} ≈ ${rate.toLocaleString()}</span>
-                </div>
-                 <div className="flex justify-between items-center text-sm mt-2">
-                  <span className="text-muted-foreground">Transaction Fee</span>
-                  <span className="font-semibold">0.5%</span>
                 </div>
               </CardContent>
             </Card>

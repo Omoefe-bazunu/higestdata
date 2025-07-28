@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useFormStatus } from 'react-dom';
@@ -8,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { CheckCircle, AlertTriangle, Loader } from 'lucide-react';
-import { useEffect, useRef, useActionState } from 'react';
+import { useEffect, useRef, useState, useActionState } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import Image from 'next/image';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -21,11 +23,22 @@ function SubmitButton() {
   );
 }
 
+const CARD_OPTIONS = [
+  { value: 'amazon', label: 'Amazon', icon: 'https://logo.clearbit.com/amazon.com' },
+  { value: 'steam', label: 'Steam', icon: 'https://logo.clearbit.com/steamgames.com' },
+  { value: 'itunes', label: 'iTunes', icon: 'https://logo.clearbit.com/apple.com' },
+  { value: 'google-play', label: 'Google Play', icon: 'https://logo.clearbit.com/google.com' },
+  { value: 'other', label: 'Other', icon: '' },
+];
+
 export default function FraudCheckForm() {
   const initialState: FraudCheckState = {};
   const [state, dispatch] = useActionState(checkGiftCardFraud, initialState);
   const formRef = useRef<HTMLFormElement>(null);
   const { toast } = useToast();
+  const [selectedCard, setSelectedCard] = useState<string | undefined>(undefined);
+
+  const currentCard = CARD_OPTIONS.find(c => c.value === selectedCard);
 
   useEffect(() => {
     if (state.message && !state.errors) {
@@ -36,6 +49,7 @@ export default function FraudCheckForm() {
         });
         if (!state.isFraudulent) {
           formRef.current?.reset();
+          setSelectedCard(undefined);
         }
     }
   }, [state, toast]);
@@ -44,16 +58,28 @@ export default function FraudCheckForm() {
     <form ref={formRef} action={dispatch} className="space-y-6">
       <div className="space-y-2">
         <Label htmlFor="cardType">Card Type</Label>
-        <Select name="cardType">
+        <Select name="cardType" value={selectedCard} onValueChange={setSelectedCard}>
           <SelectTrigger id="cardType">
-            <SelectValue placeholder="Select card type" />
+            <SelectValue placeholder="Select card type">
+                {currentCard && currentCard.icon ? (
+                    <div className="flex items-center gap-2">
+                        <Image src={currentCard.icon} alt={currentCard.label} width={20} height={20} data-ai-hint="gift card" />
+                        <span>{currentCard.label}</span>
+                    </div>
+                ) : (
+                    currentCard?.label || "Select card type"
+                )}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="amazon">Amazon</SelectItem>
-            <SelectItem value="steam">Steam</SelectItem>
-            <SelectItem value="itunes">iTunes</SelectItem>
-            <SelectItem value="google-play">Google Play</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
+            {CARD_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                    <div className="flex items-center gap-2">
+                       {option.icon && <Image src={option.icon} alt={option.label} width={20} height={20} data-ai-hint="gift card" />}
+                       <span>{option.label}</span>
+                    </div>
+                </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         {state.errors?.cardType && <p className="text-sm text-destructive">{state.errors.cardType[0]}</p>}
