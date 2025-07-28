@@ -4,6 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Image from 'next/image';
+import { CheckCircle } from 'lucide-react';
 
 function PurchaseForm({ type }: { type: 'Airtime' | 'Data' }) {
     return (
@@ -57,42 +59,69 @@ function PurchaseForm({ type }: { type: 'Airtime' | 'Data' }) {
 
 export default function BuyAirtimePage() {
     return (
-        <div className="space-y-8 max-w-md mx-auto">
+        <div className="space-y-8">
             <div>
                 <h1 className="text-3xl font-bold font-headline">Buy Airtime & Data</h1>
                 <p className="text-muted-foreground">
-                    Instantly top up any phone number. It's fast and easy.
+                    Instantly top up any phone number. It's fast, easy, and reliable.
                 </p>
             </div>
             
-            <Tabs defaultValue="airtime" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="airtime">Airtime</TabsTrigger>
-                    <TabsTrigger value="data">Data</TabsTrigger>
-                </TabsList>
-                <TabsContent value="airtime">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Buy Airtime</CardTitle>
-                            <CardDescription>Enter details to top up airtime.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                           <PurchaseForm type="Airtime" />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-                <TabsContent value="data">
-                    <Card>
-                         <CardHeader>
-                            <CardTitle>Buy Data</CardTitle>
-                            <CardDescription>Choose a data plan that suits you.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                           <PurchaseForm type="Data" />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
+            <Card className="overflow-hidden">
+                <div className="grid md:grid-cols-2">
+                    <div className="p-6 md:p-8">
+                        <Tabs defaultValue="airtime" className="w-full">
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="airtime">Airtime</TabsTrigger>
+                                <TabsTrigger value="data">Data</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="airtime">
+                                <CardHeader className="px-0">
+                                    <CardTitle>Buy Airtime</CardTitle>
+                                    <CardDescription>Enter details to top up airtime.</CardDescription>
+                                </CardHeader>
+                                <PurchaseForm type="Airtime" />
+                            </TabsContent>
+                            <TabsContent value="data">
+                                 <CardHeader className="px-0">
+                                    <CardTitle>Buy Data</CardTitle>
+                                    <CardDescription>Choose a data plan that suits you.</CardDescription>
+                                </CardHeader>
+                                <PurchaseForm type="Data" />
+                            </TabsContent>
+                        </Tabs>
+                    </div>
+                     <div className="bg-muted/50 p-8 md:p-12 flex flex-col justify-center">
+                        <div className="relative aspect-video mb-8 rounded-lg overflow-hidden">
+                           <Image 
+                                src="https://placehold.co/600x400.png" 
+                                alt="Mobile top-up illustration" 
+                                layout="fill" 
+                                objectFit="cover"
+                                data-ai-hint="mobile payment"
+                            />
+                        </div>
+                        <h3 className="text-xl font-semibold mb-4 text-secondary-foreground">Seamlessly Connected</h3>
+                        <p className="text-muted-foreground mb-4">
+                            Stay online and in touch. Our service is available 24/7, so you can recharge anytime, anywhere.
+                        </p>
+                        <ul className="space-y-2 text-sm">
+                            <li className="flex items-center gap-2">
+                                <CheckCircle className="h-4 w-4 text-primary" />
+                                <span>Instant delivery on all networks</span>
+                            </li>
+                             <li className="flex items-center gap-2">
+                                <CheckCircle className="h-4 w-4 text-primary" />
+                                <span>Secure payments from your wallet</span>
+                            </li>
+                             <li className="flex items-center gap-2">
+                                <CheckCircle className="h-4 w-4 text-primary" />
+                                <span>Competitive rates and data plans</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </Card>
         </div>
     );
 }
