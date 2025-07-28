@@ -1,8 +1,9 @@
+
 'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Repeat, Gift, ShieldCheck, CreditCard, RadioTower, LogOut, Settings } from 'lucide-react';
+import { Home, Repeat, Gift, ShieldCheck, CreditCard, RadioTower, LogOut, Settings, Bitcoin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -12,6 +13,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home },
   { href: '/transactions', label: 'Transactions', icon: Repeat },
   { href: '/gift-cards', label: 'Gift Cards', icon: Gift },
+  { href: '/crypto', label: 'Crypto Trade', icon: Bitcoin },
   { href: '/buy-airtime', label: 'Airtime & Data', icon: RadioTower },
   { href: '/admin', label: 'Admin Panel', icon: ShieldCheck, admin: true },
 ];

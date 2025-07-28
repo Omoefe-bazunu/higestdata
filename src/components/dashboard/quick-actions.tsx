@@ -1,12 +1,13 @@
+
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { RadioTower, Gift, MessageSquare, LifeBuoy } from 'lucide-react';
+import { RadioTower, Gift, Bitcoin, LifeBuoy } from 'lucide-react';
 
 const actions = [
   { href: '/buy-airtime', label: 'Buy Airtime/Data', icon: RadioTower, variant: 'default' as const },
   { href: '/gift-cards', label: 'Trade Gift Cards', icon: Gift, variant: 'secondary' as const },
-  { href: '#', label: 'Live Chat', icon: MessageSquare, variant: 'secondary' as const },
+  { href: '/crypto', label: 'Trade Crypto', icon: Bitcoin, variant: 'secondary' as const },
   { href: '#', label: 'Get Support', icon: LifeBuoy, variant: 'outline' as const },
 ];
 
