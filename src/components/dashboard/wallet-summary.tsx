@@ -12,7 +12,7 @@ export default async function WalletSummary() {
         <CardTitle className="text-muted-foreground font-medium">Wallet Balance</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col sm:items-center sm:justify-between gap-4">
             <p className="text-4xl md:text-5xl font-bold font-headline text-primary whitespace-nowrap">
             ₦{balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
