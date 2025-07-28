@@ -28,7 +28,7 @@ function Logo() {
   priority
   className="object-contain"
 />
-      <span className="text-xl font-bold font-headline text-primary">Highest Data</span>
+      <span className="text-xl font-bold font-headline text-primary whitespace-nowrap">Highest Data</span>
     </div>
   )
 }
