@@ -2,7 +2,7 @@ import type { Transaction, CryptoCoin, User, Notification, FlaggedTransaction } 
 
 // Mock User Data
 export const MOCK_USER: User = {
-  name: 'Alex Doe',
+  name: 'Clever Gbogborogbo',
   email: 'alex.doe@example.com',
   avatarUrl: 'https://placehold.co/100x100.png',
 };
