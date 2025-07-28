@@ -8,14 +8,32 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRightLeft } from 'lucide-react';
+import { ArrowRightLeft, Copy, Upload } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+
+// Mock admin wallet addresses, in a real app this would come from a secure source
+const ADMIN_WALLETS = {
+    BTC: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+    ETH: '0x1234567890123456789012345678901234567890',
+    USDT: '0xabcdef1234567890abcdef1234567890abcdef',
+};
+
 
 function CryptoTradeForm({ type }: { type: 'Buy' | 'Sell' }) {
     const [amount, setAmount] = useState('');
     const [crypto, setCrypto] = useState('BTC');
     const rate = 65432.10; // Mock rate for BTC
+    const { toast } = useToast();
 
     const calculatedValue = amount ? (parseFloat(amount) / rate).toFixed(8) : '0.00';
+    
+    const handleCopy = (address: string) => {
+        navigator.clipboard.writeText(address);
+        toast({
+            title: "Copied to clipboard!",
+            description: "Wallet address has been copied.",
+        });
+    }
 
     return (
         <form className="space-y-6">
@@ -48,6 +66,39 @@ function CryptoTradeForm({ type }: { type: 'Buy' | 'Sell' }) {
                     <Input id="crypto-value" readOnly value={`${calculatedValue} ${crypto}`} className="bg-muted" />
                 </div>
             </div>
+
+            {type === 'Buy' && (
+                <div className="space-y-2">
+                    <Label htmlFor="walletAddress">Your Receiving Wallet Address</Label>
+                    <Input id="walletAddress" name="walletAddress" type="text" placeholder={`Enter your ${crypto} wallet address`} />
+                </div>
+            )}
+            
+            {type === 'Sell' && (
+                <>
+                    <Card className="bg-muted/50">
+                        <CardHeader className="p-4">
+                            <CardDescription>Send your {crypto} to the address below. Your account will be credited after confirmation.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0">
+                            <div className="flex items-center justify-between gap-2 p-3 rounded-md border bg-background">
+                                <code className="text-sm truncate">{ADMIN_WALLETS[crypto as keyof typeof ADMIN_WALLETS]}</code>
+                                <Button type="button" variant="ghost" size="icon" onClick={() => handleCopy(ADMIN_WALLETS[crypto as keyof typeof ADMIN_WALLETS])}>
+                                    <Copy className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                     <div className="space-y-2">
+                        <Label htmlFor="sendingWalletAddress">Your Sending Wallet Address</Label>
+                        <Input id="sendingWalletAddress" name="sendingWalletAddress" type="text" placeholder={`The ${crypto} address you sent from`} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="proof">Upload Screenshot Proof</Label>
+                        <Input id="proof" name="proof" type="file" className="pt-2" />
+                    </div>
+                </>
+            )}
             
             <Card className="bg-muted/50">
               <CardContent className="p-4">
