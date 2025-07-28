@@ -6,6 +6,7 @@ import { Home, Repeat, Gift, ShieldCheck, CreditCard, RadioTower, LogOut, Settin
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import Image from 'next/image';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home },
@@ -19,9 +20,14 @@ const navItems = [
 function Logo() {
   return (
     <div className="flex items-center gap-2 p-4 border-b">
-       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 text-primary">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z" />
-      </svg>
+       <Image
+  src="https://firebasestorage.googleapis.com/v0/b/higestdata.firebasestorage.app/o/HIGHEST%20ICON%20COLORED.png?alt=media&token=4946037d-3ef0-4f52-a671-88a6e732ac1e"
+  alt="Website Logo"
+  width={48} // or your exact desired width in pixels
+  height={48} // or your exact desired height in pixels
+  priority // ensures it's loaded early
+  className="object-contain"
+/>
       <span className="text-xl font-bold font-headline text-primary">Highest Data</span>
     </div>
   )
