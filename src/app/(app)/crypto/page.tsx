@@ -2,14 +2,13 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRightLeft, Copy, Upload } from 'lucide-react';
+import { ArrowRightLeft, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 // Mock admin wallet addresses, in a real app this would come from a secure source
@@ -29,7 +28,7 @@ const CRYPTO_OPTIONS = [
 function CryptoTradeForm({ type }: { type: 'Buy' | 'Sell' }) {
     const [amount, setAmount] = useState('');
     const [crypto, setCrypto] = useState('BTC');
-    const rate = 65432.10; // Mock rate for BTC
+    const rate = 95000000; // Mock rate for BTC in NGN
     const { toast } = useToast();
 
     const calculatedValue = amount ? (parseFloat(amount) / rate).toFixed(8) : '0.00';
@@ -66,8 +65,8 @@ function CryptoTradeForm({ type }: { type: 'Buy' | 'Sell' }) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
                 <div className="space-y-2">
-                    <Label htmlFor="amount">{type === 'Buy' ? 'Amount to Spend (USD)' : 'Amount to Sell (USD)'}</Label>
-                    <Input id="amount" name="amount" type="number" placeholder="e.g., 100" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                    <Label htmlFor="amount">{type === 'Buy' ? 'Amount to Spend (NGN)' : 'Amount to Sell (NGN)'}</Label>
+                    <Input id="amount" name="amount" type="number" placeholder="e.g., 50000" value={amount} onChange={(e) => setAmount(e.target.value)} />
                 </div>
                 
                 <div className="text-center sm:hidden">
@@ -117,7 +116,7 @@ function CryptoTradeForm({ type }: { type: 'Buy' | 'Sell' }) {
               <CardContent className="p-4">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Current Rate</span>
-                  <span className="font-semibold text-primary">1 {crypto} ≈ ${rate.toLocaleString()}</span>
+                  <span className="font-semibold text-primary">1 {crypto} ≈ ₦{rate.toLocaleString()}</span>
                 </div>
               </CardContent>
             </Card>

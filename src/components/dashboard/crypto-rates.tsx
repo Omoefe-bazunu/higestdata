@@ -74,7 +74,7 @@ export default function CryptoRates() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right font-medium">${coin.price.toLocaleString()}</TableCell>
+                  <TableCell className="text-right font-medium">₦{coin.price.toLocaleString()}</TableCell>
                   <TableCell className={cn("hidden sm:table-cell text-right", coin.change24h >= 0 ? 'text-green-600' : 'text-red-600')}>
                     <div className="flex items-center justify-end gap-1">
                       {coin.change24h >= 0 ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}

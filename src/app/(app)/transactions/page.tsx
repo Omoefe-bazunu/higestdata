@@ -63,7 +63,7 @@ export default async function TransactionsPage() {
                     <Badge variant={getStatusBadgeVariant(tx.status)}>{tx.status}</Badge>
                   </TableCell>
                   <TableCell className={cn("text-right font-semibold", tx.type === 'credit' ? 'text-green-600' : 'text-foreground')}>
-                    {tx.type === 'credit' ? '+' : '-'}${Math.abs(tx.amount).toFixed(2)}
+                    {tx.type === 'credit' ? '+' : '-'}₦{Math.abs(tx.amount).toFixed(2)}
                   </TableCell>
                 </TableRow>
               ))}

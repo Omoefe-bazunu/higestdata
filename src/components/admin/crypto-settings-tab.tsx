@@ -137,9 +137,9 @@ export default function CryptoSettingsTab() {
                     rates.map((coin) => (
                       <TableRow key={coin.id}>
                         <TableCell className="font-medium">{coin.name}</TableCell>
-                        <TableCell className="text-right">${coin.price.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">₦{coin.price.toLocaleString()}</TableCell>
                         <TableCell className="text-right font-semibold text-primary">
-                          ${calculateSellPrice(coin.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ₦{calculateSellPrice(coin.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </TableCell>
                       </TableRow>
                     ))

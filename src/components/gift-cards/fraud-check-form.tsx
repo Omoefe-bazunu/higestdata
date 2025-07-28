@@ -86,8 +86,8 @@ export default function FraudCheckForm() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="cardValue">Value (USD)</Label>
-        <Input id="cardValue" name="cardValue" type="number" placeholder="e.g., 50" />
+        <Label htmlFor="cardValue">Value (NGN)</Label>
+        <Input id="cardValue" name="cardValue" type="number" placeholder="e.g., 25000" />
          {state.errors?.cardValue && <p className="text-sm text-destructive">{state.errors.cardValue[0]}</p>}
       </div>
 

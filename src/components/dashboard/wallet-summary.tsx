@@ -14,7 +14,7 @@ export default async function WalletSummary() {
       <CardContent>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <p className="text-4xl md:text-5xl font-bold font-headline text-primary whitespace-nowrap">
-            ${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ₦{balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
             <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
                 <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground w-full">

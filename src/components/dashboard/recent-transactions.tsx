@@ -46,7 +46,7 @@ export default async function RecentTransactions() {
               </div>
               <div className="text-right">
                 <p className={cn("font-semibold", tx.type === 'credit' ? 'text-green-600' : 'text-foreground')}>
-                  {tx.type === 'credit' ? '+' : ''}${Math.abs(tx.amount).toFixed(2)}
+                  {tx.type === 'credit' ? '+' : ''}₦{Math.abs(tx.amount).toFixed(2)}
                 </p>
                 <Badge variant={getStatusBadgeVariant(tx.status)} className="mt-1">{tx.status}</Badge>
               </div>

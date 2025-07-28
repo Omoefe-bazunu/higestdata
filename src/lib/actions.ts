@@ -40,7 +40,7 @@ export async function checkGiftCardFraud(
   const { cardType, cardValue, cardCode } = validatedFields.data;
 
   try {
-    const giftCardDetails = `Card Type: ${cardType}, Value: $${cardValue}, Code: ${cardCode}`;
+    const giftCardDetails = `Card Type: ${cardType}, Value: ₦${cardValue}, Code: ${cardCode}`;
     const userTransactionHistory = "User has made 3 successful airtime purchases in the last month. No previous gift card uploads.";
     const uploadMetadata = `IP Address: 192.168.1.1, Time: ${new Date().toISOString()}, Device: Desktop Browser`;
 
