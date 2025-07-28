@@ -12,16 +12,16 @@ export default async function WalletSummary() {
         <CardTitle className="text-muted-foreground font-medium">Wallet Balance</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <p className="text-4xl md:text-5xl font-bold font-headline text-primary">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <p className="text-4xl md:text-5xl font-bold font-headline text-primary whitespace-nowrap">
             ${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
             <div className="flex items-center gap-2">
-                <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground w-full md:w-auto">
                     <ArrowUpRight className="mr-2 h-5 w-5" />
                     Fund Wallet
                 </Button>
-                <Button size="lg" variant="outline">
+                <Button size="lg" variant="outline" className="w-full md:w-auto">
                     <ArrowDownLeft className="mr-2 h-5 w-5" />
                     Withdraw
                 </Button>

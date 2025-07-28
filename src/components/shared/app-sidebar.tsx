@@ -33,8 +33,11 @@ function Logo() {
   )
 }
 
+interface AppSidebarProps {
+  onLinkClick?: () => void;
+}
 
-export default function AppSidebar() {
+export default function AppSidebar({ onLinkClick }: AppSidebarProps) {
   const pathname = usePathname();
 
   const isActive = (href: string) => pathname === href;
@@ -46,7 +49,7 @@ export default function AppSidebar() {
         <ul className="space-y-2">
           {navItems.filter(item => !item.admin).map(({ href, label, icon: Icon }) => (
             <li key={href}>
-              <Link href={href}>
+              <Link href={href} onClick={onLinkClick}>
                 <Button
                   variant={isActive(href) ? 'secondary' : 'ghost'}
                   className="w-full justify-start"
@@ -62,7 +65,7 @@ export default function AppSidebar() {
         <ul className="space-y-2">
             {navItems.filter(item => item.admin).map(({ href, label, icon: Icon }) => (
                 <li key={href}>
-                    <Link href={href}>
+                    <Link href={href} onClick={onLinkClick}>
                         <Button
                         variant={isActive(href) ? 'secondary' : 'ghost'}
                         className="w-full justify-start"
@@ -77,11 +80,11 @@ export default function AppSidebar() {
 
       </nav>
       <div className="mt-auto p-4 border-t">
-         <Button variant="ghost" className="w-full justify-start">
+         <Button variant="ghost" className="w-full justify-start" onClick={onLinkClick}>
             <Settings className="mr-2 h-4 w-4" />
             Settings
         </Button>
-        <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive">
+        <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive" onClick={onLinkClick}>
             <LogOut className="mr-2 h-4 w-4" />
             Logout
         </Button>
