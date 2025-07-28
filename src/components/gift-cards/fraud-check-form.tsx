@@ -1,15 +1,14 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormStatus } from 'react-dom';
 import { checkGiftCardFraud, type FraudCheckState } from '@/lib/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Terminal, CheckCircle, AlertTriangle, Loader } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useEffect, useRef } from 'react';
+import { CheckCircle, AlertTriangle, Loader } from 'lucide-react';
+import { useEffect, useRef, useActionState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
 function SubmitButton() {
@@ -24,7 +23,7 @@ function SubmitButton() {
 
 export default function FraudCheckForm() {
   const initialState: FraudCheckState = {};
-  const [state, dispatch] = useFormState(checkGiftCardFraud, initialState);
+  const [state, dispatch] = useActionState(checkGiftCardFraud, initialState);
   const formRef = useRef<HTMLFormElement>(null);
   const { toast } = useToast();
 
