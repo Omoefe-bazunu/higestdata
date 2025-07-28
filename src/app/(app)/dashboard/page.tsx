@@ -11,14 +11,14 @@ export default function DashboardPage() {
         <h1 className="text-3xl font-bold font-headline">Welcome back, {MOCK_USER.name.split(' ')[0]}!</h1>
         <p className="text-muted-foreground">Here's a summary of your account today.</p>
       </div>
-      <div className="grid gap-8 md:grid-cols-12">
-        <div className="md:col-span-8 lg:col-span-9 space-y-8">
+      <div className="grid gap-8 md:grid-cols-3">
+        <div className="md:col-span-2 space-y-8">
           <WalletSummary />
-          <CryptoRates />
-        </div>
-        <div className="md:col-span-4 lg:col-span-3 space-y-8">
-          <QuickActions />
           <RecentTransactions />
+        </div>
+        <div className="space-y-8">
+          <QuickActions />
+          <CryptoRates />
         </div>
       </div>
     </div>

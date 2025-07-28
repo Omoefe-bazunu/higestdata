@@ -17,7 +17,7 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
 
 export default async function RecentTransactions() {
   const transactions = await getTransactions();
-  const recent = transactions.slice(0, 4);
+  const recent = transactions.slice(0, 5);
 
   return (
     <Card>
