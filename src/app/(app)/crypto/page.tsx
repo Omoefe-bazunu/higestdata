@@ -20,9 +20,9 @@ const ADMIN_WALLETS = {
 };
 
 const CRYPTO_OPTIONS = [
-    { value: 'BTC', label: 'Bitcoin (BTC)', icon: 'https://cryptoicons.org/api/color/btc/200' },
-    { value: 'ETH', label: 'Ethereum (ETH)', icon: 'https://cryptoicons.org/api/color/eth/200' },
-    { value: 'USDT', label: 'Tether (USDT)', icon: 'https://cryptoicons.org/api/color/usdt/200' },
+    { value: 'BTC', label: 'Bitcoin (BTC)' },
+    { value: 'ETH', label: 'Ethereum (ETH)' },
+    { value: 'USDT', label: 'Tether (USDT)' },
 ]
 
 
@@ -50,20 +50,14 @@ function CryptoTradeForm({ type }: { type: 'Buy' | 'Sell' }) {
                 <Label htmlFor="crypto">Cryptocurrency</Label>
                 <Select name="crypto" value={crypto} onValueChange={setCrypto}>
                     <SelectTrigger id="crypto">
-                         <SelectValue>
-                            <div className="flex items-center gap-2">
-                                {selectedCrypto && <Image src={selectedCrypto.icon} alt={selectedCrypto.label} width={20} height={20} className="rounded-full" data-ai-hint="crypto currency" />}
-                                <span>{selectedCrypto ? selectedCrypto.label : 'Select Crypto'}</span>
-                            </div>
+                         <SelectValue placeholder="Select Crypto">
+                            {selectedCrypto ? selectedCrypto.label : 'Select Crypto'}
                         </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                         {CRYPTO_OPTIONS.map(option => (
                              <SelectItem key={option.value} value={option.value}>
-                                <div className="flex items-center gap-2">
-                                    <Image src={option.icon} alt={option.label} width={20} height={20} className="rounded-full" data-ai-hint="crypto currency" />
-                                    <span>{option.label}</span>
-                                </div>
+                                {option.label}
                             </SelectItem>
                         ))}
                     </SelectContent>

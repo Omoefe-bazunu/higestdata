@@ -9,11 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-
-function CryptoIcon({ symbol }: { symbol: string }) {
-    const iconUrl = `https://cryptoicons.org/api/color/${symbol.toLowerCase()}/200`;
-    return <img src={iconUrl} alt={`${symbol} logo`} className="w-8 h-8 rounded-full bg-muted" data-ai-hint="crypto currency" />;
-}
+import Image from 'next/image';
 
 export default function CryptoRates() {
   const [rates, setRates] = useState<CryptoCoin[]>([]);
@@ -72,7 +68,6 @@ export default function CryptoRates() {
                 <TableRow key={coin.id}>
                   <TableCell>
                     <div className="flex items-center gap-4">
-                      <CryptoIcon symbol={coin.symbol} />
                       <div>
                         <div className="font-medium">{coin.name}</div>
                         <div className="text-sm text-muted-foreground">{coin.symbol}</div>
