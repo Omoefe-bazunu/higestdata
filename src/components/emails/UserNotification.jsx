@@ -1,4 +1,4 @@
-import { Html, Head, Body, Section, Text, Img } from "@react-email/components";
+// components/emails/UserNotification.js
 
 export default function UserNotification({
   userName,
@@ -11,8 +11,8 @@ export default function UserNotification({
   const isApproved = status === "approved";
   const isGiftCard = type === "giftCard";
 
-  const primaryColor = isApproved ? "#28a745" : "#dc3545"; // Green for approved, Red for rejected
-  const secondaryColor = "#007bff"; // Blue for highlights
+  const primaryColor = isApproved ? "#28a745" : "#dc3545"; // Green or Red
+  const secondaryColor = "#007bff"; // Blue
 
   let subjectText, descriptionText, amountLabel;
 
@@ -26,7 +26,6 @@ export default function UserNotification({
       descriptionText = `We regret to inform you that your request to sell the ${itemName} gift card was not approved. Reason: ${reason}. Please contact support if you have questions.`;
     }
   } else {
-    // Crypto type
     amountLabel = "Amount (NGN)";
     if (isApproved) {
       subjectText = "Your Crypto Sell Order Has Been Approved!";
@@ -37,118 +36,55 @@ export default function UserNotification({
     }
   }
 
-  return (
-    <Html>
-      <Head />
-      <Body
-        style={{
-          fontFamily: '"Arial", sans-serif',
-          margin: "0",
-          padding: "20px",
-          backgroundColor: "#f4f4f9",
-          color: "#333",
-        }}
-      >
-        <Section
-          style={{
-            maxWidth: "600px",
-            margin: "auto",
-            backgroundColor: "#ffffff",
-            padding: "30px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-          }}
-        >
-          <Img
-            src="https://your-domain.com/logo.png" // Replace with your actual logo URL
-            width="120"
-            height="30"
-            alt="Higher Logo"
-            style={{ margin: "0 auto 20px", display: "block" }}
-          />
-          <Text
-            style={{
-              fontSize: "24px",
-              fontWeight: "bold",
-              color: primaryColor,
-              textAlign: "center",
-              marginBottom: "20px",
-            }}
-          >
-            {subjectText}
-          </Text>
+  return `
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <meta charset="UTF-8" />
+      <title>${subjectText}</title>
+    </head>
+    <body style="font-family: Arial, sans-serif; margin:0; padding:20px; background-color:#f4f4f9; color:#333;">
+      <div style="max-width:600px; margin:auto; background-color:#ffffff; padding:30px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+        
+        <img src="https://your-domain.com/logo.png" alt="Higher Logo" width="120" height="30" style="margin:0 auto 20px; display:block;" />
 
-          <Text
-            style={{
-              fontSize: "16px",
-              lineHeight: "1.6",
-              marginBottom: "20px",
-            }}
-          >
-            Hello {userName},
-          </Text>
+        <h1 style="font-size:24px; font-weight:bold; color:${primaryColor}; text-align:center; margin-bottom:20px;">
+          ${subjectText}
+        </h1>
 
-          <Text
-            style={{
-              fontSize: "16px",
-              lineHeight: "1.6",
-              marginBottom: "20px",
-            }}
-          >
-            {descriptionText}
-          </Text>
+        <p style="font-size:16px; line-height:1.6; margin-bottom:20px;">
+          Hello ${userName},
+        </p>
 
-          {(status === "approved" || status === "rejected") && (
-            <Section
-              style={{
-                border: `1px solid ${secondaryColor}`,
-                borderRadius: "5px",
-                padding: "15px",
-                marginBottom: "20px",
-                backgroundColor: "#e7f3ff",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: "18px",
-                  fontWeight: "bold",
-                  color: secondaryColor,
-                  marginBottom: "15px",
-                }}
-              >
-                Order Summary:
-              </Text>
-              <Text style={{ fontSize: "16px", marginBottom: "10px" }}>
-                <strong>Item:</strong> {itemName}
-              </Text>
-              <Text style={{ fontSize: "16px", marginBottom: "10px" }}>
-                <strong>{amountLabel}:</strong> ₦{amount.toLocaleString()}
-              </Text>
-              {status === "rejected" && (
-                <Text style={{ fontSize: "16px", marginBottom: "10px" }}>
-                  <strong>Reason for Rejection:</strong> {reason}
-                </Text>
-              )}
-            </Section>
-          )}
+        <p style="font-size:16px; line-height:1.6; margin-bottom:20px;">
+          ${descriptionText}
+        </p>
 
-          <Text
-            style={{
-              fontSize: "14px",
-              color: "#666",
-              textAlign: "center",
-              marginTop: "30px",
-            }}
-          >
-            Thank you for using our service!
-          </Text>
-          <Text
-            style={{ fontSize: "14px", color: "#666", textAlign: "center" }}
-          >
-            The Higher Team
-          </Text>
-        </Section>
-      </Body>
-    </Html>
-  );
+        ${
+          status === "approved" || status === "rejected"
+            ? `
+          <div style="border:1px solid ${secondaryColor}; border-radius:5px; padding:15px; margin-bottom:20px; background-color:#e7f3ff;">
+            <h2 style="font-size:18px; font-weight:bold; color:${secondaryColor}; margin-bottom:15px;">Order Summary:</h2>
+            <p style="font-size:16px; margin-bottom:10px;"><strong>Item:</strong> ${itemName}</p>
+            <p style="font-size:16px; margin-bottom:10px;"><strong>${amountLabel}:</strong> ₦${amount.toLocaleString()}</p>
+            ${
+              status === "rejected"
+                ? `<p style="font-size:16px; margin-bottom:10px;"><strong>Reason for Rejection:</strong> ${reason}</p>`
+                : ""
+            }
+          </div>
+        `
+            : ""
+        }
+
+        <p style="font-size:14px; color:#666; text-align:center; margin-top:30px;">
+          Thank you for using our service!
+        </p>
+        <p style="font-size:14px; color:#666; text-align:center;">
+          The Higher Team
+        </p>
+      </div>
+    </body>
+  </html>
+  `;
 }
