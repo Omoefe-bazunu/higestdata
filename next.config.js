@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -9,6 +8,7 @@ const nextConfig = {
   },
   images: {
     remotePatterns: [
+      // Explicitly allowed hosts
       {
         protocol: "https",
         hostname: "placehold.co",
@@ -31,6 +31,18 @@ const nextConfig = {
         protocol: "https",
         hostname: "logo.clearbit.com",
         port: "",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com", // ✅ Unsplash specifically
+        port: "",
+        pathname: "/**",
+      },
+      // Flexible fallback (any HTTPS host)
+      {
+        protocol: "https",
+        hostname: "**",
         pathname: "/**",
       },
     ],

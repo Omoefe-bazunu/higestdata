@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { ArrowUp, ArrowDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import Image from "next/image";
 
 export default function CryptoRates() {
   const [rates, setRates] = useState([]);
@@ -45,18 +44,20 @@ export default function CryptoRates() {
     <Card>
       <CardHeader>
         <CardTitle>Crypto Rates</CardTitle>
-        <CardDescription>Live prices for top cryptocurrencies.</CardDescription>
+        <CardDescription>
+          Live prices for top cryptocurrencies (from Firestore).
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Asset</TableHead>
-              <TableHead className="text-right">Price</TableHead>
-              <TableHead className="hidden sm:table-cell text-right">
+              <TableHead className="text-xs">Asset</TableHead>
+              <TableHead className="text-right text-xs">Price</TableHead>
+              <TableHead className="hidden text-xs sm:table-cell text-right text-nowrap">
                 24h Change
               </TableHead>
-              <TableHead className="text-right sr-only sm:not-sr-only">
+              <TableHead className="text-right text-xs sr-only sm:not-sr-only">
                 Actions
               </TableHead>
             </TableRow>
@@ -88,17 +89,15 @@ export default function CryptoRates() {
               : rates.map((coin) => (
                   <TableRow key={coin.id}>
                     <TableCell>
-                      <div className="flex items-center gap-4">
-                        <div>
-                          <div className="font-medium">{coin.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {coin.symbol}
-                          </div>
+                      <div>
+                        <div className="font-medium">{coin.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {coin.symbol}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      ₦{coin.price.toLocaleString()}
+                      ₦{Number(coin.price).toLocaleString()}
                     </TableCell>
                     <TableCell
                       className={cn(

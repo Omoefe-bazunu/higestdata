@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "../ui/skeleton";
 
-// Helper to decide badge style based on status
+// ✅ Map status to badge variant
 function getStatusBadgeVariant(status) {
   switch (status) {
     case "Pending Review":
@@ -51,21 +51,34 @@ export default function AdminDashboardTab() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
-      const data = await getFlaggedTransactions();
-      setTransactions(data);
-      setLoading(false);
+      try {
+        const data = await getFlaggedTransactions();
+        setTransactions(data);
+      } catch (err) {
+        console.error("Error fetching flagged transactions:", err);
+      } finally {
+        setLoading(false);
+      }
     }
     fetchData();
   }, []);
 
   const handleUpdateStatus = async (id, status) => {
     setUpdatingId(id);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setTransactions((prev) =>
-      prev.map((tx) => (tx.id === id ? { ...tx, status } : tx))
-    );
-    setUpdatingId(null);
+    try {
+      // ⚠️ Update status in Firestore here if you want persistence
+      // Example:
+      // await updateDoc(doc(firestore, "flaggedTransactions", id), { status });
+
+      // For now, update local state
+      setTransactions((prev) =>
+        prev.map((tx) => (tx.id === id ? { ...tx, status } : tx))
+      );
+    } catch (err) {
+      console.error("Error updating status:", err);
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   return (
@@ -121,10 +134,10 @@ export default function AdminDashboardTab() {
                     <TableCell>
                       <div className="flex flex-col items-start gap-1">
                         <div className="font-medium whitespace-nowrap">
-                          {tx.user.name}
+                          {tx.user?.name || "Unknown"}
                         </div>
                         <div className="text-sm text-muted-foreground whitespace-nowrap">
-                          {tx.user.email}
+                          {tx.user?.email || "No email"}
                         </div>
                       </div>
                     </TableCell>
@@ -135,7 +148,7 @@ export default function AdminDashboardTab() {
                       {tx.reason}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      {new Date(tx.date).toLocaleDateString()}
+                      {tx.date ? new Date(tx.date).toLocaleDateString() : "N/A"}
                     </TableCell>
                     <TableCell>
                       <Badge

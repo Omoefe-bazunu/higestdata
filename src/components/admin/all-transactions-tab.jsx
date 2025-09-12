@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getTransactions } from "@/lib/data";
+import { getAllTransactions } from "@/lib/data"; // 🔹 use new admin query
 import {
   Card,
   CardContent,
@@ -44,18 +44,23 @@ export default function AllTransactionsTab() {
 
   useEffect(() => {
     async function fetchData() {
-      setLoading(true);
-      const data = await getTransactions();
-      setTransactions(data);
-      setLoading(false);
+      try {
+        setLoading(true);
+        const data = await getAllTransactions(); // 🔹 fetch admin-level transactions
+        setTransactions(data);
+      } catch (err) {
+        console.error("Error fetching transactions:", err);
+      } finally {
+        setLoading(false);
+      }
     }
     fetchData();
   }, []);
 
   const filteredTransactions = transactions.filter(
     (tx) =>
-      tx.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tx.id.toLowerCase().includes(searchTerm.toLowerCase())
+      tx.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tx.id?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (

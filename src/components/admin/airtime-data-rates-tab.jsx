@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -33,37 +33,58 @@ import { cn } from "@/lib/utils";
 import React from "react";
 import { Label } from "../ui/label";
 
-const mockVtPassData = {
-  mtn: { name: "MTN", discount: 1.5 },
-  glo: { name: "Glo", discount: 2.0 },
-  airtel: { name: "Airtel", discount: 1.8 },
-  "9mobile": { name: "9mobile", discount: 1.7 },
-};
-
-const mockDataPlans = {
-  mtn: [
-    { id: "mtn-1", name: "1.5GB - 30 Days", price: 1000 },
-    { id: "mtn-2", name: "5GB - 30 Days", price: 2500 },
-  ],
-  glo: [
-    { id: "glo-1", name: "2GB - 30 Days", price: 1000 },
-    { id: "glo-2", name: "8GB - 30 Days", price: 3000 },
-  ],
-  airtel: [
-    { id: "airtel-1", name: "1GB - 30 Days", price: 1000 },
-    { id: "airtel-2", name: "6GB - 30 Days", price: 2500 },
-  ],
-  "9mobile": [
-    { id: "9mobile-1", name: "1.2GB - 30 Days", price: 1000 },
-    { id: "9mobile-2", name: "7GB - 30 Days", price: 3000 },
-  ],
-};
-
 export default function AirtimeDataRatesTab() {
-  const [providerDiscounts, setProviderDiscounts] = useState(mockVtPassData);
-  const [dataPlans, setDataPlans] = useState(mockDataPlans);
-  const [selectedProvider, setSelectedProvider] = useState("mtn");
+  const [providerDiscounts, setProviderDiscounts] = useState({});
+  const [dataPlans, setDataPlans] = useState({});
+  const [selectedProvider, setSelectedProvider] = useState("mtn-data");
   const { toast } = useToast();
+
+  // Fetch Airtime discounts
+  useEffect(() => {
+    async function fetchAirtimeRates() {
+      try {
+        const res = await fetch("/api/vtpass/airtime");
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        const discounts = {};
+        data.content?.variations?.forEach((item) => {
+          discounts[item.variation_code] = {
+            name: item.name,
+            discount: item.fixedPrice || 0,
+          };
+        });
+
+        setProviderDiscounts(discounts);
+      } catch (err) {
+        console.error("Error fetching airtime rates:", err);
+      }
+    }
+    fetchAirtimeRates();
+  }, []);
+
+  // Fetch Data Plans for selected provider
+  useEffect(() => {
+    async function fetchDataPlans() {
+      try {
+        const res = await fetch(
+          `/api/vtpass/data?provider=${selectedProvider}`
+        );
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        setDataPlans((prev) => ({
+          ...prev,
+          [selectedProvider]: data.content?.variations || [],
+        }));
+      } catch (err) {
+        console.error("Error fetching data plans:", err);
+      }
+    }
+    fetchDataPlans();
+  }, [selectedProvider]);
 
   const handleDiscountChange = (provider, discount) => {
     setProviderDiscounts((prev) => ({
@@ -76,17 +97,39 @@ export default function AirtimeDataRatesTab() {
     setDataPlans((prev) => ({
       ...prev,
       [provider]: prev[provider].map((plan) =>
-        plan.id === planId ? { ...plan, price } : plan
+        plan.variation_code === planId ? { ...plan, fixedPrice: price } : plan
       ),
     }));
   };
 
-  const handleSaveChanges = () => {
-    console.log("Saving Airtime/Data rates:", { providerDiscounts, dataPlans });
-    toast({
-      title: "Rates Saved",
-      description: `Airtime and Data rates have been updated.`,
-    });
+  const handleSaveChanges = async () => {
+    try {
+      // Save Airtime Discounts
+      await fetch("/api/rates/airtime", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerDiscounts }),
+      });
+
+      // Save Data Plans
+      await fetch("/api/rates/data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataPlans }),
+      });
+
+      toast({
+        title: "✅ Rates Saved",
+        description: "Your Airtime & Data plan overrides have been stored.",
+      });
+    } catch (err) {
+      console.error("Error saving rates:", err);
+      toast({
+        title: "❌ Error",
+        description: "Could not save rates. Try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -96,13 +139,13 @@ export default function AirtimeDataRatesTab() {
         <TabsTrigger value="data">Data Plan Rates</TabsTrigger>
       </TabsList>
 
+      {/* Airtime Tab */}
       <TabsContent value="airtime">
         <Card>
           <CardHeader>
             <CardTitle>Airtime Purchase Discount</CardTitle>
             <CardDescription>
               Set the discount percentage for airtime purchases per provider.
-              This is based on VTPass rates.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -110,7 +153,7 @@ export default function AirtimeDataRatesTab() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Network Provider</TableHead>
-                  <TableHead>VTPass API Discount</TableHead>
+                  <TableHead>VTPass API Rate</TableHead>
                   <TableHead className="w-48">Your Discount (%)</TableHead>
                 </TableRow>
               </TableHeader>
@@ -122,7 +165,7 @@ export default function AirtimeDataRatesTab() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">
-                        {mockVtPassData[key].discount}%
+                        ₦{providerDiscounts[key].discount}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -142,6 +185,7 @@ export default function AirtimeDataRatesTab() {
         </Card>
       </TabsContent>
 
+      {/* Data Tab */}
       <TabsContent value="data">
         <Card>
           <CardHeader>
@@ -163,9 +207,13 @@ export default function AirtimeDataRatesTab() {
                 <SelectContent>
                   {Object.keys(dataPlans).map((key) => (
                     <SelectItem key={key} value={key}>
-                      {providerDiscounts[key].name}
+                      {key.toUpperCase()}
                     </SelectItem>
                   ))}
+                  <SelectItem value="mtn-data">MTN</SelectItem>
+                  <SelectItem value="glo-data">Glo</SelectItem>
+                  <SelectItem value="airtel-data">Airtel</SelectItem>
+                  <SelectItem value="etisalat-data">9mobile</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -177,17 +225,17 @@ export default function AirtimeDataRatesTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {dataPlans[selectedProvider].map((plan) => (
-                  <TableRow key={plan.id}>
+                {dataPlans[selectedProvider]?.map((plan) => (
+                  <TableRow key={plan.variation_code}>
                     <TableCell className="font-medium">{plan.name}</TableCell>
                     <TableCell>
                       <Input
                         type="number"
-                        value={plan.price}
+                        value={plan.fixedPrice}
                         onChange={(e) =>
                           handleDataPlanPriceChange(
                             selectedProvider,
-                            plan.id,
+                            plan.variation_code,
                             parseInt(e.target.value)
                           )
                         }

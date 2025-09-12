@@ -7,7 +7,6 @@ import {
   Repeat,
   Gift,
   ShieldCheck,
-  CreditCard,
   RadioTower,
   LogOut,
   Settings,
@@ -16,6 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
+import { useAuth } from "@/contexts/AuthContext";
+import { use } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
@@ -25,6 +26,11 @@ const navItems = [
   { href: "/buy-airtime", label: "Airtime & Data", icon: RadioTower },
   { href: "/admin", label: "Admin Panel", icon: ShieldCheck, admin: true },
 ];
+
+// Load admin emails from env
+const adminEmails = (process.env.NEXT_PUBLIC_ADMINEMAIL || "")
+  .split(",")
+  .map((email) => email.trim().toLowerCase());
 
 function Logo() {
   return (
@@ -46,8 +52,12 @@ function Logo() {
 
 export default function AppSidebar({ onLinkClick }) {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
 
   const isActive = (href) => pathname === href;
+
+  // Check if current user email is in the admin list
+  const isAdmin = user?.email && adminEmails.includes(user.email.toLowerCase());
 
   return (
     <aside className="h-full w-64 flex flex-col bg-card border-r">
@@ -70,25 +80,31 @@ export default function AppSidebar({ onLinkClick }) {
               </li>
             ))}
         </ul>
-        <Separator className="my-4" />
-        <ul className="space-y-2">
-          {navItems
-            .filter((item) => item.admin)
-            .map(({ href, label, icon: Icon }) => (
-              <li key={href}>
-                <Link href={href} onClick={onLinkClick}>
-                  <Button
-                    variant={isActive(href) ? "secondary" : "ghost"}
-                    className="w-full justify-start"
-                  >
-                    <Icon className="mr-2 h-4 w-4" />
-                    {label}
-                  </Button>
-                </Link>
-              </li>
-            ))}
-        </ul>
+
+        {isAdmin && (
+          <>
+            <Separator className="my-4" />
+            <ul className="space-y-2">
+              {navItems
+                .filter((item) => item.admin)
+                .map(({ href, label, icon: Icon }) => (
+                  <li key={href}>
+                    <Link href={href} onClick={onLinkClick}>
+                      <Button
+                        variant={isActive(href) ? "secondary" : "ghost"}
+                        className="w-full justify-start"
+                      >
+                        <Icon className="mr-2 h-4 w-4" />
+                        {label}
+                      </Button>
+                    </Link>
+                  </li>
+                ))}
+            </ul>
+          </>
+        )}
       </nav>
+
       <div className="mt-auto p-4 border-t">
         <Button
           variant="ghost"
@@ -100,8 +116,8 @@ export default function AppSidebar({ onLinkClick }) {
         </Button>
         <Button
           variant="ghost"
-          className="w-full justify-start text-destructive hover:text-destructive"
-          onClick={onLinkClick}
+          className="w-full justify-start text-destructive hover:text-white"
+          onClick={logout}
         >
           <LogOut className="mr-2 h-4 w-4" />
           Logout

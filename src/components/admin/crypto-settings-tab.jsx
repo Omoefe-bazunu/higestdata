@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getCryptoRates } from "@/lib/data";
+import { fetchLiveCryptoRates } from "@/lib/cryptoRates";
+import { firestore } from "@/lib/firebaseConfig";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
   Card,
   CardContent,
@@ -21,181 +23,294 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Save, Copy } from "lucide-react";
+import { Save, Copy, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const initialWallets = {
-  BTC: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
-  ETH: "0x1234567890123456789012345678901234567890",
-  USDT: "0xabcdef1234567890abcdef1234567890abcdef",
-};
-
 export default function CryptoSettingsTab() {
-  const [rates, setRates] = useState([]);
-  const [profitMargin, setProfitMargin] = useState(2.5);
+  const [rates, setRates] = useState([]); // live API rates
+  const [customRates, setCustomRates] = useState({}); // per-coin margins
+  const [wallets, setWallets] = useState({});
   const [loading, setLoading] = useState(true);
-  const [wallets, setWallets] = useState(initialWallets);
+
+  const [newWalletSymbol, setNewWalletSymbol] = useState("");
+  const [newWalletAddress, setNewWalletAddress] = useState("");
+
   const { toast } = useToast();
 
+  // 🔹 Fetch live prices + Firestore settings
   useEffect(() => {
     async function fetchData() {
-      setLoading(true);
-      const data = await getCryptoRates();
-      setRates(data);
-      setLoading(false);
+      try {
+        setLoading(true);
+
+        // Load live crypto rates
+        const liveData = await fetchLiveCryptoRates();
+        setRates(liveData);
+
+        // Load wallets
+        const walletSnap = await getDoc(
+          doc(firestore, "settings", "cryptoWallets")
+        );
+        if (walletSnap.exists()) setWallets(walletSnap.data());
+
+        // Load margins
+        const configSnap = await getDoc(
+          doc(firestore, "settings", "cryptoConfig")
+        );
+        if (configSnap.exists()) {
+          setCustomRates(configSnap.data().customRates || {});
+        }
+      } catch (err) {
+        console.error("Error fetching crypto settings:", err);
+        toast({
+          title: "Error",
+          description: "Failed to load crypto settings.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
     }
     fetchData();
-  }, []);
+  }, [toast]);
 
-  const handleSave = () => {
-    console.log("Saving settings:", { profitMargin, wallets });
+  // 🔹 Save settings
+  const handleSave = async () => {
+    try {
+      // Save wallet addresses
+      await setDoc(doc(firestore, "settings", "cryptoWallets"), wallets, {
+        merge: true,
+      });
+
+      // Save per-coin custom margins
+      await setDoc(
+        doc(firestore, "settings", "cryptoConfig"),
+        { customRates },
+        { merge: true }
+      );
+
+      // Save final adjusted rates for users
+      const adjustedRates = rates.map((coin) => ({
+        id: coin.id,
+        name: coin.name,
+        symbol: coin.symbol, // ✅ Ensure symbol is included
+        basePrice: coin.price,
+        finalPrice: calculateSellPrice(coin.id, coin.price),
+      }));
+
+      await setDoc(doc(firestore, "settings", "cryptoRates"), {
+        assets: adjustedRates,
+      });
+
+      toast({
+        title: "Settings Saved",
+        description: "Crypto settings and wallet addresses updated.",
+      });
+    } catch (err) {
+      console.error("Error saving settings:", err);
+      toast({
+        title: "Error",
+        description: "Could not save crypto settings.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // 🔹 Handle wallet changes
+  const handleWalletChange = (id, address) => {
+    setWallets((prev) => ({ ...prev, [id]: address })); // ✅ Use ID as key
+  };
+
+  // 🔹 Handle adding new wallet
+  const handleAddWallet = () => {
+    if (!newWalletSymbol || !newWalletAddress) {
+      toast({
+        title: "Missing info",
+        description: "Please select a coin and enter a wallet address.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const coinToAdd = rates.find((coin) => coin.symbol === newWalletSymbol);
+    if (!coinToAdd) {
+      toast({
+        title: "Invalid Coin",
+        description: "Selected coin not found in live rates.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setWallets((prev) => ({
+      ...prev,
+      [coinToAdd.id]: newWalletAddress, // ✅ Use ID as key
+    }));
+    setNewWalletSymbol("");
+    setNewWalletAddress("");
     toast({
-      title: "Settings Saved",
-      description: `Crypto settings and wallet addresses have been updated.`,
+      title: "Wallet Added",
+      description: `${coinToAdd.name} wallet saved locally. Don’t forget to save settings.`,
     });
   };
 
-  const handleWalletChange = (symbol, address) => {
-    setWallets((prev) => ({ ...prev, [symbol]: address }));
+  // 🔹 Handle margin changes per coin
+  const handleRateChange = (id, margin) => {
+    setCustomRates((prev) => ({
+      ...prev,
+      [id]: parseFloat(margin) || 0,
+    }));
   };
 
-  const calculateSellPrice = (price) => {
-    return price * (1 - profitMargin / 100);
+  // 🔹 Calculate final sell price
+  const calculateSellPrice = (id, marketPrice) => {
+    const margin = customRates[id] || 0;
+    return marketPrice * (1 + margin / 100);
   };
 
   const handleCopy = (address) => {
     navigator.clipboard.writeText(address);
     toast({
-      title: "Copied to clipboard!",
-      description: "Wallet address has been copied.",
+      title: "Copied!",
+      description: "Wallet address copied to clipboard.",
     });
-  };
-
-  const handleProfitMarginChange = (e) => {
-    const value = parseFloat(e.target.value);
-    setProfitMargin(isNaN(value) ? 0 : value);
   };
 
   return (
     <div className="space-y-6">
-      <Card className="mt-4">
+      {/* Wallet Addresses */}
+      <Card>
         <CardHeader>
           <CardTitle>Company Wallet Addresses</CardTitle>
           <CardDescription>
-            These are the wallet addresses displayed to users when they sell
-            crypto.
+            These wallet addresses are shown to users when selling crypto.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {Object.entries(wallets).map(([symbol, address]) => (
-            <div key={symbol} className="space-y-2">
-              <Label htmlFor={`${symbol}-wallet`}>
-                {symbol} Wallet Address
-              </Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id={`${symbol}-wallet`}
-                  value={address}
-                  onChange={(e) => handleWalletChange(symbol, e.target.value)}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleCopy(address)}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
+          {Object.keys(wallets).length === 0 && <p>No wallets set yet.</p>}
+          {Object.entries(wallets).map(([id, address]) => {
+            const coin = rates.find((r) => r.id === id);
+            return (
+              <div key={id} className="space-y-2">
+                <Label>{coin?.name || id} Wallet Address</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={address}
+                    onChange={(e) => handleWalletChange(id, e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleCopy(address)}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+            );
+          })}
 
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle>Cryptocurrency Rate Settings</CardTitle>
-          <CardDescription>
-            Set the profit margin for crypto transactions based on live market
-            data.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="md:col-span-1 space-y-4">
-              <h3 className="font-semibold text-lg">Profit Margin</h3>
-              <div className="space-y-2">
-                <Label htmlFor="profit-margin">Margin (%)</Label>
-                <Input
-                  id="profit-margin"
-                  type="number"
-                  value={profitMargin}
-                  onChange={handleProfitMarginChange}
-                  step="0.1"
-                />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                This margin will be deducted from the market price to calculate
-                your sell price.
-              </p>
-            </div>
-            <div className="md:col-span-2">
-              <h3 className="font-semibold text-lg">Live Price Preview</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                This table shows the final sell price after applying the margin.
-              </p>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Asset</TableHead>
-                    <TableHead className="text-right">Market Price</TableHead>
-                    <TableHead className="text-right">
-                      Your Sell Price
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading
-                    ? Array.from({ length: 4 }).map((_, index) => (
-                        <TableRow key={index}>
-                          <TableCell>
-                            <Skeleton className="h-6 w-24" />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Skeleton className="h-6 w-20 ml-auto" />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Skeleton className="h-6 w-20 ml-auto" />
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    : rates.map((coin) => (
-                        <TableRow key={coin.id}>
-                          <TableCell className="font-medium">
-                            {coin.name}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            ₦{coin.price.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-primary">
-                            ₦
-                            {calculateSellPrice(coin.price).toLocaleString(
-                              "en-US",
-                              {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              }
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                </TableBody>
-              </Table>
+          {/* Add New Wallet */}
+          <div className="space-y-2 border-t pt-4">
+            <Label>Add New Wallet</Label>
+            <div className="flex items-center gap-2">
+              <select
+                value={newWalletSymbol}
+                onChange={(e) => setNewWalletSymbol(e.target.value)}
+                className="border rounded-md px-2 py-1"
+              >
+                <option value="">Select Coin</option>
+                {rates.map((coin) => (
+                  <option key={coin.id} value={coin.symbol}>
+                    {coin.name} ({coin.symbol})
+                  </option>
+                ))}
+              </select>
+              <Input
+                placeholder="Wallet address"
+                value={newWalletAddress}
+                onChange={(e) => setNewWalletAddress(e.target.value)}
+              />
+              <Button type="button" onClick={handleAddWallet}>
+                <Plus className="mr-2 h-4 w-4" /> Add
+              </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
+      {/* Crypto Rate Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Cryptocurrency Rate Settings</CardTitle>
+          <CardDescription>
+            Adjust profit margins for each asset. Final sell price is applied
+            based on live market rates.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Asset</TableHead>
+                <TableHead className="text-right">Market Price (₦)</TableHead>
+                <TableHead className="text-right">Margin (%)</TableHead>
+                <TableHead className="text-right">Your Price (₦)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading
+                ? Array.from({ length: 4 }).map((_, index) => (
+                    <TableRow key={`skeleton-${index}`}>
+                      <TableCell>
+                        <Skeleton className="h-6 w-24" />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Skeleton className="h-6 w-20 ml-auto" />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Skeleton className="h-6 w-16 ml-auto" />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Skeleton className="h-6 w-20 ml-auto" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                : rates.map((coin) => (
+                    <TableRow key={coin.id}>
+                      <TableCell className="font-medium">{coin.name}</TableCell>
+                      <TableCell className="text-right">
+                        ₦{coin.price.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Input
+                          type="number"
+                          value={customRates[coin.id] ?? ""}
+                          placeholder="0"
+                          onChange={(e) =>
+                            handleRateChange(coin.id, e.target.value)
+                          }
+                          className="w-20 text-right"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-primary">
+                        ₦
+                        {calculateSellPrice(coin.id, coin.price).toLocaleString(
+                          "en-US",
+                          {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Save Button */}
       <div className="mt-6 flex justify-end">
         <Button onClick={handleSave}>
           <Save className="mr-2 h-4 w-4" />
