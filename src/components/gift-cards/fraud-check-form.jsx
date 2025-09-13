@@ -2,8 +2,9 @@
 
 import { useRef, useState, useEffect } from "react";
 import { getAuth } from "firebase/auth";
-import { collection, addDoc } from "firebase/firestore";
-import { firestore } from "@/lib/firebaseConfig";
+import { collection, addDoc, updateDoc, doc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { firestore, storage } from "@/lib/firebaseConfig";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle, AlertTriangle, Loader } from "lucide-react";
+import {
+  CheckCircle,
+  AlertTriangle,
+  Loader,
+  Upload,
+  X,
+  Image,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function FraudCheckForm({ giftCards, exchangeRate }) {
@@ -24,10 +32,13 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
   const formRef = useRef(null);
+  const fileInputRef = useRef(null);
   const { toast } = useToast();
   const [selectedCard, setSelectedCard] = useState("");
   const [faceValue, setFaceValue] = useState("");
   const [cardCode, setCardCode] = useState("");
+  const [cardImage, setCardImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [isValid, setIsValid] = useState(false);
 
   // Check authentication status
@@ -51,9 +62,55 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
   // Validate form inputs
   useEffect(() => {
     const valid =
-      selectedCard && faceValue && parseFloat(faceValue) > 0 && cardCode.trim();
+      selectedCard &&
+      faceValue &&
+      parseFloat(faceValue) > 0 &&
+      cardCode.trim() &&
+      cardImage;
     setIsValid(valid);
-  }, [selectedCard, faceValue, cardCode]);
+  }, [selectedCard, faceValue, cardCode, cardImage]);
+
+  // Handle image selection
+  const handleImageChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+      if (!validTypes.includes(file.type)) {
+        toast({
+          title: "Invalid File Type",
+          description: "Please upload a valid image file (JPG, PNG, or GIF).",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const maxSize = 5 * 1024 * 1024;
+      if (file.size > maxSize) {
+        toast({
+          title: "File Too Large",
+          description: "Please upload an image smaller than 5MB.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setCardImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Remove selected image
+  const removeImage = () => {
+    setCardImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   // Handle submission feedback
   useEffect(() => {
@@ -66,17 +123,37 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
         variant: formState.errors ? "destructive" : "default",
       });
       if (!formState.errors) {
-        // Clear form on success
         setSelectedCard("");
         setFaceValue("");
         setCardCode("");
+        setCardImage(null);
+        setImagePreview(null);
         formRef.current?.reset();
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
       }
     }
     if (formState.errors) {
       console.log("Form submission errors:", formState.errors);
     }
   }, [formState, toast]);
+
+  // Upload image to Firebase Storage
+  const uploadImage = async (file, userId, submissionId) => {
+    try {
+      const storageRef = ref(
+        storage,
+        `gift-cards/${userId}/${submissionId}/${file.name}`
+      );
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      return downloadURL;
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      throw error;
+    }
+  };
 
   // Send email notification function
   const sendAdminNotification = async (submissionData) => {
@@ -93,6 +170,7 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
           rate: submissionData.rate,
           payoutNaira: submissionData.payoutNaira,
           userId: submissionData.userId,
+          imageUrl: submissionData.imageUrl,
         }),
       });
 
@@ -106,7 +184,7 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
     }
   };
 
-  // Handle form submission - everything client-side
+  // Handle form submission
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -122,7 +200,8 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
     if (!isValid) {
       toast({
         title: "Invalid Input",
-        description: "Please fill all required fields correctly.",
+        description:
+          "Please fill all required fields correctly and upload a card image.",
         variant: "destructive",
       });
       return;
@@ -131,19 +210,18 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
     setIsSubmitting(true);
 
     try {
-      // Validate inputs
       const errors = {};
       if (!selectedCard) errors.cardType = ["Card type is required"];
       if (!faceValue || isNaN(faceValue) || parseFloat(faceValue) <= 0)
         errors.cardValue = ["Valid card value in USD is required"];
       if (!cardCode.trim()) errors.cardCode = ["Card code is required"];
+      if (!cardImage) errors.cardImage = ["Card image is required"];
 
       if (Object.keys(errors).length > 0) {
         setFormState({ message: "Validation failed.", errors });
         return;
       }
 
-      // Get the selected card data
       const selectedCardData = giftCards.find(
         (card) => card.id === selectedCard
       );
@@ -158,7 +236,6 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
       const rate = selectedCardData.rate;
       const payoutNaira = (parseFloat(faceValue) * rate * exchangeRate) / 100;
 
-      // Save to Firestore (client-side with user authentication context)
       const submissionData = {
         userId: user.uid,
         giftCardId: selectedCard,
@@ -168,6 +245,9 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
         payoutNaira,
         status: "pending",
         submittedAt: new Date().toISOString(),
+        imageUrl: null,
+        exchangeRate,
+        ratePercentage: rate,
       };
 
       console.log("Saving submission to Firestore:", submissionData);
@@ -179,7 +259,20 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
 
       console.log("Submission saved with ID:", docRef.id);
 
-      // Create transaction record with updated format
+      let imageUrl = null;
+      try {
+        imageUrl = await uploadImage(cardImage, user.uid, docRef.id);
+        console.log("Image uploaded successfully:", imageUrl);
+
+        // Update the submission with the image URL
+        await updateDoc(doc(firestore, "giftCardSubmissions", docRef.id), {
+          imageUrl: imageUrl,
+        });
+      } catch (imageError) {
+        console.error("Failed to upload image:", imageError);
+        throw new Error("Failed to upload card image");
+      }
+
       const transactionData = {
         userId: user.uid,
         description: `${selectedCardData.name} gift-card-sales-order`,
@@ -198,7 +291,6 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
       );
       console.log("Transaction record created");
 
-      // Send admin notification
       try {
         await sendAdminNotification({
           submissionId: docRef.id,
@@ -207,10 +299,10 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
           rate,
           payoutNaira,
           userId: user.uid,
+          imageUrl: imageUrl,
         });
       } catch (emailError) {
         console.error("Failed to send admin notification:", emailError);
-        // Don't fail the submission if email fails
       }
 
       setFormState({
@@ -332,6 +424,67 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
         )}
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="cardImage">Card Image *</Label>
+        <div className="space-y-4">
+          {!imagePreview ? (
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+              <input
+                ref={fileInputRef}
+                id="cardImage"
+                name="cardImage"
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                disabled={!isAuthenticated}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!isAuthenticated}
+                className="w-full"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Upload Card Image
+              </Button>
+              <p className="text-sm text-muted-foreground mt-2">
+                PNG, JPG or GIF up to 5MB
+              </p>
+            </div>
+          ) : (
+            <div className="relative border rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-2">
+                  <Image className="h-4 w-4" />
+                  <span className="text-sm font-medium">Card Image</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={removeImage}
+                  disabled={!isAuthenticated}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <img
+                src={imagePreview}
+                alt="Card preview"
+                className="max-w-full h-auto max-h-64 rounded-md mx-auto"
+              />
+            </div>
+          )}
+        </div>
+        {formState.errors?.cardImage && (
+          <p className="text-sm text-destructive">
+            {formState.errors.cardImage[0]}
+          </p>
+        )}
+      </div>
+
       <Button
         type="submit"
         className="w-full"
@@ -339,7 +492,7 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
           !isValid ||
           isSubmitting ||
           !isAuthenticated ||
-          giftCards.length === 0 ||
+          !giftCards?.length ||
           exchangeRate === null
         }
       >

@@ -37,14 +37,14 @@ export async function getTransactions(userId) {
   }));
 }
 
-// Get Crypto Rates (from Firestore document "settings/cryptoRates")
+// Get Crypto Rates (from Firestore document "settings/cryptoConfig")
 export async function getCryptoRates() {
-  const ratesDoc = await getDoc(doc(firestore, "settings", "cryptoRates"));
-  if (ratesDoc.exists()) {
-    const data = ratesDoc.data();
-    return data.assets || []; // Return the assets array or empty array if not found
+  const configDoc = await getDoc(doc(firestore, "settings", "cryptoConfig"));
+  if (configDoc.exists()) {
+    const data = configDoc.data();
+    return data.customRates || {}; // Return the customRates object or empty object if not found
   }
-  return [];
+  return {};
 }
 
 // Get Crypto Wallets

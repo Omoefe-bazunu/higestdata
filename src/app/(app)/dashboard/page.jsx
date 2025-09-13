@@ -6,7 +6,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 
 import WalletSummary from "@/components/dashboard/wallet-summary";
-import CryptoRates from "@/components/dashboard/crypto-rates";
+// import CryptoRates from "@/components/dashboard/crypto-rates"; // <-- Remove this import
 import RecentTransactions from "@/components/dashboard/recent-transactions";
 import QuickActions from "@/components/dashboard/quick-actions";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -82,7 +82,7 @@ export default function DashboardPage() {
         </div>
         <div className="space-y-8">
           <QuickActions />
-          <CryptoRates />
+          {/* Removed CryptoRates component */}
         </div>
       </div>
     </div>

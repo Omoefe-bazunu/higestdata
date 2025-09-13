@@ -9,7 +9,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Lightbulb } from "lucide-react";
-import { collection, getDocs, getDoc, doc } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import { useToast } from "@/hooks/use-toast";
 import FraudCheckForm from "@/components/gift-cards/fraud-check-form";
@@ -23,7 +23,7 @@ export default function GiftCardsPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        // Fetch gift card rates
+        // Fetch gift card rates from Firebase
         const snapshot = await getDocs(collection(firestore, "giftCardRates"));
         const data = snapshot.docs.map((doc) => ({
           id: doc.id,
@@ -31,18 +31,19 @@ export default function GiftCardsPage() {
         }));
         setGiftCards(data);
 
-        // Fetch exchange rate
-        const exchangeRateDoc = await getDoc(
-          doc(firestore, "settings", "exchangeRate")
-        );
-        if (exchangeRateDoc.exists()) {
-          console.log("Exchange rate:", exchangeRateDoc.data().rate);
-          setExchangeRate(exchangeRateDoc.data().rate);
+        // Fetch live exchange rate from API route
+        const exchangeResponse = await fetch("/api/exchangeRate");
+        if (exchangeResponse.ok) {
+          const exchangeData = await exchangeResponse.json();
+          console.log("Live exchange rate:", exchangeData.rate);
+          setExchangeRate(exchangeData.rate);
         } else {
+          console.warn("Failed to fetch live exchange rate, using fallback");
           setExchangeRate(1600); // Fallback default
         }
       } catch (err) {
         console.error("Error fetching data:", err);
+        setExchangeRate(1600); // Fallback on error
         toast({
           title: "Error",
           description: "Failed to load gift card options or exchange rate.",

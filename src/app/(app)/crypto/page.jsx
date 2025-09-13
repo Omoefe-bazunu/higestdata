@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getAuth } from "firebase/auth";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import {
   Card,
@@ -22,66 +22,139 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowRightLeft, Copy, Loader } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  ArrowRightLeft,
+  Copy,
+  Loader,
+  AlertTriangle,
+  CheckCircle,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, CheckCircle } from "lucide-react";
-import { getCryptoRates, getCryptoWallets, getExchangeRate } from "@/lib/data";
+import { getCryptoRates, getCryptoWallets, getWalletBalance } from "@/lib/data";
+import { useRouter } from "next/navigation";
+
+// Function to fetch live crypto price from CoinGecko
+const fetchLiveCryptoPrice = async (coinId) => {
+  try {
+    const response = await fetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`
+    );
+    const data = await response.json();
+    return data[coinId]?.usd || 0;
+  } catch (error) {
+    console.error("Error fetching live price:", error);
+    return 0;
+  }
+};
+
+// Function to fetch the live USD to NGN exchange rate from the internal API route
+const fetchExchangeRate = async () => {
+  try {
+    const response = await fetch("/api/exchangeRate");
+    if (!response.ok) {
+      throw new Error("Failed to fetch exchange rate from internal API");
+    }
+    const data = await response.json();
+    return data.rate || 1;
+  } catch (error) {
+    console.error("Error fetching exchange rate from API route:", error);
+    return 1;
+  }
+};
 
 // --- CryptoTradeForm Component ---
 function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
   const [amount, setAmount] = useState("");
-  const [crypto, setCrypto] = useState(""); // State for selected crypto symbol
+  const [crypto, setCrypto] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formState, setFormState] = useState({});
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const [userBalance, setUserBalance] = useState(0);
+  const [livePrice, setLivePrice] = useState(0);
+  const [showInsufficientFundsModal, setShowInsufficientFundsModal] =
+    useState(false);
+  const [loadingPrice, setLoadingPrice] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
-  // Check authentication status
   useEffect(() => {
     const auth = getAuth();
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       setUser(user);
       setIsAuthenticated(!!user);
+      if (user) {
+        const balance = await getWalletBalance(user.uid);
+        setUserBalance(balance);
+      }
     });
     return () => unsubscribe();
   }, []);
 
-  // Initialize crypto state only once after initial render or when cryptoRates/wallets change.
-  // Crucially, 'crypto' is NOT a dependency here to prevent infinite loops.
+  const availableCryptos = Object.keys(cryptoRates || {})
+    .filter((cryptoId) => wallets[cryptoId])
+    .map((cryptoId) => {
+      const crypto = cryptoRates[cryptoId];
+      const marginKey = Object.keys(crypto).find((k) => k.startsWith("margin"));
+      return {
+        id: cryptoId,
+        name: crypto.name,
+        symbol: crypto.symbol,
+        margin: marginKey ? crypto[marginKey] : 0,
+      };
+    });
+
   useEffect(() => {
-    if (
-      cryptoRates &&
-      cryptoRates.length > 0 &&
-      !crypto &&
-      Object.keys(wallets).length > 0
-    ) {
-      // Only set if 'crypto' is not already set
-      // Set initial crypto to the first one that has a wallet address
-      const initialCrypto = cryptoRates.find((coin) => wallets?.[coin.id]);
-      setCrypto(initialCrypto ? initialCrypto.symbol : cryptoRates[0]?.symbol);
+    if (availableCryptos.length > 0 && !crypto) {
+      setCrypto(availableCryptos[0].id);
     }
-  }, [cryptoRates, wallets]); // Remove 'crypto' from dependencies
+  }, [availableCryptos, crypto]);
 
-  // Get selected crypto object by symbol
-  const selectedCrypto = cryptoRates?.find((c) => c.symbol === crypto);
-  const usdRate = selectedCrypto?.finalPrice || 0;
-  const ngnRate = usdRate * (exchangeRate || 1);
+  useEffect(() => {
+    if (crypto) {
+      const fetchPrice = async () => {
+        setLoadingPrice(true);
+        const price = await fetchLiveCryptoPrice(crypto);
+        setLivePrice(price);
+        setLoadingPrice(false);
+      };
+      fetchPrice();
+    }
+  }, [crypto]);
 
-  // Conversion logic
-  let calculatedValue;
+  const selectedCrypto = availableCryptos.find((c) => c.id === crypto);
+  const adminMargin = selectedCrypto?.margin || 0;
+
+  // Fixed calculation logic
+  let finalPriceUSD, finalPriceNGN;
+
   if (type === "Buy") {
-    calculatedValue = amount
-      ? (parseFloat(amount) / ngnRate).toFixed(8)
-      : "0.00";
+    // For buying: add margin to the live price (user pays more)
+    finalPriceUSD = livePrice * (1 + adminMargin / 100);
+    finalPriceNGN = finalPriceUSD * exchangeRate;
   } else {
-    calculatedValue = amount
-      ? (parseFloat(amount) * ngnRate).toFixed(2)
-      : "0.00";
+    // For selling: subtract margin from the live price (user gets less)
+    finalPriceUSD = livePrice * (1 - adminMargin / 100);
+    finalPriceNGN = finalPriceUSD * exchangeRate;
   }
 
-  // Handle submission feedback
+  let totalUSD = 0,
+    totalNGN = 0;
+  if (amount && parseFloat(amount) > 0) {
+    const units = parseFloat(amount);
+    totalUSD = units * finalPriceUSD;
+    totalNGN = units * finalPriceNGN;
+  }
+
   useEffect(() => {
     if (formState.message) {
       toast({
@@ -90,7 +163,6 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
         variant: formState.errors ? "destructive" : "default",
       });
       if (!formState.errors) {
-        // Clear form on success
         setAmount("");
       }
     }
@@ -104,9 +176,7 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
     });
   };
 
-  // Send email notification function (assuming this is correctly implemented)
   const sendAdminNotification = async (orderData) => {
-    // ... (your existing sendAdminNotification implementation)
     try {
       const response = await fetch("/api/send-email", {
         method: "POST",
@@ -127,8 +197,6 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
 
       if (!response.ok) {
         console.error("Failed to send admin notification");
-      } else {
-        console.log("Admin notification sent successfully");
       }
     } catch (error) {
       console.error("Error sending admin notification:", error);
@@ -155,6 +223,11 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
       return;
     }
 
+    if (type === "Buy" && totalNGN > userBalance) {
+      setShowInsufficientFundsModal(true);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -166,33 +239,33 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
       const orderData = {
         userId: user.uid,
         type: type.toLowerCase(),
-        crypto: crypto, // This is now the symbol
+        crypto: crypto,
         cryptoName: selectedCrypto?.name || crypto,
+        cryptoSymbol: selectedCrypto?.symbol || crypto,
         amount: parseFloat(amount),
-        rate: usdRate,
-        calculatedValue: calculatedValue,
-        walletAddress: walletAddress, // For 'Buy' type
-        sendingWalletAddress: sendingWalletAddress, // For 'Sell' type
-        proof: proof ? proof.name : null, // For 'Sell' type
+        livePrice: livePrice,
+        adminMargin: adminMargin,
+        finalPriceUSD: finalPriceUSD,
+        finalPriceNGN: finalPriceNGN,
+        totalUSD: totalUSD,
+        totalNGN: totalNGN,
+        walletAddress: walletAddress,
+        sendingWalletAddress: sendingWalletAddress,
+        proof: proof ? proof.name : null,
         status: "pending",
         createdAt: new Date().toISOString(),
       };
 
-      // Save to Firestore - cryptoOrders collection
       const docRef = await addDoc(
         collection(firestore, "cryptoOrders"),
         orderData
       );
-      console.log("Crypto order saved with ID:", docRef.id);
 
-      // Create transaction record in user's subcollection
       const transactionType = type === "Buy" ? "debit" : "credit";
       const transactionDescription = `${
         selectedCrypto?.name || crypto
       } ${type.toLowerCase()}-order`;
-
-      const transactionAmount =
-        type === "Buy" ? parseFloat(amount) : parseFloat(amount) * ngnRate;
+      const transactionAmount = totalNGN;
 
       const transactionData = {
         userId: user.uid,
@@ -210,16 +283,22 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
         collection(firestore, "users", user.uid, "transactions"),
         transactionData
       );
-      console.log("Transaction record created");
 
-      // Send admin notification
+      if (type === "Buy") {
+        const newBalance = userBalance - totalNGN;
+        await updateDoc(doc(firestore, "users", user.uid), {
+          walletBalance: newBalance,
+        });
+        setUserBalance(newBalance);
+      }
+
       try {
         await sendAdminNotification({
           orderId: docRef.id,
-          crypto: crypto, // This is now the symbol
+          crypto: crypto,
           cryptoName: selectedCrypto?.name || crypto,
           amount: parseFloat(amount),
-          calculatedValue: calculatedValue,
+          calculatedValue: totalNGN,
           walletAddress: walletAddress,
           sendingWalletAddress: sendingWalletAddress,
           userId: user.uid,
@@ -243,204 +322,290 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
   };
 
   return (
-    <form className="space-y-6" onSubmit={handleSubmit}>
-      {!isAuthenticated && (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Authentication Required</AlertTitle>
-          <AlertDescription>
-            Please sign in to trade cryptocurrency.
-          </AlertDescription>
-        </Alert>
-      )}
+    <>
+      <form className="space-y-6" onSubmit={handleSubmit}>
+        {!isAuthenticated && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Authentication Required</AlertTitle>
+            <AlertDescription>
+              Please sign in to trade cryptocurrency.
+            </AlertDescription>
+          </Alert>
+        )}
 
-      <div className="space-y-2">
-        <Label htmlFor="crypto">Cryptocurrency</Label>
-
-        <Select
-          name="crypto"
-          value={crypto}
-          onValueChange={setCrypto}
-          disabled={!isAuthenticated}
-        >
-          <SelectTrigger id="crypto">
-            <SelectValue placeholder="Select Crypto" />
-          </SelectTrigger>
-          <SelectContent>
-            {cryptoRates
-              ?.filter((coin) => wallets?.[coin.id]) // ✅ use id to filter wallets
-              .map(
-                (
-                  coin // Use coin.symbol for value
-                ) => (
-                  <SelectItem key={coin.id} value={coin.symbol}>
-                    {coin.name} ({coin.symbol})
-                  </SelectItem>
-                )
-              )}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
         <div className="space-y-2">
-          <Label htmlFor="amount">
-            {type === "Buy"
-              ? "Amount to Spend (NGN)"
-              : `Amount to Sell (${crypto})`}
-          </Label>
-          <Input
-            id="amount"
-            name="amount"
-            type="number"
-            placeholder={type === "Buy" ? "e.g., 50000" : "e.g., 0.5"}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+          <Label htmlFor="crypto">Cryptocurrency</Label>
+          <Select
+            name="crypto"
+            value={crypto}
+            onValueChange={setCrypto}
             disabled={!isAuthenticated}
-            required
-            step={type === "Buy" ? "1" : "0.00000001"}
-          />
-          {formState.errors?.amount && (
-            <p className="text-sm text-destructive">
-              {formState.errors.amount[0]}
-            </p>
-          )}
+          >
+            <SelectTrigger id="crypto">
+              <SelectValue placeholder="Select Crypto" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableCryptos.map((coin) => (
+                <SelectItem key={coin.id} value={coin.id}>
+                  {coin.name} ({coin.symbol})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="text-center sm:hidden">
-          <ArrowRightLeft className="h-4 w-4 text-muted-foreground mx-auto" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+          <div className="space-y-2">
+            <Label htmlFor="amount">
+              Amount ({selectedCrypto?.symbol || "Crypto"})
+            </Label>
+            <Input
+              id="amount"
+              name="amount"
+              type="number"
+              placeholder="e.g., 0.5"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              disabled={!isAuthenticated}
+              required
+              step="0.00000001"
+            />
+            {formState.errors?.amount && (
+              <p className="text-sm text-destructive">
+                {formState.errors.amount[0]}
+              </p>
+            )}
+          </div>
+
+          <div className="text-center sm:hidden">
+            <ArrowRightLeft className="h-4 w-4 text-muted-foreground mx-auto" />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="total-value">
+              {type === "Buy" ? "You'll Pay" : "You'll Receive"}
+            </Label>
+            <div className="space-y-1">
+              <Input
+                id="total-value"
+                readOnly
+                value={`$${totalUSD.toFixed(2)} USD`}
+                className="bg-muted"
+              />
+
+              <Input
+                readOnly
+                value={`₦${totalNGN.toLocaleString()} NGN`}
+                className="bg-muted"
+              />
+            </div>
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="crypto-value">
-            {type === "Buy" ? "You Get (approx.)" : "You Receive (approx.)"}
-          </Label>
-          <Input
-            id="crypto-value"
-            readOnly
-            value={`${calculatedValue} ${type === "Buy" ? crypto : "NGN"}`}
-            className="bg-muted"
-          />
-        </div>
-      </div>
-
-      {type === "Buy" && (
-        <div className="space-y-2">
-          <Label htmlFor="walletAddress">Your Receiving Wallet Address</Label>
-          <Input
-            id="walletAddress"
-            name="walletAddress"
-            type="text"
-            placeholder={`Enter your ${crypto} wallet address`}
-            disabled={!isAuthenticated}
-            required
-          />
-        </div>
-      )}
-
-      {type === "Sell" && (
-        <>
+        {type === "Buy" && isAuthenticated && (
           <Card className="bg-muted/50">
-            <CardHeader className="p-4">
-              <CardDescription>
-                Send your {crypto} to the address below. Your account will be
-                credited after confirmation.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="flex items-center justify-between gap-2 p-3 rounded-md border bg-background">
-                <code className="text-sm truncate">
-                  {wallets?.[selectedCrypto?.id] || "Wallet not set"}{" "}
-                  {/* Access wallet using selectedCrypto.id */}
-                </code>
-                {wallets?.[selectedCrypto?.id] && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleCopy(wallets[selectedCrypto.id])}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                )}
+            <CardContent className="p-4">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Wallet Balance</span>
+                <span
+                  className={`font-semibold ${
+                    totalNGN > userBalance ? "text-destructive" : "text-primary"
+                  }`}
+                >
+                  ₦{userBalance.toLocaleString()}
+                </span>
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {type === "Buy" && (
           <div className="space-y-2">
-            <Label htmlFor="sendingWalletAddress">
-              Your Sending Wallet Address
-            </Label>
+            <Label htmlFor="walletAddress">Your Receiving Wallet Address</Label>
             <Input
-              id="sendingWalletAddress"
-              name="sendingWalletAddress"
+              id="walletAddress"
+              name="walletAddress"
               type="text"
-              placeholder={`The ${crypto} address you sent from`}
+              placeholder={`Enter your ${
+                selectedCrypto?.symbol || "crypto"
+              } wallet address`}
               disabled={!isAuthenticated}
               required
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="proof">Upload Screenshot Proof</Label>
-            <Input
-              id="proof"
-              name="proof"
-              type="file"
-              className="pt-2"
-              disabled={!isAuthenticated}
-            />
-          </div>
-        </>
-      )}
-
-      <Card className="bg-muted/50">
-        <CardContent className="p-4">
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground">Current Rate</span>
-            <span className="font-semibold text-primary">
-              1 {crypto} ≈ ₦{ngnRate ? ngnRate.toLocaleString() : "0"}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Button
-        type="submit"
-        className="w-full"
-        disabled={
-          !isAuthenticated || isSubmitting || !amount || parseFloat(amount) <= 0
-        }
-      >
-        {isSubmitting ? (
-          <>
-            <Loader className="mr-2 h-4 w-4 animate-spin" />
-            Processing...
-          </>
-        ) : (
-          `${type} Crypto`
         )}
-      </Button>
 
-      {formState.message && (
-        <Alert variant={formState.errors ? "destructive" : "default"}>
-          {formState.errors ? (
-            <AlertTriangle className="h-4 w-4" />
+        {type === "Sell" && (
+          <>
+            <Card className="bg-muted/50">
+              <CardHeader className="p-4">
+                <CardDescription>
+                  Send your {selectedCrypto?.symbol || "crypto"} to the address
+                  below. Your account will be credited after confirmation.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <div className="flex items-center justify-between gap-2 p-3 rounded-md border bg-background">
+                  <code className="text-sm truncate">
+                    {wallets?.[crypto] || "Wallet not set"}
+                  </code>
+                  {wallets?.[crypto] && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleCopy(wallets[crypto])}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+            <div className="space-y-2">
+              <Label htmlFor="sendingWalletAddress">
+                Your Sending Wallet Address
+              </Label>
+              <Input
+                id="sendingWalletAddress"
+                name="sendingWalletAddress"
+                type="text"
+                placeholder={`The ${
+                  selectedCrypto?.symbol || "crypto"
+                } address you sent from`}
+                disabled={!isAuthenticated}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="proof">Upload Screenshot Proof</Label>
+              <Input
+                id="proof"
+                name="proof"
+                type="file"
+                className="pt-2"
+                disabled={!isAuthenticated}
+              />
+            </div>
+          </>
+        )}
+
+        <Card className="bg-muted/50">
+          <CardContent className="p-4">
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Live Market Price</span>
+                <span className="font-semibold">
+                  {loadingPrice ? (
+                    <Loader className="h-4 w-4 animate-spin inline" />
+                  ) : (
+                    `$${livePrice.toFixed(2)}`
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Admin Margin</span>
+                <span className="font-semibold">
+                  {type === "Buy"
+                    ? adminMargin > 0
+                      ? `+${adminMargin}%`
+                      : `${adminMargin}%`
+                    : adminMargin > 0
+                    ? `-${adminMargin}%`
+                    : `${adminMargin}%`}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">
+                  Exchange Rate (USD/NGN)
+                </span>
+                <span className="font-semibold">
+                  ₦{exchangeRate.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center border-t pt-2">
+                <span className="text-muted-foreground">
+                  {type} Price (1 {selectedCrypto?.symbol})
+                </span>
+                <span className="font-semibold text-primary">
+                  ${finalPriceUSD?.toFixed(2)} USD
+                  <br />₦{finalPriceNGN?.toLocaleString()} NGN
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={
+            !isAuthenticated ||
+            isSubmitting ||
+            !amount ||
+            parseFloat(amount) <= 0 ||
+            loadingPrice
+          }
+        >
+          {isSubmitting ? (
+            <>
+              <Loader className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
           ) : (
-            <CheckCircle className="h-4 w-4" />
+            `${type} Crypto`
           )}
-          <AlertTitle>
-            {formState.errors ? "Submission Failed" : "Order Received"}
-          </AlertTitle>
-          <AlertDescription>{formState.message}</AlertDescription>
-        </Alert>
-      )}
-    </form>
+        </Button>
+
+        {formState.message && (
+          <Alert variant={formState.errors ? "destructive" : "default"}>
+            {formState.errors ? (
+              <AlertTriangle className="h-4 w-4" />
+            ) : (
+              <CheckCircle className="h-4 w-4" />
+            )}
+            <AlertTitle>
+              {formState.errors ? "Submission Failed" : "Order Received"}
+            </AlertTitle>
+            <AlertDescription>{formState.message}</AlertDescription>
+          </Alert>
+        )}
+      </form>
+
+      <Dialog
+        open={showInsufficientFundsModal}
+        onOpenChange={setShowInsufficientFundsModal}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Insufficient Wallet Balance</DialogTitle>
+            <DialogDescription>
+              Your current wallet balance (₦{userBalance.toLocaleString()}) is
+              insufficient to complete this transaction. You need ₦
+              {totalNGN.toLocaleString()} to buy {amount}{" "}
+              {selectedCrypto?.symbol}.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowInsufficientFundsModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={() => router.push("/wallet")}>Fund Wallet</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
 // --- CryptoPage Component ---
 export default function CryptoPage() {
   const [data, setData] = useState({
-    cryptoRates: [],
+    cryptoRates: {},
     wallets: {},
     exchangeRate: 1,
   });
@@ -450,11 +615,11 @@ export default function CryptoPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setLoading(true); // Ensure loading is true at the start of fetch
+        setLoading(true);
         const [rates, walletsData, exchangeRateData] = await Promise.all([
           getCryptoRates(),
           getCryptoWallets(),
-          getExchangeRate(),
+          fetchExchangeRate(), // Calls the local API route
         ]);
         setData({
           cryptoRates: rates,
@@ -473,7 +638,7 @@ export default function CryptoPage() {
       }
     };
     fetchData();
-  }, [toast]); // `toast` is stable and unlikely to change, but good practice to include if used
+  }, [toast]);
 
   if (loading) {
     return (
@@ -484,30 +649,23 @@ export default function CryptoPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-2xl mx-auto">
-      <div>
-        <h1 className="text-3xl font-bold font-headline">
-          Trade Cryptocurrency
-        </h1>
-        <p className="text-muted-foreground">
-          Instantly buy and sell top cryptocurrencies at the best rates.
-        </p>
-      </div>
-
+    <div className="container mx-auto py-8">
       <Card>
-        <Tabs defaultValue="buy" className="w-full">
-          <CardHeader>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ArrowRightLeft className="h-6 w-6" /> Crypto Trading
+          </CardTitle>
+          <CardDescription>
+            Buy and Sell cryptocurrencies at the best rates.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="buy" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="buy">Buy</TabsTrigger>
-              <TabsTrigger value="sell">Sell</TabsTrigger>
+              <TabsTrigger value="buy">Buy Crypto</TabsTrigger>
+              <TabsTrigger value="sell">Sell Crypto</TabsTrigger>
             </TabsList>
-          </CardHeader>
-          <CardContent>
             <TabsContent value="buy">
-              <CardTitle className="mb-2 text-2xl">Buy Crypto</CardTitle>
-              <CardDescription className="mb-6">
-                Select a currency and enter the amount you wish to purchase.
-              </CardDescription>
               <CryptoTradeForm
                 type="Buy"
                 cryptoRates={data.cryptoRates}
@@ -516,10 +674,6 @@ export default function CryptoPage() {
               />
             </TabsContent>
             <TabsContent value="sell">
-              <CardTitle className="mb-2 text-2xl">Sell Crypto</CardTitle>
-              <CardDescription className="mb-6">
-                Your wallet will be credited instantly upon confirmation.
-              </CardDescription>
               <CryptoTradeForm
                 type="Sell"
                 cryptoRates={data.cryptoRates}
@@ -527,8 +681,8 @@ export default function CryptoPage() {
                 exchangeRate={data.exchangeRate}
               />
             </TabsContent>
-          </CardContent>
-        </Tabs>
+          </Tabs>
+        </CardContent>
       </Card>
     </div>
   );

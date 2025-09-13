@@ -27,7 +27,7 @@ import { Save, Copy, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function CryptoSettingsTab() {
-  const [rates, setRates] = useState([]); // live API rates
+  const [rates, setRates] = useState([]); // live API rates (for display only)
   const [customRates, setCustomRates] = useState({}); // per-coin margins
   const [wallets, setWallets] = useState({});
   const [loading, setLoading] = useState(true);
@@ -43,7 +43,7 @@ export default function CryptoSettingsTab() {
       try {
         setLoading(true);
 
-        // Load live crypto rates
+        // Load live crypto rates (for display only)
         const liveData = await fetchLiveCryptoRates();
         setRates(liveData);
 
@@ -82,25 +82,24 @@ export default function CryptoSettingsTab() {
         merge: true,
       });
 
-      // Save per-coin custom margins
+      // Save only per-coin custom margins and asset names
+      const marginData = {};
+      Object.keys(customRates).forEach((id) => {
+        const coin = rates.find((r) => r.id === id);
+        if (coin && customRates[id] !== undefined) {
+          marginData[id] = {
+            name: coin.name,
+            symbol: coin.symbol,
+            margin: customRates[id],
+          };
+        }
+      });
+
       await setDoc(
         doc(firestore, "settings", "cryptoConfig"),
-        { customRates },
+        { customRates: marginData },
         { merge: true }
       );
-
-      // Save final adjusted rates for users
-      const adjustedRates = rates.map((coin) => ({
-        id: coin.id,
-        name: coin.name,
-        symbol: coin.symbol, // ✅ Ensure symbol is included
-        basePrice: coin.price,
-        finalPrice: calculateSellPrice(coin.id, coin.price),
-      }));
-
-      await setDoc(doc(firestore, "settings", "cryptoRates"), {
-        assets: adjustedRates,
-      });
 
       toast({
         title: "Settings Saved",
@@ -149,7 +148,7 @@ export default function CryptoSettingsTab() {
     setNewWalletAddress("");
     toast({
       title: "Wallet Added",
-      description: `${coinToAdd.name} wallet saved locally. Don’t forget to save settings.`,
+      description: `${coinToAdd.name} wallet saved locally. Don't forget to save settings.`,
     });
   };
 
@@ -165,6 +164,12 @@ export default function CryptoSettingsTab() {
   const calculateSellPrice = (id, marketPrice) => {
     const margin = customRates[id] || 0;
     return marketPrice * (1 + margin / 100);
+  };
+
+  // 🔹 Calculate profit per unit
+  const calculateProfit = (id, marketPrice) => {
+    const finalPrice = calculateSellPrice(id, marketPrice);
+    return finalPrice - marketPrice;
   };
 
   const handleCopy = (address) => {
@@ -244,8 +249,8 @@ export default function CryptoSettingsTab() {
         <CardHeader>
           <CardTitle>Cryptocurrency Rate Settings</CardTitle>
           <CardDescription>
-            Adjust profit margins for each asset. Final sell price is applied
-            based on live market rates.
+            Adjust profit margins for each asset. Live prices are for reference
+            only.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -256,6 +261,7 @@ export default function CryptoSettingsTab() {
                 <TableHead className="text-right">Market Price (₦)</TableHead>
                 <TableHead className="text-right">Margin (%)</TableHead>
                 <TableHead className="text-right">Your Price (₦)</TableHead>
+                <TableHead className="text-right">Profit (₦)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -270,6 +276,9 @@ export default function CryptoSettingsTab() {
                       </TableCell>
                       <TableCell className="text-right">
                         <Skeleton className="h-6 w-16 ml-auto" />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Skeleton className="h-6 w-20 ml-auto" />
                       </TableCell>
                       <TableCell className="text-right">
                         <Skeleton className="h-6 w-20 ml-auto" />
@@ -296,6 +305,16 @@ export default function CryptoSettingsTab() {
                       <TableCell className="text-right font-semibold text-primary">
                         ₦
                         {calculateSellPrice(coin.id, coin.price).toLocaleString(
+                          "en-US",
+                          {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-green-600">
+                        ₦
+                        {calculateProfit(coin.id, coin.price).toLocaleString(
                           "en-US",
                           {
                             minimumFractionDigits: 2,

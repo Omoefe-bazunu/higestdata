@@ -3,34 +3,16 @@ import * as React from "react";
 export function SendAdminTemplate({ data }) {
   return (
     <div>
-      <h2>New Gift Card Submission Received</h2>
-      <p>Details:</p>
-      <ul>
-        <li>
-          <strong>Gift Card:</strong> {data.giftCardName}
-        </li>
-        <li>
-          <strong>Face Value:</strong> ${data.faceValue}
-        </li>
-        <li>
-          <strong>Rate:</strong> {data.rate}%
-        </li>
-        <li>
-          <strong>Payout:</strong> ₦{Number(data.payoutNaira).toLocaleString()}
-        </li>
-        <li>
-          <strong>Card Code:</strong> [Hidden for security]
-        </li>
-        <li>
-          <strong>User ID:</strong> {data.userId}
-        </li>
-        <li>
-          <strong>Status:</strong> Pending
-        </li>
-        <li>
-          <strong>Submission ID:</strong> {data.submissionId}
-        </li>
-      </ul>
+      <h1>New Gift Card Submission</h1>
+      <p>Submission ID: {data.submissionId}</p>
+      <p>Gift Card: {data.giftCardName}</p>
+      <p>Face Value: ${data.faceValue}</p>
+      <p>Rate: {data.rate}%</p>
+      <p>Payout: ₦{data.payoutNaira.toLocaleString()}</p>
+      <p>User ID: {data.userId}</p>
+      <p>
+        Image URL: <a href={data.imageUrl}>View Image</a>
+      </p>
     </div>
   );
 }
