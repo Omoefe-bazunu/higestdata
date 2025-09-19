@@ -45,7 +45,7 @@ export default function CryptoRates() {
       <CardHeader>
         <CardTitle>Crypto Rates</CardTitle>
         <CardDescription>
-          Live prices for top cryptocurrencies (from Firestore).
+          Live prices for top cryptocurrencies
         </CardDescription>
       </CardHeader>
       <CardContent>

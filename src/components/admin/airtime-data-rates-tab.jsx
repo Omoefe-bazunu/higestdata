@@ -1,6 +1,11 @@
+// components/AdminRatesDashboard.js
+// Updated admin dashboard for managing VTU rates with profit margins
+
 "use client";
 
 import { useState, useEffect } from "react";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { firestore } from "@/lib/firebaseConfig";
 import {
   Card,
   CardContent,
@@ -18,7 +23,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Save } from "lucide-react";
+import { Save, Loader, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -27,273 +32,697 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "../ui/badge";
-import * as TabsPrimitive from "@radix-ui/react-tabs";
-import { cn } from "@/lib/utils";
-import React from "react";
-import { Label } from "../ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
 
-export default function AirtimeDataRatesTab() {
-  const [providerDiscounts, setProviderDiscounts] = useState({});
-  const [dataPlans, setDataPlans] = useState({});
-  const [selectedProvider, setSelectedProvider] = useState("mtn-data");
+export default function AdminRatesDashboard() {
+  // State management for different service rates
+  const [airtimeRates, setAirtimeRates] = useState({});
+  const [dataRates, setDataRates] = useState({});
+  const [tvRates, setTvRates] = useState({});
+  const [selectedProvider, setSelectedProvider] = useState("mtn");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
-  // Fetch Airtime discounts
+  // Load existing rates on component mount
   useEffect(() => {
-    async function fetchAirtimeRates() {
-      try {
-        const res = await fetch("/api/vtpass/airtime");
-        const data = await res.json();
-
-        if (data.error) throw new Error(data.error);
-
-        const discounts = {};
-        data.content?.variations?.forEach((item) => {
-          discounts[item.variation_code] = {
-            name: item.name,
-            discount: item.fixedPrice || 0,
-          };
-        });
-
-        setProviderDiscounts(discounts);
-      } catch (err) {
-        console.error("Error fetching airtime rates:", err);
-      }
-    }
-    fetchAirtimeRates();
+    loadRates();
   }, []);
 
-  // Fetch Data Plans for selected provider
-  useEffect(() => {
-    async function fetchDataPlans() {
-      try {
-        const res = await fetch(
-          `/api/vtpass/data?provider=${selectedProvider}`
-        );
-        const data = await res.json();
-
-        if (data.error) throw new Error(data.error);
-
-        setDataPlans((prev) => ({
-          ...prev,
-          [selectedProvider]: data.content?.variations || [],
-        }));
-      } catch (err) {
-        console.error("Error fetching data plans:", err);
-      }
-    }
-    fetchDataPlans();
-  }, [selectedProvider]);
-
-  const handleDiscountChange = (provider, discount) => {
-    setProviderDiscounts((prev) => ({
-      ...prev,
-      [provider]: { ...prev[provider], discount },
-    }));
-  };
-
-  const handleDataPlanPriceChange = (provider, planId, price) => {
-    setDataPlans((prev) => ({
-      ...prev,
-      [provider]: prev[provider].map((plan) =>
-        plan.variation_code === planId ? { ...plan, fixedPrice: price } : plan
-      ),
-    }));
-  };
-
-  const handleSaveChanges = async () => {
+  // Load all rates from Firestore
+  const loadRates = async () => {
     try {
-      // Save Airtime Discounts
-      await fetch("/api/rates/airtime", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ providerDiscounts }),
-      });
+      setIsLoading(true);
 
-      // Save Data Plans
-      await fetch("/api/rates/data", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dataPlans }),
-      });
+      // Load airtime rates
+      const airtimeDoc = await getDoc(
+        doc(firestore, "settings", "airtimeRates")
+      );
+      if (airtimeDoc.exists()) {
+        setAirtimeRates(airtimeDoc.data().rates || {});
+      } else {
+        // Initialize with default airtime rates
+        const defaultAirtimeRates = {
+          mtn: { name: "MTN", basePrice: 100, profit: 2, finalPrice: 102 },
+          glo: { name: "Glo", basePrice: 100, profit: 2, finalPrice: 102 },
+          airtel: {
+            name: "Airtel",
+            basePrice: 100,
+            profit: 2,
+            finalPrice: 102,
+          },
+          "9mobile": {
+            name: "9mobile",
+            basePrice: 100,
+            profit: 2,
+            finalPrice: 102,
+          },
+        };
+        setAirtimeRates(defaultAirtimeRates);
+      }
 
+      // Load data rates
+      const dataDoc = await getDoc(doc(firestore, "settings", "dataRates"));
+      if (dataDoc.exists()) {
+        setDataRates(dataDoc.data().rates || {});
+      }
+
+      // Load TV rates
+      const tvDoc = await getDoc(doc(firestore, "settings", "tvRates"));
+      if (tvDoc.exists()) {
+        setTvRates(tvDoc.data().rates || {});
+      }
+    } catch (error) {
+      console.error("Error loading rates:", error);
       toast({
-        title: "✅ Rates Saved",
-        description: "Your Airtime & Data plan overrides have been stored.",
-      });
-    } catch (err) {
-      console.error("Error saving rates:", err);
-      toast({
-        title: "❌ Error",
-        description: "Could not save rates. Try again.",
+        title: "Error",
+        description: "Failed to load rates. Please refresh the page.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  // Update airtime rate
+  const updateAirtimeRate = (network, field, value) => {
+    setAirtimeRates((prev) => ({
+      ...prev,
+      [network]: {
+        ...prev[network],
+        [field]: field === "name" ? value : parseFloat(value) || 0,
+        finalPrice:
+          field === "basePrice"
+            ? (parseFloat(value) || 0) + (prev[network]?.profit || 0)
+            : field === "profit"
+            ? (prev[network]?.basePrice || 0) + (parseFloat(value) || 0)
+            : prev[network]?.finalPrice || 0,
+      },
+    }));
+  };
+
+  // Add new data plan
+  const addDataPlan = (network) => {
+    const planId = `plan_${Date.now()}`;
+    setDataRates((prev) => ({
+      ...prev,
+      [network]: {
+        ...prev[network],
+        [planId]: {
+          name: "New Data Plan",
+          basePrice: 1000,
+          profit: 50,
+          finalPrice: 1050,
+        },
+      },
+    }));
+  };
+
+  // Update data plan rate
+  const updateDataRate = (network, planId, field, value) => {
+    setDataRates((prev) => ({
+      ...prev,
+      [network]: {
+        ...prev[network],
+        [planId]: {
+          ...prev[network]?.[planId],
+          [field]: field === "name" ? value : parseFloat(value) || 0,
+          finalPrice:
+            field === "basePrice"
+              ? (parseFloat(value) || 0) +
+                (prev[network]?.[planId]?.profit || 0)
+              : field === "profit"
+              ? (prev[network]?.[planId]?.basePrice || 0) +
+                (parseFloat(value) || 0)
+              : prev[network]?.[planId]?.finalPrice || 0,
+        },
+      },
+    }));
+  };
+
+  // Remove data plan
+  const removeDataPlan = (network, planId) => {
+    setDataRates((prev) => {
+      const newRates = { ...prev };
+      if (newRates[network]) {
+        delete newRates[network][planId];
+      }
+      return newRates;
+    });
+  };
+
+  // Add new TV plan
+  const addTVPlan = (provider) => {
+    const planId = `plan_${Date.now()}`;
+    setTvRates((prev) => ({
+      ...prev,
+      [provider]: {
+        ...prev[provider],
+        [planId]: {
+          name: "New TV Plan",
+          basePrice: 5000,
+          profit: 200,
+          finalPrice: 5200,
+        },
+      },
+    }));
+  };
+
+  // Update TV plan rate
+  const updateTVRate = (provider, planId, field, value) => {
+    setTvRates((prev) => ({
+      ...prev,
+      [provider]: {
+        ...prev[provider],
+        [planId]: {
+          ...prev[provider]?.[planId],
+          [field]: field === "name" ? value : parseFloat(value) || 0,
+          finalPrice:
+            field === "basePrice"
+              ? (parseFloat(value) || 0) +
+                (prev[provider]?.[planId]?.profit || 0)
+              : field === "profit"
+              ? (prev[provider]?.[planId]?.basePrice || 0) +
+                (parseFloat(value) || 0)
+              : prev[provider]?.[planId]?.finalPrice || 0,
+        },
+      },
+    }));
+  };
+
+  // Remove TV plan
+  const removeTVPlan = (provider, planId) => {
+    setTvRates((prev) => {
+      const newRates = { ...prev };
+      if (newRates[provider]) {
+        delete newRates[provider][planId];
+      }
+      return newRates;
+    });
+  };
+
+  // Save all rates to Firestore
+  const saveAllRates = async () => {
+    try {
+      setIsSaving(true);
+
+      // Save airtime rates
+      await setDoc(doc(firestore, "settings", "airtimeRates"), {
+        rates: airtimeRates,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Save data rates
+      await setDoc(doc(firestore, "settings", "dataRates"), {
+        rates: dataRates,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Save TV rates
+      await setDoc(doc(firestore, "settings", "tvRates"), {
+        rates: tvRates,
+        updatedAt: new Date().toISOString(),
+      });
+
+      toast({
+        title: "Success",
+        description: "All rates have been saved successfully.",
+      });
+    } catch (error) {
+      console.error("Error saving rates:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save rates. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading rates...</span>
+      </div>
+    );
+  }
+
   return (
-    <Tabs defaultValue="airtime" className="w-full mt-4">
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="airtime">Airtime Rates</TabsTrigger>
-        <TabsTrigger value="data">Data Plan Rates</TabsTrigger>
-      </TabsList>
-
-      {/* Airtime Tab */}
-      <TabsContent value="airtime">
-        <Card>
-          <CardHeader>
-            <CardTitle>Airtime Purchase Discount</CardTitle>
-            <CardDescription>
-              Set the discount percentage for airtime purchases per provider.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Network Provider</TableHead>
-                  <TableHead>VTPass API Rate</TableHead>
-                  <TableHead className="w-48">Your Discount (%)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {Object.keys(providerDiscounts).map((key) => (
-                  <TableRow key={key}>
-                    <TableCell className="font-medium">
-                      {providerDiscounts[key].name}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">
-                        ₦{providerDiscounts[key].discount}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        value={providerDiscounts[key].discount}
-                        onChange={(e) =>
-                          handleDiscountChange(key, parseFloat(e.target.value))
-                        }
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      {/* Data Tab */}
-      <TabsContent value="data">
-        <Card>
-          <CardHeader>
-            <CardTitle>Data Plan Pricing</CardTitle>
-            <CardDescription>
-              Set the price for data plans for each network provider.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-4">
-              <Label>Select Provider</Label>
-              <Select
-                value={selectedProvider}
-                onValueChange={(val) => setSelectedProvider(val)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a provider" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.keys(dataPlans).map((key) => (
-                    <SelectItem key={key} value={key}>
-                      {key.toUpperCase()}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="mtn-data">MTN</SelectItem>
-                  <SelectItem value="glo-data">Glo</SelectItem>
-                  <SelectItem value="airtel-data">Airtel</SelectItem>
-                  <SelectItem value="etisalat-data">9mobile</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data Plan</TableHead>
-                  <TableHead className="w-48">Price (₦)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {dataPlans[selectedProvider]?.map((plan) => (
-                  <TableRow key={plan.variation_code}>
-                    <TableCell className="font-medium">{plan.name}</TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        value={plan.fixedPrice}
-                        onChange={(e) =>
-                          handleDataPlanPriceChange(
-                            selectedProvider,
-                            plan.variation_code,
-                            parseInt(e.target.value)
-                          )
-                        }
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      <div className="mt-6 flex justify-end">
-        <Button onClick={handleSaveChanges}>
-          <Save className="mr-2 h-4 w-4" />
-          Save All Changes
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">VTU Rates Management</h1>
+          <p className="text-muted-foreground">
+            Set base prices and profit margins for all VTU services
+          </p>
+        </div>
+        <Button onClick={saveAllRates} disabled={isSaving}>
+          {isSaving ? (
+            <>
+              <Loader className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              Save All Changes
+            </>
+          )}
         </Button>
       </div>
-    </Tabs>
+
+      <Tabs defaultValue="airtime" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="airtime">Airtime Rates</TabsTrigger>
+          <TabsTrigger value="data">Data Plan Rates</TabsTrigger>
+          <TabsTrigger value="tv">TV Subscription Rates</TabsTrigger>
+        </TabsList>
+
+        {/* Airtime Rates Tab */}
+        <TabsContent value="airtime">
+          <Card>
+            <CardHeader>
+              <CardTitle>Airtime Rates Configuration</CardTitle>
+              <CardDescription>
+                Set base prices and profit margins for airtime top-ups
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Network</TableHead>
+                    <TableHead>Base Price (₦)</TableHead>
+                    <TableHead>Profit Margin (₦)</TableHead>
+                    <TableHead>Final Price (₦)</TableHead>
+                    <TableHead>Margin %</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.keys(airtimeRates).map((network) => (
+                    <TableRow key={network}>
+                      <TableCell className="font-medium">
+                        {airtimeRates[network]?.name || network}
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          value={airtimeRates[network]?.basePrice || 0}
+                          onChange={(e) =>
+                            updateAirtimeRate(
+                              network,
+                              "basePrice",
+                              e.target.value
+                            )
+                          }
+                          className="w-24"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          value={airtimeRates[network]?.profit || 0}
+                          onChange={(e) =>
+                            updateAirtimeRate(network, "profit", e.target.value)
+                          }
+                          className="w-24"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          ₦{airtimeRates[network]?.finalPrice || 0}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {airtimeRates[network]?.basePrice > 0
+                            ? (
+                                ((airtimeRates[network]?.profit || 0) /
+                                  airtimeRates[network]?.basePrice) *
+                                100
+                              ).toFixed(1)
+                            : 0}
+                          %
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Data Plans Tab */}
+        <TabsContent value="data">
+          <Card>
+            <CardHeader>
+              <CardTitle>Data Plan Rates Configuration</CardTitle>
+              <CardDescription>
+                Manage data plan pricing for each network provider
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-4">
+                <Label>Select Network Provider</Label>
+                <div className="flex gap-2 mt-2">
+                  <Select
+                    value={selectedProvider}
+                    onValueChange={setSelectedProvider}
+                  >
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Select provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mtn">MTN</SelectItem>
+                      <SelectItem value="glo">Glo</SelectItem>
+                      <SelectItem value="airtel">Airtel</SelectItem>
+                      <SelectItem value="9mobile">9mobile</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    onClick={() => addDataPlan(selectedProvider)}
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Plan
+                  </Button>
+                </div>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Plan Name</TableHead>
+                    <TableHead>Base Price (₦)</TableHead>
+                    <TableHead>Profit (₦)</TableHead>
+                    <TableHead>Final Price (₦)</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dataRates[selectedProvider] &&
+                    Object.keys(dataRates[selectedProvider]).map((planId) => (
+                      <TableRow key={planId}>
+                        <TableCell>
+                          <Input
+                            type="text"
+                            value={
+                              dataRates[selectedProvider][planId]?.name || ""
+                            }
+                            onChange={(e) =>
+                              updateDataRate(
+                                selectedProvider,
+                                planId,
+                                "name",
+                                e.target.value
+                              )
+                            }
+                            className="w-40"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            value={
+                              dataRates[selectedProvider][planId]?.basePrice ||
+                              0
+                            }
+                            onChange={(e) =>
+                              updateDataRate(
+                                selectedProvider,
+                                planId,
+                                "basePrice",
+                                e.target.value
+                              )
+                            }
+                            className="w-28"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            value={
+                              dataRates[selectedProvider][planId]?.profit || 0
+                            }
+                            onChange={(e) =>
+                              updateDataRate(
+                                selectedProvider,
+                                planId,
+                                "profit",
+                                e.target.value
+                              )
+                            }
+                            className="w-24"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            ₦
+                            {dataRates[selectedProvider][planId]?.finalPrice ||
+                              0}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            onClick={() =>
+                              removeDataPlan(selectedProvider, planId)
+                            }
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  {(!dataRates[selectedProvider] ||
+                    Object.keys(dataRates[selectedProvider]).length === 0) && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        className="text-center text-muted-foreground"
+                      >
+                        No data plans configured. Click "Add Plan" to start.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* TV Subscription Tab */}
+        <TabsContent value="tv">
+          <Card>
+            <CardHeader>
+              <CardTitle>TV Subscription Rates Configuration</CardTitle>
+              <CardDescription>
+                Manage cable TV subscription pricing for each provider
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-4">
+                <Label>Select TV Provider</Label>
+                <div className="flex gap-2 mt-2">
+                  <Select
+                    value={selectedProvider}
+                    onValueChange={setSelectedProvider}
+                  >
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Select provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="dstv">DSTV</SelectItem>
+                      <SelectItem value="gotv">GoTV</SelectItem>
+                      <SelectItem value="startimes">Startimes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button onClick={() => addTVPlan(selectedProvider)} size="sm">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Plan
+                  </Button>
+                </div>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Package Name</TableHead>
+                    <TableHead>Base Price (₦)</TableHead>
+                    <TableHead>Profit (₦)</TableHead>
+                    <TableHead>Final Price (₦)</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tvRates[selectedProvider] &&
+                    Object.keys(tvRates[selectedProvider]).map((planId) => (
+                      <TableRow key={planId}>
+                        <TableCell>
+                          <Input
+                            type="text"
+                            value={
+                              tvRates[selectedProvider][planId]?.name || ""
+                            }
+                            onChange={(e) =>
+                              updateTVRate(
+                                selectedProvider,
+                                planId,
+                                "name",
+                                e.target.value
+                              )
+                            }
+                            className="w-48"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            value={
+                              tvRates[selectedProvider][planId]?.basePrice || 0
+                            }
+                            onChange={(e) =>
+                              updateTVRate(
+                                selectedProvider,
+                                planId,
+                                "basePrice",
+                                e.target.value
+                              )
+                            }
+                            className="w-32"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            value={
+                              tvRates[selectedProvider][planId]?.profit || 0
+                            }
+                            onChange={(e) =>
+                              updateTVRate(
+                                selectedProvider,
+                                planId,
+                                "profit",
+                                e.target.value
+                              )
+                            }
+                            className="w-28"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            ₦
+                            {tvRates[selectedProvider][planId]?.finalPrice || 0}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            onClick={() =>
+                              removeTVPlan(selectedProvider, planId)
+                            }
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  {(!tvRates[selectedProvider] ||
+                    Object.keys(tvRates[selectedProvider]).length === 0) && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        className="text-center text-muted-foreground"
+                      >
+                        No TV plans configured. Click "Add Plan" to start.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Summary Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Rate Configuration Summary</CardTitle>
+          <CardDescription>
+            Overview of your current pricing structure
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 border rounded-lg">
+              <h4 className="font-semibold mb-2">Airtime Networks</h4>
+              <p className="text-sm text-muted-foreground">
+                {Object.keys(airtimeRates).length} networks configured
+              </p>
+              <div className="mt-2 space-y-1">
+                {Object.values(airtimeRates).map((rate, index) => (
+                  <div key={index} className="flex justify-between text-xs">
+                    <span>{rate.name}</span>
+                    <span>₦{rate.finalPrice}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-4 border rounded-lg">
+              <h4 className="font-semibold mb-2">Data Plans</h4>
+              <p className="text-sm text-muted-foreground">
+                {Object.values(dataRates).reduce(
+                  (total, network) => total + Object.keys(network).length,
+                  0
+                )}{" "}
+                plans configured
+              </p>
+              <div className="mt-2 space-y-1">
+                {Object.keys(dataRates).map((network) => (
+                  <div key={network} className="flex justify-between text-xs">
+                    <span>{network.toUpperCase()}</span>
+                    <span>
+                      {Object.keys(dataRates[network] || {}).length} plans
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-4 border rounded-lg">
+              <h4 className="font-semibold mb-2">TV Subscriptions</h4>
+              <p className="text-sm text-muted-foreground">
+                {Object.values(tvRates).reduce(
+                  (total, provider) => total + Object.keys(provider).length,
+                  0
+                )}{" "}
+                packages configured
+              </p>
+              <div className="mt-2 space-y-1">
+                {Object.keys(tvRates).map((provider) => (
+                  <div key={provider} className="flex justify-between text-xs">
+                    <span>{provider.toUpperCase()}</span>
+                    <span>
+                      {Object.keys(tvRates[provider] || {}).length} packages
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
-
-// Tabs components
-const Tabs = TabsPrimitive.Root;
-
-const TabsList = React.forwardRef(({ className, ...props }, ref) => (
-  <TabsPrimitive.List
-    ref={ref}
-    className={cn(
-      "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
-      className
-    )}
-    {...props}
-  />
-));
-TabsList.displayName = TabsPrimitive.List.displayName;
-
-const TabsTrigger = React.forwardRef(({ className, ...props }, ref) => (
-  <TabsPrimitive.Trigger
-    ref={ref}
-    className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
-      className
-    )}
-    {...props}
-  />
-));
-TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
-
-const TabsContent = React.forwardRef(({ className, ...props }, ref) => (
-  <TabsPrimitive.Content
-    ref={ref}
-    className={cn(
-      "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-      className
-    )}
-    {...props}
-  />
-));
-TabsContent.displayName = TabsPrimitive.Content.displayName;

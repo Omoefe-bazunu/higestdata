@@ -34,7 +34,7 @@ const adminEmails = (process.env.NEXT_PUBLIC_ADMINEMAIL || "")
 
 function Logo() {
   return (
-    <div className="flex items-center gap-2 p-4 border-b">
+    <div className="flex items-center gap-2 p-4 border-b mt-4">
       <Image
         src="https://firebasestorage.googleapis.com/v0/b/higestdata.firebasestorage.app/o/HIGHEST%20ICON%20COLORED.png?alt=media&token=4946037d-3ef0-4f52-a671-88a6e732ac1e"
         alt="Website Logo"
@@ -60,7 +60,7 @@ export default function AppSidebar({ onLinkClick }) {
   const isAdmin = user?.email && adminEmails.includes(user.email.toLowerCase());
 
   return (
-    <aside className="h-full w-64 flex flex-col bg-card border-r">
+    <aside className="h-full w-64 flex flex-col bg-card border-r py-20">
       <Logo />
       <nav className="flex-1 px-4 py-4">
         <ul className="space-y-2">

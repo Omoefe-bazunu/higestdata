@@ -1,8 +1,11 @@
+// components/VTUPurchaseForm.js
+// Updated VTU form with wallet integration
+
 "use client";
 
 import { useState, useRef, useEffect } from "react";
 import { getAuth } from "firebase/auth";
-import { collection, addDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import {
   Card,
@@ -23,11 +26,19 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Image from "next/image";
-import { CheckCircle, Loader, AlertTriangle } from "lucide-react";
+import { CheckCircle, Loader, AlertTriangle, Wallet } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
-// ✅ Reusable form
+// Reusable VTU Purchase Form
 function PurchaseForm({ type, user }) {
   const [network, setNetwork] = useState("");
   const [phone, setPhone] = useState("");
@@ -36,13 +47,105 @@ function PurchaseForm({ type, user }) {
   const [provider, setProvider] = useState("");
   const [cardNumber, setCardNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formState, setFormState] = useState({});
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [showInsufficientModal, setShowInsufficientModal] = useState(false);
+  const [dataPlans, setDataPlans] = useState([]);
+  const [tvPlans, setTvPlans] = useState([]);
   const { toast } = useToast();
 
   const isAuthenticated = !!user;
 
+  // Fetch user wallet balance
+  useEffect(() => {
+    if (user) {
+      fetchWalletBalance();
+    }
+  }, [user]);
+
+  // Fetch data plans when network changes
+  useEffect(() => {
+    if (network && type === "Data") {
+      fetchDataPlans(network);
+    }
+  }, [network, type]);
+
+  // Fetch TV plans when provider changes
+  useEffect(() => {
+    if (provider && type === "Cable") {
+      fetchTVPlans(provider);
+    }
+  }, [provider, type]);
+
+  const fetchWalletBalance = async () => {
+    try {
+      const userDoc = await getDoc(doc(firestore, "users", user.uid));
+      if (userDoc.exists()) {
+        setWalletBalance(userDoc.data().walletBalance || 0);
+      }
+    } catch (error) {
+      console.error("Error fetching wallet balance:", error);
+    }
+  };
+
+  // Fetch available data plans from rates
+  const fetchDataPlans = async (networkProvider) => {
+    try {
+      const ratesDoc = await getDoc(doc(firestore, "settings", "dataRates"));
+      if (ratesDoc.exists()) {
+        const rates = ratesDoc.data()?.rates || {};
+        const networkPlans = rates[networkProvider] || {};
+
+        const plans = Object.keys(networkPlans).map((planId) => ({
+          id: planId,
+          name: networkPlans[planId].name || planId,
+          price: networkPlans[planId].price || 0,
+        }));
+
+        setDataPlans(plans);
+      }
+    } catch (error) {
+      console.error("Error fetching data plans:", error);
+    }
+  };
+
+  // Fetch available TV plans from rates
+  const fetchTVPlans = async (tvProvider) => {
+    try {
+      const ratesDoc = await getDoc(doc(firestore, "settings", "tvRates"));
+      if (ratesDoc.exists()) {
+        const rates = ratesDoc.data()?.rates || {};
+        const providerPlans = rates[tvProvider] || {};
+
+        const plans = Object.keys(providerPlans).map((planId) => ({
+          id: planId,
+          name: providerPlans[planId].name || planId,
+          price: providerPlans[planId].price || 0,
+        }));
+
+        setTvPlans(plans);
+      }
+    } catch (error) {
+      console.error("Error fetching TV plans:", error);
+    }
+  };
+
+  // Get transaction amount based on service type
+  const getTransactionAmount = () => {
+    if (type === "Airtime") {
+      return parseFloat(amount || 0);
+    } else if (type === "Data") {
+      const selectedPlan = dataPlans.find((plan) => plan.id === dataPlan);
+      return selectedPlan ? selectedPlan.price : 0;
+    } else if (type === "Cable") {
+      const selectedPlan = tvPlans.find((plan) => plan.id === dataPlan);
+      return selectedPlan ? selectedPlan.price : parseFloat(amount || 0);
+    }
+    return 0;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!isAuthenticated) {
       toast({
         title: "Authentication Required",
@@ -52,66 +155,78 @@ function PurchaseForm({ type, user }) {
       return;
     }
 
+    const transactionAmount = getTransactionAmount();
+
+    // Validate transaction amount
+    if (!transactionAmount || transactionAmount <= 0) {
+      toast({
+        title: "Invalid Amount",
+        description: "Please enter a valid amount or select a plan.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check wallet balance
+    if (walletBalance < transactionAmount) {
+      setShowInsufficientModal(true);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      // Transaction description + amount mapping
-      let description = "";
-      let txnAmount = 0;
-
-      if (type === "Airtime") {
-        description = `${network} airtime top-up`;
-        txnAmount = parseFloat(amount || 0);
-      } else if (type === "Data") {
-        description = `${network} data purchase (${dataPlan})`;
-        txnAmount = dataPlan.includes("1.5GB")
-          ? 1000
-          : dataPlan.includes("5GB")
-          ? 2500
-          : dataPlan.includes("12GB")
-          ? 5000
-          : 0;
-      } else if (type === "Cable") {
-        description = `${provider} subscription for ${cardNumber}`;
-        txnAmount = parseFloat(amount || 0);
-      }
-
-      if (!txnAmount || txnAmount <= 0) {
-        setFormState({
-          errors: { amount: ["Enter a valid amount/plan"] },
-          message: "Invalid input",
-        });
-        return;
-      }
-
+      // Prepare transaction data
       const transactionData = {
         userId: user.uid,
-        description,
-        amount: txnAmount,
-        type: "debit",
-        status: "Pending",
-        date: new Date().toLocaleDateString(),
-        createdAt: new Date().toISOString(),
-        relatedSubmissionType: type.toLowerCase(),
+        serviceType: type.toLowerCase(),
+        amount: transactionAmount,
+        phone: phone,
+        network: network,
+        variationId: dataPlan,
+        customerId: cardNumber,
       };
 
-      await addDoc(
-        collection(firestore, "users", user.uid, "transactions"),
-        transactionData
-      );
+      // Call VTU transaction API
+      const response = await fetch("/api/vtu/transaction", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(transactionData),
+      });
 
-      setFormState({ message: `${type} purchase submitted successfully.` });
-      setNetwork("");
-      setPhone("");
-      setAmount("");
-      setDataPlan("");
-      setProvider("");
-      setCardNumber("");
-    } catch (err) {
-      console.error("Submission error:", err);
-      setFormState({
-        errors: { server: [err.message] },
-        message: "Failed to process transaction.",
+      const result = await response.json();
+
+      if (result.success) {
+        toast({
+          title: "Transaction Successful",
+          description: `${type} purchase completed successfully.`,
+        });
+
+        // Reset form
+        setNetwork("");
+        setPhone("");
+        setAmount("");
+        setDataPlan("");
+        setProvider("");
+        setCardNumber("");
+
+        // Refresh wallet balance
+        fetchWalletBalance();
+      } else {
+        toast({
+          title: "Transaction Failed",
+          description: result.message || "Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Transaction error:", error);
+      toast({
+        title: "Transaction Failed",
+        description: "Network error. Please try again.",
+        variant: "destructive",
       });
     } finally {
       setIsSubmitting(false);
@@ -119,127 +234,210 @@ function PurchaseForm({ type, user }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {type !== "Cable" && (
-        <div className="space-y-2">
-          <Label htmlFor="network">Network Provider</Label>
-          <Select value={network} onValueChange={setNetwork}>
-            <SelectTrigger id="network">
-              <SelectValue placeholder="Select Network" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="mtn">MTN</SelectItem>
-              <SelectItem value="glo">Glo</SelectItem>
-              <SelectItem value="airtel">Airtel</SelectItem>
-              <SelectItem value="9mobile">9mobile</SelectItem>
-            </SelectContent>
-          </Select>
+    <>
+      {/* Wallet Balance Display */}
+      <div className="bg-primary/5 p-4 rounded-lg mb-6">
+        <div className="flex items-center gap-2 mb-2">
+          <Wallet className="h-4 w-4" />
+          <span className="text-sm font-medium">Wallet Balance</span>
         </div>
-      )}
+        <p className="text-2xl font-bold">₦{walletBalance.toLocaleString()}</p>
+      </div>
 
-      {type === "Cable" && (
-        <>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {type !== "Cable" && (
           <div className="space-y-2">
-            <Label htmlFor="provider">Cable Provider</Label>
-            <Select value={provider} onValueChange={setProvider}>
-              <SelectTrigger id="provider">
-                <SelectValue placeholder="Select Provider" />
+            <Label htmlFor="network">Network Provider</Label>
+            <Select value={network} onValueChange={setNetwork}>
+              <SelectTrigger id="network">
+                <SelectValue placeholder="Select Network" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="dstv">DSTV</SelectItem>
-                <SelectItem value="gotv">GoTV</SelectItem>
-                <SelectItem value="startimes">Startimes</SelectItem>
+                <SelectItem value="mtn">MTN</SelectItem>
+                <SelectItem value="glo">Glo</SelectItem>
+                <SelectItem value="airtel">Airtel</SelectItem>
+                <SelectItem value="9mobile">9mobile</SelectItem>
               </SelectContent>
             </Select>
           </div>
+        )}
 
+        {type === "Cable" && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="provider">Cable Provider</Label>
+              <Select value={provider} onValueChange={setProvider}>
+                <SelectTrigger id="provider">
+                  <SelectValue placeholder="Select Provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="dstv">DSTV</SelectItem>
+                  <SelectItem value="gotv">GoTV</SelectItem>
+                  <SelectItem value="startimes">Startimes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cardNumber">Smart Card Number</Label>
+              <Input
+                id="cardNumber"
+                value={cardNumber}
+                onChange={(e) => setCardNumber(e.target.value)}
+                placeholder="e.g., 1234567890"
+                required
+              />
+            </div>
+          </>
+        )}
+
+        {type !== "Cable" && (
           <div className="space-y-2">
-            <Label htmlFor="cardNumber">Smart Card Number</Label>
+            <Label htmlFor="phone">Phone Number</Label>
             <Input
-              id="cardNumber"
-              value={cardNumber}
-              onChange={(e) => setCardNumber(e.target.value)}
-              placeholder="e.g., 1234567890"
+              id="phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="08012345678"
+              required
             />
           </div>
-        </>
-      )}
+        )}
 
-      {type !== "Cable" && (
         <div className="space-y-2">
-          <Label htmlFor="phone">Phone Number</Label>
-          <Input
-            id="phone"
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="08012345678"
-          />
-        </div>
-      )}
+          <Label htmlFor="amount">
+            {type === "Airtime"
+              ? "Amount"
+              : type === "Cable"
+              ? "Subscription Plan"
+              : "Data Plan"}
+          </Label>
 
-      <div className="space-y-2">
-        <Label htmlFor="amount">
-          {type === "Airtime"
-            ? "Amount"
-            : type === "Cable"
-            ? "Amount"
-            : "Data Plan"}
-        </Label>
-        {type === "Airtime" || type === "Cable" ? (
-          <Input
-            id="amount"
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="e.g., 1000"
-          />
-        ) : (
-          <Select value={dataPlan} onValueChange={setDataPlan}>
-            <SelectTrigger id="data-plan">
-              <SelectValue placeholder="Select Data Plan" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1.5GB">1.5GB - 30 Days - ₦1,000</SelectItem>
-              <SelectItem value="5GB">5GB - 30 Days - ₦2,500</SelectItem>
-              <SelectItem value="12GB">12GB - 30 Days - ₦5,000</SelectItem>
-            </SelectContent>
-          </Select>
-        )}
-      </div>
-
-      <p className="text-sm text-muted-foreground">
-        The amount will be deducted from your wallet balance.
-      </p>
-
-      <Button
-        type="submit"
-        className="w-full"
-        disabled={isSubmitting || !isAuthenticated}
-      >
-        {isSubmitting ? (
-          <>
-            <Loader className="mr-2 h-4 w-4 animate-spin" /> Submitting...
-          </>
-        ) : (
-          `Purchase ${type}`
-        )}
-      </Button>
-
-      {formState.message && (
-        <Alert variant={formState.errors ? "destructive" : "default"}>
-          {formState.errors ? (
-            <AlertTriangle className="h-4 w-4" />
-          ) : (
-            <CheckCircle className="h-4 w-4" />
+          {type === "Airtime" && (
+            <Input
+              id="amount"
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="e.g., 1000"
+              min="50"
+              required
+            />
           )}
-          <AlertTitle>
-            {formState.errors ? "Submission Failed" : "Submission Received"}
-          </AlertTitle>
-          <AlertDescription>{formState.message}</AlertDescription>
-        </Alert>
-      )}
-    </form>
+
+          {type === "Data" && (
+            <Select value={dataPlan} onValueChange={setDataPlan} required>
+              <SelectTrigger id="data-plan">
+                <SelectValue placeholder="Select Data Plan" />
+              </SelectTrigger>
+              <SelectContent>
+                {dataPlans.map((plan) => (
+                  <SelectItem key={plan.id} value={plan.id}>
+                    {plan.name} - ₦{plan.price.toLocaleString()}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {type === "Cable" && (
+            <Select value={dataPlan} onValueChange={setDataPlan} required>
+              <SelectTrigger id="tv-plan">
+                <SelectValue placeholder="Select Subscription Plan" />
+              </SelectTrigger>
+              <SelectContent>
+                {tvPlans.map((plan) => (
+                  <SelectItem key={plan.id} value={plan.id}>
+                    {plan.name} - ₦{plan.price.toLocaleString()}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* Amount Preview */}
+        {getTransactionAmount() > 0 && (
+          <div className="bg-muted p-3 rounded-lg">
+            <p className="text-sm">
+              <span className="font-medium">Amount to be charged:</span> ₦
+              {getTransactionAmount().toLocaleString()}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              This will be deducted from your wallet balance.
+            </p>
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={isSubmitting || !isAuthenticated}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader className="mr-2 h-4 w-4 animate-spin" /> Processing...
+            </>
+          ) : (
+            `Purchase ${type}`
+          )}
+        </Button>
+      </form>
+
+      {/* Insufficient Balance Modal */}
+      <Dialog
+        open={showInsufficientModal}
+        onOpenChange={setShowInsufficientModal}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              Insufficient Balance
+            </DialogTitle>
+            <DialogDescription>
+              Your wallet balance is insufficient for this transaction.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-muted p-4 rounded-lg">
+              <p className="text-sm">
+                <span className="font-medium">Required Amount:</span> ₦
+                {getTransactionAmount().toLocaleString()}
+              </p>
+              <p className="text-sm">
+                <span className="font-medium">Current Balance:</span> ₦
+                {walletBalance.toLocaleString()}
+              </p>
+              <p className="text-sm text-red-600">
+                <span className="font-medium">Shortfall:</span> ₦
+                {(getTransactionAmount() - walletBalance).toLocaleString()}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setShowInsufficientModal(false)}
+                variant="outline"
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowInsufficientModal(false);
+                  // Redirect to funding page
+                  window.location.href = "/dashboard/wallet";
+                }}
+                className="flex-1"
+              >
+                Fund Wallet
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

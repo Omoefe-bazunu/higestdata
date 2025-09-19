@@ -56,7 +56,12 @@ export default function DashboardPage() {
   if (!user) {
     return (
       <p className="text-muted-foreground">
-        Please log in to view your dashboard.
+        Please log in to view your dashboard.{" "}
+        <span>
+          <a href="/login" className="text-primary-foreground">
+            Login
+          </a>
+        </span>
       </p>
     );
   }
@@ -67,7 +72,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
+      <div className=" mt-20">
         <h1 className="text-3xl font-bold font-headline">
           Welcome back, {userData.name.split(" ")[0]}!
         </h1>
