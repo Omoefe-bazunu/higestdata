@@ -36,7 +36,7 @@ export default function FAQs() {
   };
 
   return (
-    <section className="py-20 bg-white text-blue-950">
+    <section className="py-20 bg-gray-50 text-blue-950">
       <div className="max-w-7xl mx-auto px-6 lg:px-12 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
         {/* Left Side - FAQ List */}
         <div>

@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 
 export default function WhyChooseUs() {
   return (
-    <section className="flex flex-col-reverse md:flex-row items-center justify-center px-6 py-12 bg-white">
+    <section className="flex flex-col-reverse md:flex-row items-center justify-center px-6 py-12 bg-gray-50">
       <div className="max-w-7xl mx-auto px-6 lg:px-12 flex flex-col-reverse md:flex-row lg:flex-row items-center justify-between">
         {/* Image Section */}
         <motion.div
