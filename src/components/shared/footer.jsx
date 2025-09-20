@@ -28,8 +28,8 @@ export default function Footer() {
             <span className="text-2xl font-bold">Highest Data</span>
           </div>
           <p className="text-gray-300 whitespace-normal break-words">
-            Simplified international payments and digital transactions. Buy,
-            sell, and trade with confidence.
+            Simplified digital transactions. Buy, sell, and trade with
+            confidence.
           </p>
         </div>
 
