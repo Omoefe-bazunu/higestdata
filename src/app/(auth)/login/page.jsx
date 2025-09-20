@@ -14,6 +14,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
+import { Eye, EyeOff } from "lucide-react";
+import Image from "next/image";
 
 export default function LoginPage() {
   const { login, loginWithGoogle, resetPassword } = useAuth();
@@ -21,6 +23,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // 👈 state for visibility
   const router = useRouter();
 
   const handleSubmit = async (e) => {
@@ -61,9 +64,11 @@ export default function LoginPage() {
   };
 
   return (
-    <Card className="mx-auto max-w-sm">
+    <Card className="mx-auto max-w-sm mt-12">
       <CardHeader>
-        <CardTitle className="text-2xl font-headline">Login</CardTitle>
+        <CardTitle className="text-2xl text-center font-headline">
+          Login
+        </CardTitle>
         <CardDescription>
           Enter your email below to login to your account
         </CardDescription>
@@ -75,12 +80,14 @@ export default function LoginPage() {
             <Input
               id="email"
               type="email"
-              placeholder="m@example.com"
+              placeholder="raniem57@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
           </div>
+
+          {/* Password Field */}
           <div className="grid gap-2">
             <div className="flex items-center">
               <Label htmlFor="password">Password</Label>
@@ -92,14 +99,25 @@ export default function LoginPage() {
                 Forgot your password?
               </button>
             </div>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"} // 👈 toggle type
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
+
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Logging in..." : "Login"}
           </Button>
@@ -109,6 +127,13 @@ export default function LoginPage() {
             className="w-full"
             onClick={handleGoogleLogin}
           >
+            <Image
+              src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+              alt="Google logo"
+              width={20}
+              height={20}
+              className="w-5 h-5"
+            />
             Login with Google
           </Button>
         </form>

@@ -2,6 +2,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProviderWrapper } from "@/contexts/AuthProviderWrapper";
+import ClientLayoutWrapper from "@/components/shared/client-layout-wrapper";
 
 export const metadata = {
   title: "Highest Data",
@@ -19,7 +20,7 @@ export default function RootLayout({ children }) {
       </head>
       <body className={cn("h-full font-body antialiased")}>
         <AuthProviderWrapper>
-          {children}
+          <ClientLayoutWrapper>{children}</ClientLayoutWrapper>
           <Toaster />
         </AuthProviderWrapper>
       </body>

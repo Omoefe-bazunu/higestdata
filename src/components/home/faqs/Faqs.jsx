@@ -36,7 +36,7 @@ export default function FAQs() {
   };
 
   return (
-    <section className="py-20 bg-white text-primary">
+    <section className="py-20 bg-white text-blue-950">
       <div className="max-w-7xl mx-auto px-6 lg:px-12 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
         {/* Left Side - FAQ List */}
         <div>
@@ -54,7 +54,7 @@ export default function FAQs() {
             {faqs.map((faq, index) => (
               <div
                 key={index}
-                className="bg-primary shadow-xl text-white rounded-lg"
+                className="bg-blue-950 shadow-xl text-white rounded-lg"
               >
                 {/* Question */}
                 <button
@@ -76,7 +76,11 @@ export default function FAQs() {
                     <motion.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
+                      exit={{
+                        height: 0,
+                        opacity: 0,
+                        transition: { duration: 0.3 },
+                      }}
                       transition={{ duration: 0.4 }}
                       className="px-6 pb-4 text-gray-200"
                     >

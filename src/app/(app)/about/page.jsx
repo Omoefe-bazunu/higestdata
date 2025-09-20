@@ -35,26 +35,25 @@ export default function AboutUs() {
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrent((prev) => (prev + 1) % team.length);
-    }, 5000); // auto-slide every 5 seconds
+    }, 5000);
     return () => clearInterval(interval);
   }, [team.length]);
 
   return (
-    <section className="bg-[#eef0f3] text-primary">
+    <section className="bg-blue-950 text-primary">
       {/* ================= About + Hero ================= */}
       <div className="max-w-7xl mx-auto px-6 lg:px-12 py-20">
         <motion.div
           initial={{ opacity: 0, y: -30 }}
-          whileInView={{ opacity: 1, y: 0 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
-          viewport={{ once: true }}
           className="text-center"
         >
-          <p className="uppercase tracking-widest text-sm text-gray-500 mt-10">
+          <p className="uppercase tracking-widest text-sm text-gray-300 mt-10">
             About Us
           </p>
           <h2
-            className="text-4xl md:text-5xl max-w-3xl mx-auto text-primary mt-3"
+            className="text-4xl md:text-5xl max-w-3xl mx-auto text-white mt-3"
             style={{ lineHeight: "1.2" }}
           >
             We are more than just a Digital Trade Platform
@@ -64,22 +63,21 @@ export default function AboutUs() {
         <div className="flex flex-col lg:flex-row items-center gap-12 mt-16">
           <motion.div
             initial={{ opacity: 0, x: -80 }}
-            whileInView={{ opacity: 1, x: 0 }}
+            animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 1 }}
-            viewport={{ once: true }}
             className="flex-1 text-left"
           >
-            <h3 className="text-3xl md:text-4xl font-bold text-primary mb-6">
+            <h3 className="text-3xl md:text-4xl text-center md:text-left font-bold text-white mb-6">
               Making Digital Transactions a Seamless Experience
             </h3>
-            <p className="text-lg md:text-xl text-gray-700 mb-6 leading-relaxed">
+            <p className="text-lg md:text-xl text-center md:text-left text-gray-300 mb-6 leading-relaxed">
               At <span className="font-semibold">Highest Data</span>, we
               simplify digital transactions with a secure, user-friendly
               platform. From crypto trading to gift cards, airtime, and wallet
               funding, our mission is to make financial services accessible,
               fast, and reliable.
             </p>
-            <p className="text-lg md:text-xl text-gray-700 leading-relaxed">
+            <p className="text-lg md:text-xl text-center md:text-left text-gray-300 leading-relaxed">
               We exist to empower individuals and businesses with a seamless,
               secure ecosystem for confident transactions — ensuring every
               digital trade is trustworthy and efficient.
@@ -88,9 +86,8 @@ export default function AboutUs() {
 
           <motion.div
             initial={{ opacity: 0, x: 80 }}
-            whileInView={{ opacity: 1, x: 0 }}
+            animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 1 }}
-            viewport={{ once: true }}
             className="flex-1"
           >
             <div className="relative w-full max-w-md mx-auto">
@@ -107,8 +104,8 @@ export default function AboutUs() {
       </div>
 
       {/* ================= Core Values ================= */}
-      <div className="bg-primary py-20">
-        <div className="max-w-7xl mx-auto px-6 lg:px-12 text-white">
+      <div className="bg-white py-20">
+        <div className="max-w-7xl mx-auto px-6 lg:px-12 text-blue-950">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">
             Our Core Values
           </h2>
@@ -118,38 +115,37 @@ export default function AboutUs() {
                 title: "Security",
                 desc: "Top-tier encryption and multi-layer protection ensure every transaction is safe and reliable.",
                 icon: (
-                  <FaShieldAlt className="text-5xl mx-auto mb-4 text-blue-300" />
+                  <FaShieldAlt className="text-5xl mx-auto mb-4 text-blue-950" />
                 ),
               },
               {
                 title: "Innovation",
                 desc: "Constantly evolving with cutting-edge financial technology to meet global demands.",
                 icon: (
-                  <FaLightbulb className="text-5xl mx-auto mb-4 text-blue-300" />
+                  <FaLightbulb className="text-5xl mx-auto mb-4 text-blue-950" />
                 ),
               },
               {
                 title: "Trust",
                 desc: "Trusted by thousands of users for transparent, fair, and dependable digital services.",
                 icon: (
-                  <FaHandshake className="text-5xl mx-auto mb-4 text-blue-300" />
+                  <FaHandshake className="text-5xl mx-auto mb-4 text-blue-950" />
                 ),
               },
             ].map((value, index) => (
               <motion.div
                 key={index}
                 initial={{ opacity: 0, scale: 0.8 }}
-                whileInView={{ opacity: 1, scale: 1 }}
+                animate={{ opacity: 1, scale: 1 }}
                 transition={{
                   duration: 0.6,
                   delay: index * 0.15,
                   ease: "easeOut",
                 }}
-                viewport={{ once: true }}
                 className="p-8 bg-white bg-opacity-10 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 border border-blue-400 border-opacity-30"
               >
                 <h3 className="text-2xl font-bold mb-4">{value.title}</h3>
-                <p className="text-gray-200 leading-relaxed">{value.desc}</p>
+                <p className="text-gray-600 leading-relaxed">{value.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -157,7 +153,7 @@ export default function AboutUs() {
       </div>
 
       {/* ================= Team Section ================= */}
-      <div className="py-20 bg-white">
+      <div className="py-20 bg-white hidden">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-primary mb-12">
             Meet Our Team

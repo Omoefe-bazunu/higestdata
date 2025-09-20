@@ -649,15 +649,21 @@ export default function CryptoPage() {
   }
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto mt-4">
+      <div>
+        <h1 className="text-3xl font-bold font-headline">
+          Buy and Sell Crypto Assets
+        </h1>
+        <p className="text-muted-foreground mt-2">
+          Buy and Sell cryptocurrencies at the best rates.
+        </p>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ArrowRightLeft className="h-6 w-6" /> Crypto Trading
           </CardTitle>
-          <CardDescription>
-            Buy and Sell cryptocurrencies at the best rates.
-          </CardDescription>
+          <CardDescription>Complete the form to Buy or Sell</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="buy" className="w-full">

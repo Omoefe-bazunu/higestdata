@@ -4,21 +4,25 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
+import { useRouter } from "next/navigation";
 
 import WalletSummary from "@/components/dashboard/wallet-summary";
-// import CryptoRates from "@/components/dashboard/crypto-rates"; // <-- Remove this import
+// import CryptoRates from "@/components/dashboard/crypto-rates"; // <-- removed
 import RecentTransactions from "@/components/dashboard/recent-transactions";
 import QuickActions from "@/components/dashboard/quick-actions";
-import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DashboardPage() {
   const { user } = useAuth(); // current Firebase user
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
+    if (user === undefined) return; // auth not ready yet
+
     if (!user) {
-      setLoading(false);
+      router.replace("/login");
       return;
     }
 
@@ -30,7 +34,6 @@ export default function DashboardPage() {
         if (snap.exists()) {
           setUserData(snap.data());
         } else {
-          // fallback if doc doesn’t exist
           setUserData({ name: user.displayName || "User", walletBalance: 0 });
         }
       } catch (err) {
@@ -41,29 +44,16 @@ export default function DashboardPage() {
     }
 
     fetchUserData();
-  }, [user]);
+    setCheckingAuth(false);
+  }, [user, router]);
 
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-48" />
-        <Skeleton className="h-6 w-64" />
-        <Skeleton className="h-32 w-full" />
-      </div>
-    );
+  // ⛔ Block rendering until auth check finishes
+  if (checkingAuth) {
+    return null; // or a full-screen loader if you want
   }
 
-  if (!user) {
-    return (
-      <p className="text-muted-foreground">
-        Please log in to view your dashboard.{" "}
-        <span>
-          <a href="/login" className="text-primary-foreground">
-            Login
-          </a>
-        </span>
-      </p>
-    );
+  if (loading) {
+    return <p className="text-muted-foreground">Loading dashboard...</p>;
   }
 
   if (!userData) {
@@ -72,7 +62,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div className=" mt-20">
+      <div className="mt-4">
         <h1 className="text-3xl font-bold font-headline">
           Welcome back, {userData.name.split(" ")[0]}!
         </h1>
@@ -87,7 +77,6 @@ export default function DashboardPage() {
         </div>
         <div className="space-y-8">
           <QuickActions />
-          {/* Removed CryptoRates component */}
         </div>
       </div>
     </div>

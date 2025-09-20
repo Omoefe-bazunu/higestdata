@@ -111,7 +111,7 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 mt-4">
       <div>
         <h1 className="text-3xl font-bold font-headline">
           Transaction History

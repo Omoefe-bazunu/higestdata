@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Image from "next/image";
+import { Eye, EyeOff } from "lucide-react"; // 👈 icons
 
 export default function SignupPage() {
   const { signup, loginWithGoogle } = useAuth();
@@ -28,6 +29,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // 👈 state for toggle
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -80,7 +82,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-gray-100">
+    <div className="relative min-h-screen flex items-center justify-center bg-gray-100 mt-12">
       {/* Background Image */}
       <Image
         src="https://images.unsplash.com/photo-1556742400-b5f0e1a6bfcf?ixlib=rb-4.0.3&auto=format&fit=crop&w=1950&q=80"
@@ -93,10 +95,6 @@ export default function SignupPage() {
       {/* Signup Card */}
       <Card className="mx-auto w-full max-w-md shadow-xl">
         <CardHeader className="text-center">
-          {/* Brand Name */}
-          <h1 className="text-2xl font-extrabold font-headline text-primary mb-2">
-            Highest Data
-          </h1>
           <CardTitle className="text-xl font-headline">Sign Up</CardTitle>
           <CardDescription>
             Enter your information to create an account
@@ -108,7 +106,7 @@ export default function SignupPage() {
               <Label htmlFor="full-name">Full name</Label>
               <Input
                 id="full-name"
-                placeholder="Alex Doe"
+                placeholder="Omoefe Bazunu"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 required
@@ -120,22 +118,32 @@ export default function SignupPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="m@example.com"
+                placeholder="raniem57@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
 
+            {/* Password with toggle */}
             <div className="grid gap-2">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"} // 👈 toggle type
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>

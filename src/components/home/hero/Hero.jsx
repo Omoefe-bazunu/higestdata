@@ -1,45 +1,55 @@
+"use client";
+
+import { motion } from "framer-motion";
+
 export default function Hero() {
   return (
     <section
-      className=" h-fit"
+      className="h-fit text-center text-white py-20"
       style={{
-        backgroundImage: `url('/herobg.jpg')`,
+        backgroundImage: `url('/herobg1.jpg')`,
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
       }}
     >
-      <div className="max-w-7xl mt-20 mx-auto px-6 lg:px-12 py-16 lg:pt-12 flex flex-col lg:flex-row items-center justify-between">
-        {/* Left Content */}
-        <div className="flex flex-col items-start text-left max-w-xl">
-          <h1
-            className="text-5xl lg:text-7xl text-primary leading-[2.5rem] mb-6"
-            style={{ lineHeight: "1.1" }}
+      <div className="max-w-7xl mx-auto px-6 lg:px-12 pt-12 l lg:pt-12 flex flex-col items-center">
+        <div className="flex flex-col items-start justify-center w-full">
+          {/* Heading */}
+          <motion.h1
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="text-5xl lg:text-7xl max-w-xl text-center mx-auto leading-[2.5rem] mb-6"
+            style={{ lineHeight: "1.1", fontFamily: "Inter, sans-serif" }}
           >
             Simplified Digital{" "}
-            <span className="text-orange-500">Transactions</span>
-          </h1>
-          <p className="text-normal lg:text-lg w-5/6 lg:w-full text-gray-600 mb-8">
+            <span className="text-orange-400">Transactions</span>
+          </motion.h1>
+
+          {/* Subtext */}
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, delay: 0.3 }}
+            className="text-normal max-w-xl mx-auto lg:w-full mb-8"
+          >
             Buy and sell crypto assets, trade gift cards, purchase airtime &
             data, subscribe to cable TV, and fund your sports betting account —
             all at amazing rates through a secure, responsive system.
-          </p>
-          <button className="px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white text-lg font-medium rounded-lg shadow-md transition">
-            Get Started
-          </button>
-        </div>
+          </motion.p>
 
-        {/* Right Image */}
-        <div className="mt-12 lg:mt-0 w-full lg:w-1/2 flex justify-center">
-          <div
-            className="w-80 h-80 lg:w-[500px] lg:h-[500px]"
-            style={{
-              backgroundImage: `url('/hero1.png')`,
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-              backgroundRepeat: "no-repeat",
-            }}
-          ></div>
+          {/* Button */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.6 }}
+            className="px-5 py-2 mx-auto bg-orange-500 hover:bg-orange-600 text-white text-lg font-medium rounded-full shadow-md transition"
+          >
+            Get Started
+          </motion.button>
         </div>
       </div>
     </section>

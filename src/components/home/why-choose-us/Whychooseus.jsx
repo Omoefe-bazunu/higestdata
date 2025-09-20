@@ -27,7 +27,7 @@ export default function WhyChooseUs() {
           viewport={{ once: true }}
           transition={{ duration: 0.8 }}
         >
-          <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">
+          <h2 className="text-3xl md:text-4xl font-bold text-blue-950 mb-4">
             Why Choose Us?
           </h2>
           <p className="text-gray-600 mb-8 leading-relaxed">
@@ -45,11 +45,11 @@ export default function WhyChooseUs() {
               viewport={{ once: true }}
               transition={{ duration: 0.6 }}
             >
-              <span className="w-10 h-10 bg-blue-300 rounded-full flex items-center justify-center text-white mr-4 flex-shrink-0 shadow-md">
+              <span className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white mr-4 flex-shrink-0 shadow-md">
                 ✔
               </span>
               <p className="text-gray-700">
-                <span className=" text-primary font-semibold">
+                <span className=" text-blue-950 font-semibold">
                   Secure Trade:
                 </span>{" "}
                 Enjoy high-end security for all your transactions, making sure
@@ -66,11 +66,11 @@ export default function WhyChooseUs() {
               viewport={{ once: true }}
               transition={{ duration: 0.6, delay: 0.2 }}
             >
-              <span className="w-10 h-10 bg-blue-300 rounded-full flex items-center justify-center text-white mr-4 flex-shrink-0 shadow-md">
+              <span className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white mr-4 flex-shrink-0 shadow-md">
                 ✔
               </span>
               <p className="text-gray-700">
-                <span className=" text-primary font-semibold">
+                <span className=" text-blue-950 font-semibold">
                   Sweet Rates:
                 </span>{" "}
                 Trade your favorite digital assets with competitive rates that

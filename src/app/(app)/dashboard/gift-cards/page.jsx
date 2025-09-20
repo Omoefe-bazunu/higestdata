@@ -8,19 +8,40 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Lightbulb } from "lucide-react";
+import { Lightbulb, Loader } from "lucide-react";
 import { collection, getDocs } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import { useToast } from "@/hooks/use-toast";
 import FraudCheckForm from "@/components/gift-cards/fraud-check-form";
+import { getAuth } from "firebase/auth";
+import { useRouter } from "next/navigation";
 
 export default function GiftCardsPage() {
   const [giftCards, setGiftCards] = useState([]);
   const [exchangeRate, setExchangeRate] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [user, setUser] = useState(null);
   const { toast } = useToast();
+  const router = useRouter();
+
+  // ✅ Check authentication before rendering anything
+  useEffect(() => {
+    const auth = getAuth();
+    const unsub = auth.onAuthStateChanged((usr) => {
+      if (usr) {
+        setUser(usr);
+        setAuthChecked(true);
+      } else {
+        router.replace("/login"); // redirect without flash
+      }
+    });
+    return () => unsub();
+  }, [router]);
 
   // Fetch gift card rates and exchange rate
   useEffect(() => {
+    if (!authChecked || !user) return; // wait for auth before fetching
+
     async function fetchData() {
       try {
         // Fetch gift card rates from Firebase
@@ -52,13 +73,22 @@ export default function GiftCardsPage() {
       }
     }
     fetchData();
-  }, [toast]);
+  }, [authChecked, user, toast]);
+
+  // ✅ Block rendering until auth check finishes
+  if (!authChecked) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-8 max-w-2xl mx-auto">
+    <div className="space-y-8 mt-4">
       <div>
         <h1 className="text-3xl font-bold font-headline">Trade Gift Cards</h1>
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground mt-2">
           Enter your gift card details below to get a payout to your wallet.
           Validation and processing take 15–30 minutes.
         </p>

@@ -4,6 +4,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
@@ -32,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
+  DialogClose,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -39,7 +41,7 @@ import {
 } from "@/components/ui/dialog";
 
 // Reusable VTU Purchase Form
-function PurchaseForm({ type, user }) {
+function PurchaseForm({ type, user, router }) {
   const [network, setNetwork] = useState("");
   const [phone, setPhone] = useState("");
   const [amount, setAmount] = useState("");
@@ -433,6 +435,9 @@ function PurchaseForm({ type, user }) {
               >
                 Fund Wallet
               </Button>
+              <Button asChild variant="outline">
+                <DialogClose>Cancel</DialogClose>
+              </Button>
             </div>
           </div>
         </DialogContent>
@@ -443,15 +448,31 @@ function PurchaseForm({ type, user }) {
 
 export default function BuyAirtimePage() {
   const [user, setUser] = useState(null);
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
     const auth = getAuth();
-    const unsub = auth.onAuthStateChanged((usr) => setUser(usr));
+    const unsub = auth.onAuthStateChanged((usr) => {
+      if (usr) {
+        setUser(usr);
+        setAuthChecked(true); // only mark as checked if authenticated
+      } else {
+        router.replace("/login"); // ensure redirect happens without flash
+      }
+    });
     return () => unsub();
-  }, []);
+  }, [router]);
+  if (!authChecked) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 mt-4">
       <div>
         <h1 className="text-3xl font-bold font-headline">
           Buy Airtime, Data & Cable
@@ -478,7 +499,7 @@ export default function BuyAirtimePage() {
                     Enter details to top up airtime.
                   </CardDescription>
                 </CardHeader>
-                <PurchaseForm type="Airtime" user={user} />
+                <PurchaseForm type="Airtime" user={user} router={router} />
               </TabsContent>
 
               <TabsContent value="data">
@@ -488,7 +509,7 @@ export default function BuyAirtimePage() {
                     Choose a data plan that suits you.
                   </CardDescription>
                 </CardHeader>
-                <PurchaseForm type="Data" user={user} />
+                <PurchaseForm type="Data" user={user} router={router} />
               </TabsContent>
 
               <TabsContent value="cable">
@@ -498,7 +519,7 @@ export default function BuyAirtimePage() {
                     Pay for your cable subscription.
                   </CardDescription>
                 </CardHeader>
-                <PurchaseForm type="Cable" user={user} />
+                <PurchaseForm type="Cable" user={user} router={router} />
               </TabsContent>
             </Tabs>
           </div>
@@ -506,7 +527,7 @@ export default function BuyAirtimePage() {
           <div className="bg-muted/50 p-8 md:p-12 flex flex-col justify-center">
             <div className="relative aspect-video mb-8 rounded-lg overflow-hidden">
               <Image
-                src="https://placehold.co/600x400.png"
+                src="/vtu.png"
                 alt="Mobile services illustration"
                 fill
                 style={{ objectFit: "cover" }}

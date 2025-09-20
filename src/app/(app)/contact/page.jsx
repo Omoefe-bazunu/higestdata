@@ -61,7 +61,7 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="bg-[#eef0f3]">
+    <div className="bg-blue-950 ">
       {/* Hero */}
       <section className=" text-center px-6 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 lg:px-12 py-20">
@@ -72,11 +72,11 @@ export default function ContactPage() {
             viewport={{ once: true }}
             className="text-center"
           >
-            <p className="uppercase tracking-widest text-sm text-gray-500 mt-10">
+            <p className="uppercase tracking-widest text-sm text-gray-300 mt-10">
               Contact Us
             </p>
             <h2
-              className="text-4xl md:text-5xl max-w-3xl mx-auto text-primary mt-3"
+              className="text-4xl md:text-5xl max-w-3xl mx-auto text-white mt-3"
               style={{ lineHeight: "1.2" }}
             >
               Connect with Us: We are Here to Help You
@@ -96,7 +96,7 @@ export default function ContactPage() {
             variants={fadeUp}
             className="p-4 sm:p-8"
           >
-            <h2 className="text-2xl font-semibold text-center text-primary mb-6">
+            <h2 className="text-2xl font-semibold text-center text-blu-950 mb-6">
               Send us a message
             </h2>
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -140,7 +140,7 @@ export default function ContactPage() {
                 disabled={loading}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="w-fit px-8 flex justify-center items-center gap-2 bg-primary text-white py-3 rounded-lg font-semibold shadow hover:bg-orange-600 transition"
+                className="w-fit px-8 flex justify-center items-center gap-2 bg-blue-950 text-white py-3 rounded-lg font-semibold shadow hover:bg-orange-600 transition"
               >
                 {loading && (
                   <svg
@@ -180,7 +180,7 @@ export default function ContactPage() {
           </motion.div>
         </div>
       </section>
-      <section className="py-8 px-6 bg-white">
+      <section className="py-8 px-6 bg-gray-50">
         <div className="max-w-5xl mx-auto px-6 lg:px-12 flex text-left flex-col gap-12">
           {/* Contact Info */}
           <motion.div
@@ -190,7 +190,7 @@ export default function ContactPage() {
             variants={fadeLeft}
             className="p-4 sm:p-8"
           >
-            <h2 className="text-2xl font-semibold text-primary mb-4">
+            <h2 className="text-2xl font-semibold text-blue-950 mb-4">
               We are available on the following channels:
             </h2>
             <div className="space-y-4 text-gray-700">

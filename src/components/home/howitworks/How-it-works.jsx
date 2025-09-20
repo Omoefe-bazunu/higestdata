@@ -75,7 +75,7 @@ const HowItWorks = () => {
                 animate={{ scale: [1, 1.1, 1] }}
                 transition={{ repeat: Infinity, duration: 2 }}
               >
-                <step.icon className="w-8 h-8 text-primary" />
+                <step.icon className="w-8 h-8 text-blue-950" />
               </motion.div>
 
               {/* Text */}
