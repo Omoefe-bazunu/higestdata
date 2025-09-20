@@ -9,6 +9,7 @@ import {
   Phone,
   MapPin,
 } from "lucide-react";
+import Link from "next/link";
 
 export default function Footer() {
   return (
@@ -54,16 +55,16 @@ export default function Footer() {
           <h3 className="text-lg font-semibold mb-4">Services</h3>
           <ul className="space-y-2">
             <li className="text-gray-300 hover:text-orange-400 transition cursor-pointer">
-              Crypto Trading
+              <Link href="/dashboard/crypto">Crypto Trading</Link>
             </li>
             <li className="text-gray-300 hover:text-orange-400 transition cursor-pointer">
-              Gift Card Exchange
+              <Link href="/dashboard/gift-cards">Gift Card Exchange</Link>
             </li>
             <li className="text-gray-300 hover:text-orange-400 transition cursor-pointer">
-              Airtime & Data
+              <Link href="/dashboard/buy-airtime">Airtime & Data</Link>
             </li>
             <li className="text-gray-300 hover:text-orange-400 transition cursor-pointer">
-              Wallet Funding
+              <Link href="/dashboard/buy-airtime">Betting Wallet Funding</Link>
             </li>
           </ul>
         </div>

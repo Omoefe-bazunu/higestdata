@@ -7,7 +7,7 @@ export default function WhyChooseUs() {
       <div className="max-w-7xl mx-auto px-6 lg:px-12 flex flex-col-reverse md:flex-row lg:flex-row items-center justify-between">
         {/* Image Section */}
         <motion.div
-          className="w-full md:w-1/2 mb-8 md:mb-0 flex justify-center"
+          className="w-full md:w-1/2 mt-8 md:mt-0 flex justify-center"
           initial={{ opacity: 0, x: 40 }}
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}

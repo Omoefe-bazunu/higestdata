@@ -649,7 +649,7 @@ export default function CryptoPage() {
   }
 
   return (
-    <div className="container mx-auto mt-4">
+    <div className=" mt-4">
       <div>
         <h1 className="text-3xl font-bold font-headline">
           Buy and Sell Crypto Assets

@@ -5,24 +5,29 @@ import { RadioTower, Gift, Bitcoin, LifeBuoy } from "lucide-react";
 
 const actions = [
   {
-    href: "/buy-airtime",
+    href: "/dashboard/buy-airtime",
     label: "Buy Airtime/Data",
     icon: RadioTower,
     variant: "default",
   },
   {
-    href: "/gift-cards",
+    href: "/dashboard/gift-cards",
     label: "Trade Gift Cards",
     icon: Gift,
     variant: "secondary",
   },
   {
-    href: "/crypto",
+    href: "/dashboard/crypto",
     label: "Trade Crypto",
     icon: Bitcoin,
     variant: "secondary",
   },
-  { href: "#", label: "Get Support", icon: LifeBuoy, variant: "outline" },
+  {
+    href: "/contact",
+    label: "Get Support",
+    icon: LifeBuoy,
+    variant: "outline",
+  },
 ];
 
 export default function QuickActions() {
