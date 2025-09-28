@@ -50,6 +50,27 @@ export default function ContactPage() {
         createdAt: serverTimestamp(),
       });
 
+      // Send email notification
+      try {
+        const response = await fetch("/api/contact-message-notification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            message: formData.message,
+            userId: user.uid,
+          }),
+        });
+
+        if (!response.ok) {
+          console.error("Failed to send email");
+        }
+      } catch (emailError) {
+        console.error("Email error:", emailError);
+      }
+
       setStatus("✅ Message sent successfully!");
       setFormData({ name: "", email: "", phone: "", message: "" });
     } catch (err) {

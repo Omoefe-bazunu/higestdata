@@ -1,78 +1,92 @@
-import { NextResponse } from "next/server";
-import { doc, getDoc } from "firebase/firestore";
-import { firestore } from "@/lib/firebaseConfig"; // Ensure this path is correct
+// app/api/send-user-notification/route.js
 import { Resend } from "resend";
-import UserNotification from "@/components/emails/UserNotification";
+import { NextResponse } from "next/server";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request) {
   try {
-    const { userId, status, type, itemName, amount, reason, cryptoName } =
-      await request.json(); // Added cryptoName to accept crypto details
+    const {
+      userId,
+      status,
+      type,
+      itemName,
+      amount,
+      reason,
+      cryptoName,
+      userEmail,
+    } = await request.json();
 
-    // Fetch user details from Firestore
-    const userDoc = await getDoc(doc(firestore, "users", userId));
-    if (!userDoc.exists()) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    if (!userId || !status || !type || !userEmail) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
     }
 
-    const userData = userDoc.data();
-    const userEmail = userData.email;
-    const userName = userData.displayName || "User";
+    const companyName = "Higher Exchange";
+    const logoUrl =
+      "https://firebasestorage.googleapis.com/v0/b/entcarepat.appspot.com/o/App%20Icon_GPL.webp?alt=media&token=893f7df9-4613-4477-86a4-9cf3a2880ce8";
+    const orderItem = type === "giftCard" ? itemName : cryptoName || itemName;
 
-    let subject;
-    let reactTemplate;
+    let subject, userHtml;
 
-    // Determine the subject and template based on status and type
     if (status === "approved") {
       subject = `${
         type === "giftCard" ? "Gift Card" : "Crypto"
-      } Sell Order Approved`;
-      reactTemplate = UserNotification({
-        userName,
-        type, // Pass type to the component
-        itemName: type === "giftCard" ? itemName : cryptoName, // Use cryptoName for crypto type
-        amount,
-        status: "approved",
-      });
+      } Order Approved`;
+      userHtml = `
+        <div style="font-family: Arial, sans-serif; color: #333;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <img src="${logoUrl}" alt="${companyName}" style="max-width: 150px; height: auto;" />
+            <h2>${companyName}</h2>
+          </div>
+          <p>Your ${
+            type === "giftCard" ? "gift card" : "crypto"
+          } order for <strong>${orderItem}</strong> worth <strong>₦${amount}</strong> has been <span style="color:green;font-weight:bold;">APPROVED</span>.</p>
+          <p>We will process your transaction shortly. Thank you for choosing us!</p>
+          <br>
+          <p>Best regards,<br>${companyName} Team</p>
+        </div>
+      `;
     } else if (status === "rejected") {
       subject = `${
         type === "giftCard" ? "Gift Card" : "Crypto"
-      } Sell Order - Action Required`;
-      reactTemplate = UserNotification({
-        userName,
-        type, // Pass type to the component
-        itemName: type === "giftCard" ? itemName : cryptoName, // Use cryptoName for crypto type
-        amount,
-        status: "rejected",
-        reason, // Pass reason only for rejected status
-      });
+      } Order Rejected`;
+      userHtml = `
+        <div style="font-family: Arial, sans-serif; color: #333;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <img src="${logoUrl}" alt="${companyName}" style="max-width: 150px; height: auto;" />
+            <h2>${companyName}</h2>
+          </div>
+          <p>We regret to inform you that your ${
+            type === "giftCard" ? "gift card" : "crypto"
+          } order for <strong>${orderItem}</strong> worth <strong>₦${amount}</strong> has been <span style="color:red;font-weight:bold;">REJECTED</span>.</p>
+          <p><strong>Reason:</strong> ${reason || "Not specified"}.</p>
+          <p>Please review and try again, or contact support for assistance.</p>
+          <br>
+          <p>Best regards,<br>${companyName} Team</p>
+        </div>
+      `;
     } else {
-      // Handle any other unexpected statuses if necessary
       return NextResponse.json(
         { error: `Unsupported status: ${status}` },
         { status: 400 }
       );
     }
 
-    const { error } = await resend.emails.send({
-      from: "Higher Team <info@higher.com.ng>", // Must be verified on Resend
-      to: [userEmail],
+    await resend.emails.send({
+      from: `${companyName} <info@higher.com.ng>`,
+      to: userEmail,
       subject,
-      react: reactTemplate,
+      html: userHtml,
     });
 
-    if (error) {
-      console.error("Resend API Error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
     console.error("Error sending user notification:", error);
     return NextResponse.json(
-      { error: "Failed to send notification" },
+      { error: "Failed to send notification", details: error.message },
       { status: 500 }
     );
   }

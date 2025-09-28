@@ -77,7 +77,7 @@ export default function Footer() {
               <Mail size={18} /> info@highestdata.com
             </li>
             <li className="flex items-center gap-3">
-              <Phone size={18} /> +234 703 891 1469
+              <Phone size={18} /> +234 703 891 1469; 09159082405
             </li>
             <li className="flex items-center gap-3">
               <MapPin size={18} /> Oghara, Delta State, Nigeria

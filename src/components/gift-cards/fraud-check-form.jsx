@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { getAuth } from "firebase/auth";
-import { collection, addDoc, updateDoc, doc } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, getDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { firestore, storage } from "@/lib/firebaseConfig";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
   Upload,
   X,
   Image,
+  Plus,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -37,9 +38,11 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
   const [selectedCard, setSelectedCard] = useState("");
   const [faceValue, setFaceValue] = useState("");
   const [cardCode, setCardCode] = useState("");
-  const [cardImage, setCardImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
+  const [cardImages, setCardImages] = useState([]); // Changed to array
+  const [imagePreviews, setImagePreviews] = useState([]); // Changed to array
   const [isValid, setIsValid] = useState(false);
+
+  const MAX_IMAGES = 10;
 
   // Check authentication status
   useEffect(() => {
@@ -66,50 +69,79 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
       faceValue &&
       parseFloat(faceValue) > 0 &&
       cardCode.trim() &&
-      cardImage;
+      cardImages.length > 0; // At least one image required
     setIsValid(valid);
-  }, [selectedCard, faceValue, cardCode, cardImage]);
+  }, [selectedCard, faceValue, cardCode, cardImages]);
 
-  // Handle image selection
+  // Handle multiple image selection
   const handleImageChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+    const files = Array.from(event.target.files);
+
+    if (cardImages.length + files.length > MAX_IMAGES) {
+      toast({
+        title: "Too Many Images",
+        description: `You can upload a maximum of ${MAX_IMAGES} images. Currently you have ${cardImages.length} image(s).`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+    const maxSize = 5 * 1024 * 1024; // 5MB
+
+    const validFiles = [];
+    const validPreviews = [];
+
+    for (const file of files) {
       if (!validTypes.includes(file.type)) {
         toast({
           title: "Invalid File Type",
-          description: "Please upload a valid image file (JPG, PNG, or GIF).",
+          description: `File "${file.name}" is not a valid image type. Please upload JPG, PNG, or GIF files.`,
           variant: "destructive",
         });
-        return;
+        continue;
       }
 
-      const maxSize = 5 * 1024 * 1024;
       if (file.size > maxSize) {
         toast({
           title: "File Too Large",
-          description: "Please upload an image smaller than 5MB.",
+          description: `File "${file.name}" is larger than 5MB. Please choose a smaller file.`,
           variant: "destructive",
         });
-        return;
+        continue;
       }
 
-      setCardImage(file);
+      validFiles.push(file);
+
+      // Create preview
       const reader = new FileReader();
       reader.onload = (e) => {
-        setImagePreview(e.target.result);
+        setImagePreviews((prev) => [
+          ...prev,
+          {
+            id: Date.now() + Math.random(),
+            url: e.target.result,
+            name: file.name,
+          },
+        ]);
       };
       reader.readAsDataURL(file);
     }
-  };
 
-  // Remove selected image
-  const removeImage = () => {
-    setCardImage(null);
-    setImagePreview(null);
+    if (validFiles.length > 0) {
+      setCardImages((prev) => [...prev, ...validFiles]);
+    }
+
+    // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  };
+
+  // Remove specific image
+  const removeImage = (index) => {
+    setCardImages((prev) => prev.filter((_, i) => i !== index));
+    setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
   // Handle submission feedback
@@ -126,8 +158,8 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
         setSelectedCard("");
         setFaceValue("");
         setCardCode("");
-        setCardImage(null);
-        setImagePreview(null);
+        setCardImages([]);
+        setImagePreviews([]);
         formRef.current?.reset();
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
@@ -139,18 +171,29 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
     }
   }, [formState, toast]);
 
-  // Upload image to Firebase Storage
-  const uploadImage = async (file, userId, submissionId) => {
+  // Upload multiple images to Firebase Storage
+  const uploadImages = async (files, userId, submissionId) => {
     try {
-      const storageRef = ref(
-        storage,
-        `gift-cards/${userId}/${submissionId}/${file.name}`
-      );
-      const snapshot = await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(snapshot.ref);
-      return downloadURL;
+      const uploadPromises = files.map(async (file, index) => {
+        const timestamp = Date.now();
+        const fileName = `${timestamp}_${index}_${file.name}`;
+        const storageRef = ref(
+          storage,
+          `gift-cards/${userId}/${submissionId}/${fileName}`
+        );
+        const snapshot = await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(snapshot.ref);
+        return {
+          url: downloadURL,
+          name: file.name,
+          uploadedAt: new Date().toISOString(),
+        };
+      });
+
+      const imageUrls = await Promise.all(uploadPromises);
+      return imageUrls;
     } catch (error) {
-      console.error("Error uploading image:", error);
+      console.error("Error uploading images:", error);
       throw error;
     }
   };
@@ -158,7 +201,16 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
   // Send email notification function
   const sendAdminNotification = async (submissionData) => {
     try {
-      const response = await fetch("/api/send-notification", {
+      // Fetch user email
+      const userDocRef = doc(firestore, "users", submissionData.userId);
+      const userDoc = await getDoc(userDocRef);
+      if (!userDoc.exists() || !userDoc.data().email) {
+        console.error("User email not found");
+        return;
+      }
+      const userEmail = userDoc.data().email;
+
+      const response = await fetch("/api/giftcard-notify-admin", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -170,20 +222,20 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
           rate: submissionData.rate,
           payoutNaira: submissionData.payoutNaira,
           userId: submissionData.userId,
-          imageUrl: submissionData.imageUrl,
+          userEmail,
+          imageCount: submissionData.imageCount,
         }),
       });
 
       if (!response.ok) {
-        console.error("Failed to send admin notification");
+        console.error("Failed to send notification");
       } else {
-        console.log("Admin notification sent successfully");
+        console.log("Notification sent successfully");
       }
     } catch (error) {
-      console.error("Error sending admin notification:", error);
+      console.error("Error sending notification:", error);
     }
   };
-
   // Handle form submission
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -201,7 +253,7 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
       toast({
         title: "Invalid Input",
         description:
-          "Please fill all required fields correctly and upload a card image.",
+          "Please fill all required fields correctly and upload at least one card image.",
         variant: "destructive",
       });
       return;
@@ -215,7 +267,8 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
       if (!faceValue || isNaN(faceValue) || parseFloat(faceValue) <= 0)
         errors.cardValue = ["Valid card value in USD is required"];
       if (!cardCode.trim()) errors.cardCode = ["Card code is required"];
-      if (!cardImage) errors.cardImage = ["Card image is required"];
+      if (cardImages.length === 0)
+        errors.cardImages = ["At least one card image is required"];
 
       if (Object.keys(errors).length > 0) {
         setFormState({ message: "Validation failed.", errors });
@@ -245,7 +298,8 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
         payoutNaira,
         status: "pending",
         submittedAt: new Date().toISOString(),
-        imageUrl: null,
+        imageUrls: [], // Will be updated after upload
+        imageCount: cardImages.length,
         exchangeRate,
         ratePercentage: rate,
       };
@@ -259,18 +313,18 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
 
       console.log("Submission saved with ID:", docRef.id);
 
-      let imageUrl = null;
+      let imageUrls = [];
       try {
-        imageUrl = await uploadImage(cardImage, user.uid, docRef.id);
-        console.log("Image uploaded successfully:", imageUrl);
+        imageUrls = await uploadImages(cardImages, user.uid, docRef.id);
+        console.log("Images uploaded successfully:", imageUrls);
 
-        // Update the submission with the image URL
+        // Update the submission with the image URLs
         await updateDoc(doc(firestore, "giftCardSubmissions", docRef.id), {
-          imageUrl: imageUrl,
+          imageUrls: imageUrls,
         });
       } catch (imageError) {
-        console.error("Failed to upload image:", imageError);
-        throw new Error("Failed to upload card image");
+        console.error("Failed to upload images:", imageError);
+        throw new Error("Failed to upload card images");
       }
 
       const transactionData = {
@@ -299,7 +353,8 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
           rate,
           payoutNaira,
           userId: user.uid,
-          imageUrl: imageUrl,
+          imageUrls: imageUrls,
+          imageCount: cardImages.length,
         });
       } catch (emailError) {
         console.error("Failed to send admin notification:", emailError);
@@ -425,16 +480,20 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="cardImage">Card Image *</Label>
+        <Label htmlFor="cardImages">
+          Card Images * (Maximum {MAX_IMAGES} images)
+        </Label>
         <div className="space-y-4">
-          {!imagePreview ? (
+          {/* Upload Button */}
+          {cardImages.length < MAX_IMAGES && (
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
               <input
                 ref={fileInputRef}
-                id="cardImage"
-                name="cardImage"
+                id="cardImages"
+                name="cardImages"
                 type="file"
                 accept="image/*"
+                multiple
                 onChange={handleImageChange}
                 disabled={!isAuthenticated}
                 className="hidden"
@@ -447,40 +506,74 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
                 className="w-full"
               >
                 <Upload className="h-4 w-4 mr-2" />
-                Upload Card Image
+                Upload Card Images ({cardImages.length}/{MAX_IMAGES})
               </Button>
               <p className="text-sm text-muted-foreground mt-2">
-                PNG, JPG or GIF up to 5MB
+                PNG, JPG or GIF up to 5MB each. You can select multiple images
+                at once.
               </p>
             </div>
-          ) : (
-            <div className="relative border rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center space-x-2">
-                  <Image className="h-4 w-4" />
-                  <span className="text-sm font-medium">Card Image</span>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={removeImage}
-                  disabled={!isAuthenticated}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+          )}
+
+          {/* Image Previews */}
+          {imagePreviews.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">
+                  Uploaded Images ({imagePreviews.length}/{MAX_IMAGES})
+                </Label>
+                {cardImages.length < MAX_IMAGES && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={!isAuthenticated}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add More
+                  </Button>
+                )}
               </div>
-              <img
-                src={imagePreview}
-                alt="Card preview"
-                className="max-w-full h-auto max-h-64 rounded-md mx-auto"
-              />
+
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {imagePreviews.map((preview, index) => (
+                  <div
+                    key={preview.id}
+                    className="relative border rounded-lg p-2"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-muted-foreground truncate">
+                        {preview.name}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeImage(index)}
+                        disabled={!isAuthenticated}
+                        className="h-6 w-6 p-0"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <img
+                      src={preview.url}
+                      alt={`Card preview ${index + 1}`}
+                      className="w-full h-24 object-cover rounded-md"
+                    />
+                    <div className="text-xs text-center mt-1 text-muted-foreground">
+                      Image {index + 1}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
-        {formState.errors?.cardImage && (
+        {formState.errors?.cardImages && (
           <p className="text-sm text-destructive">
-            {formState.errors.cardImage[0]}
+            {formState.errors.cardImages[0]}
           </p>
         )}
       </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getAuth } from "firebase/auth";
-import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc, getDoc } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import {
   Card,
@@ -178,28 +178,36 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
 
   const sendAdminNotification = async (orderData) => {
     try {
-      const response = await fetch("/api/send-email", {
+      // Fetch user email from Firestore
+      const userDocRef = doc(firestore, "users", orderData.userId);
+      const userDoc = await getDoc(userDocRef);
+      if (!userDoc.exists() || !userDoc.data().email) {
+        console.error("User email not found");
+        return;
+      }
+      const userEmail = userDoc.data().email;
+
+      const response = await fetch("/api/send-crypto-email", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           orderType: type,
-          crypto: orderData.crypto,
-          amount: orderData.amount,
-          calculatedValue: orderData.calculatedValue,
+          amount: orderData.calculatedValue, // Use totalNGN for amount
+          crypto: orderData.cryptoName,
           walletAddress: orderData.walletAddress,
           sendingWalletAddress: orderData.sendingWalletAddress,
-          userId: orderData.userId,
-          adminEmails: process.env.NEXT_PUBLIC_ADMINEMAIL,
+          userEmail, // Include fetched user email
         }),
       });
 
       if (!response.ok) {
-        console.error("Failed to send admin notification");
+        const errorText = await response.text();
+        console.error("Failed to send crypto order notification:", errorText);
       }
     } catch (error) {
-      console.error("Error sending admin notification:", error);
+      console.error("Error sending crypto order notification:", error);
     }
   };
 
@@ -504,7 +512,7 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
                   )}
                 </span>
               </div>
-              <div className="flex justify-between items-center">
+              <div className=" justify-between items-center hidden">
                 <span className="text-muted-foreground">Admin Margin</span>
                 <span className="font-semibold">
                   {type === "Buy"
