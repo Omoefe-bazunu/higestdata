@@ -1035,8 +1035,10 @@ export default function PendingRequestsTab() {
                   </div>
                   {selectedRequest.proof && (
                     <div className="col-span-2">
-                      <Label className="font-semibold">Proof File</Label>
-                      <p>{selectedRequest.proof}</p>
+                      <ImageGallery
+                        images={`https://firebasestorage.googleapis.com/v0/b/entcarepat.appspot.com/o/crypto-orders%2F${selectedRequest.userId}%2F${selectedRequest.id}%2F${selectedRequest.proof}?alt=media`}
+                        title="Proof Image"
+                      />
                     </div>
                   )}
                 </div>

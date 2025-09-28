@@ -8,6 +8,7 @@ import {
   Gift,
   ShieldCheck,
   RadioTower,
+  CreditCard,
   LogOut,
   Settings,
   Bitcoin,
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/dashboard/gift-cards", label: "Gift Cards", icon: Gift },
   { href: "/dashboard/crypto", label: "Crypto Trade", icon: Bitcoin },
   { href: "/dashboard/buy-airtime", label: "Airtime & Data", icon: RadioTower },
+  { href: "/dashboard/betting", label: "Betting Funding", icon: CreditCard },
   {
     href: "/dashboard/admin",
     label: "Admin Panel",

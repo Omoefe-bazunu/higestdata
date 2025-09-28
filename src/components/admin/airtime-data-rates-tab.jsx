@@ -273,33 +273,35 @@ export default function AdminRatesDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-2">
         <div>
           <h1 className="text-3xl font-bold">VTU Rates Management</h1>
           <p className="text-muted-foreground">
             Set base prices and profit margins for all VTU services
           </p>
         </div>
-        <Button onClick={saveAllRates} disabled={isSaving}>
-          {isSaving ? (
-            <>
-              <Loader className="mr-2 h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <Save className="mr-2 h-4 w-4" />
-              Save All Changes
-            </>
-          )}
-        </Button>
+        <div className=" w-fit">
+          <Button onClick={saveAllRates} disabled={isSaving}>
+            {isSaving ? (
+              <>
+                <Loader className="mr-2 h-4 w-4 animate-spin " />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 h-4 w-4" />
+                Save All Changes
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="airtime" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="airtime">Airtime Rates</TabsTrigger>
           <TabsTrigger value="data">Data Plan Rates</TabsTrigger>
-          <TabsTrigger value="tv">TV Subscription Rates</TabsTrigger>
+          <TabsTrigger value="tv">TV Rates</TabsTrigger>
         </TabsList>
 
         {/* Airtime Rates Tab */}

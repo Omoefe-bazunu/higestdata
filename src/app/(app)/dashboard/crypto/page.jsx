@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { getAuth } from "firebase/auth";
 import { collection, addDoc, doc, updateDoc, getDoc } from "firebase/firestore";
-import { firestore } from "@/lib/firebaseConfig";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { firestore, storage } from "@/lib/firebaseConfig";
 import {
   Card,
   CardContent,
@@ -193,12 +194,13 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          orderId: orderData.orderId,
           orderType: type,
-          amount: orderData.calculatedValue, // Use totalNGN for amount
+          amount: orderData.calculatedValue,
           crypto: orderData.cryptoName,
           walletAddress: orderData.walletAddress,
           sendingWalletAddress: orderData.sendingWalletAddress,
-          userEmail, // Include fetched user email
+          userEmail,
         }),
       });
 
@@ -236,13 +238,46 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
       return;
     }
 
+    const formData = new FormData(e.target);
+    const walletAddress = formData.get("walletAddress");
+    const sendingWalletAddress = formData.get("sendingWalletAddress");
+    const proofFile = formData.get("proof");
+
+    if (type === "Sell" && !proofFile) {
+      setFormState({
+        message: "Proof of transaction is required for sell orders.",
+        errors: { proof: ["Proof file is required"] },
+      });
+      return;
+    }
+
+    // Check file size for proof image (max 5MB)
+    if (type === "Sell" && proofFile && proofFile.size > 5 * 1024 * 1024) {
+      setFormState({
+        message: "Proof image must not exceed 5MB.",
+        errors: { proof: ["File size must be 5MB or less"] },
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const formData = new FormData(e.target);
-      const walletAddress = formData.get("walletAddress");
-      const sendingWalletAddress = formData.get("sendingWalletAddress");
-      const proof = formData.get("proof");
+      let proofUrl = null;
+      let proofFileName = null;
+
+      // Upload proof file to Firebase Storage for sell orders
+      if (type === "Sell" && proofFile) {
+        const fileExtension = proofFile.name.split(".").pop();
+        proofFileName = `${Date.now()}.${fileExtension}`; // Unique file name
+        const storagePath = `crypto-orders/${user.uid}/${proofFileName}`;
+        const storageRef = ref(storage, storagePath);
+
+        // Upload the file
+        await uploadBytes(storageRef, proofFile);
+        // Get the download URL
+        proofUrl = await getDownloadURL(storageRef);
+      }
 
       const orderData = {
         userId: user.uid,
@@ -259,7 +294,7 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
         totalNGN: totalNGN,
         walletAddress: walletAddress,
         sendingWalletAddress: sendingWalletAddress,
-        proof: proof ? proof.name : null,
+        proof: proofUrl || null, // Store the download URL
         status: "pending",
         createdAt: new Date().toISOString(),
       };
@@ -300,20 +335,16 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
         setUserBalance(newBalance);
       }
 
-      try {
-        await sendAdminNotification({
-          orderId: docRef.id,
-          crypto: crypto,
-          cryptoName: selectedCrypto?.name || crypto,
-          amount: parseFloat(amount),
-          calculatedValue: totalNGN,
-          walletAddress: walletAddress,
-          sendingWalletAddress: sendingWalletAddress,
-          userId: user.uid,
-        });
-      } catch (emailError) {
-        console.error("Failed to send admin notification:", emailError);
-      }
+      await sendAdminNotification({
+        orderId: docRef.id,
+        crypto: crypto,
+        cryptoName: selectedCrypto?.name || crypto,
+        amount: parseFloat(amount),
+        calculatedValue: totalNGN,
+        walletAddress: walletAddress,
+        sendingWalletAddress: sendingWalletAddress,
+        userId: user.uid,
+      });
 
       setFormState({
         message: `${type} order submitted successfully. Your transaction is being processed.`,
@@ -401,7 +432,6 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
                 value={`$${totalUSD.toFixed(2)} USD`}
                 className="bg-muted"
               />
-
               <Input
                 readOnly
                 value={`₦${totalNGN.toLocaleString()} NGN`}
@@ -492,9 +522,15 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
                 id="proof"
                 name="proof"
                 type="file"
+                accept="image/*"
                 className="pt-2"
                 disabled={!isAuthenticated}
               />
+              {formState.errors?.proof && (
+                <p className="text-sm text-destructive">
+                  {formState.errors.proof[0]}
+                </p>
+              )}
             </div>
           </>
         )}
@@ -512,7 +548,7 @@ function CryptoTradeForm({ type, cryptoRates, wallets, exchangeRate }) {
                   )}
                 </span>
               </div>
-              <div className=" justify-between items-center hidden">
+              <div className="flex justify-between items-center hidden">
                 <span className="text-muted-foreground">Admin Margin</span>
                 <span className="font-semibold">
                   {type === "Buy"
@@ -627,7 +663,7 @@ export default function CryptoPage() {
         const [rates, walletsData, exchangeRateData] = await Promise.all([
           getCryptoRates(),
           getCryptoWallets(),
-          fetchExchangeRate(), // Calls the local API route
+          fetchExchangeRate(),
         ]);
         setData({
           cryptoRates: rates,
@@ -657,7 +693,7 @@ export default function CryptoPage() {
   }
 
   return (
-    <div className=" mt-4">
+    <div className="mt-4">
       <div>
         <h1 className="text-3xl font-bold font-headline">
           Buy and Sell Crypto Assets

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RadioTower, Gift, Bitcoin, LifeBuoy } from "lucide-react";
+import { RadioTower, Gift, Bitcoin, CreditCard } from "lucide-react";
 
 const actions = [
   {
@@ -23,9 +23,9 @@ const actions = [
     variant: "secondary",
   },
   {
-    href: "/contact",
-    label: "Get Support",
-    icon: LifeBuoy,
+    href: "/betting",
+    label: "Fund Betting A/C",
+    icon: CreditCard,
     variant: "outline",
   },
 ];
