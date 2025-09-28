@@ -23,7 +23,7 @@ const actions = [
     variant: "secondary",
   },
   {
-    href: "/betting",
+    href: "/dashboard/betting",
     label: "Fund Betting A/C",
     icon: CreditCard,
     variant: "outline",
