@@ -82,7 +82,8 @@ export default function Footer() {
               <Phone size={18} /> +234 703 891 1469; 09159082405
             </li>
             <li className="flex items-center gap-3">
-              <MapPin size={18} /> Oghara, Delta State, Nigeria
+              <MapPin size={18} /> HON BEN IGBAKPA HOUSE WATER BOARD RD, LAKYARD
+              CLUB, OGHARA, ETHIOPE WEST
             </li>
           </ul>
 

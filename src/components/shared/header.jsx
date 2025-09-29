@@ -69,7 +69,7 @@ export default function Header() {
               <Link
                 href="/policies"
                 className={`hover:text-orange-400 transition-colors ${
-                  isActive("/contact") ? "text-orange-400" : ""
+                  isActive("/policies") ? "text-orange-400" : ""
                 }`}
               >
                 Legal Policies
