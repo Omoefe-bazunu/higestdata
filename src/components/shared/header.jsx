@@ -162,6 +162,14 @@ export default function Header() {
               >
                 Contact
               </Link>
+              <Link
+                href="/policies"
+                className={`block hover:text-orange-400 transition-colors ${
+                  isActive("/policies") ? "text-orange-400" : ""
+                }`}
+              >
+                Legal Policies
+              </Link>
 
               <div className="pt-4 border-t border-gray-700 space-y-3">
                 {user ? (
