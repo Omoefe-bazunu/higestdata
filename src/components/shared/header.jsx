@@ -66,6 +66,14 @@ export default function Header() {
               >
                 Contact
               </Link>
+              <Link
+                href="/policies"
+                className={`hover:text-orange-400 transition-colors ${
+                  isActive("/contact") ? "text-orange-400" : ""
+                }`}
+              >
+                Legal Policies
+              </Link>
             </nav>
 
             {/* Desktop Auth Buttons */}

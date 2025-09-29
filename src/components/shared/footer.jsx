@@ -37,16 +37,18 @@ export default function Footer() {
         <div>
           <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
           <ul className="space-y-2">
-            {["Home", "About", "Services", "Contact"].map((link) => (
-              <li key={link}>
-                <a
-                  href={`/${link.toLowerCase()}`}
-                  className="text-gray-300 hover:text-orange-400 transition"
-                >
-                  {link}
-                </a>
-              </li>
-            ))}
+            {["Home", "About", "Services", "Contact", "Policies"].map(
+              (link) => (
+                <li key={link}>
+                  <a
+                    href={`/${link.toLowerCase()}`}
+                    className="text-gray-300 hover:text-orange-400 transition"
+                  >
+                    {link}
+                  </a>
+                </li>
+              )
+            )}
           </ul>
         </div>
 
