@@ -58,7 +58,7 @@ export default function RecentTransactions() {
           <CardTitle>Recent Activity</CardTitle>
           <CardDescription>Your latest transactions.</CardDescription>
         </div>
-        <Link href="/transactions">
+        <Link href="/dashboard/transactions">
           <Button variant="ghost" size="sm">
             View All
           </Button>

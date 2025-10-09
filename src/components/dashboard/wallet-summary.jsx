@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import WithdrawalModal from "@/components/WithdrawalModal";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +38,7 @@ export default function WalletSummary() {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState([]);
   const [fundingDialogOpen, setFundingDialogOpen] = useState(false);
+  const [withdrawalDialogOpen, setWithdrawalDialogOpen] = useState(false);
 
   // Fetch wallet balance and transactions
   useEffect(() => {
@@ -114,15 +116,20 @@ export default function WalletSummary() {
               {/* Fund Wallet Button */}
               <Button
                 size="lg"
-                className="bg-accent hover:bg-accent/90 text-accent-foreground w-full"
+                className="bg-accent hover:bg-accent/80 text-accent-foreground w-full"
                 onClick={() => setFundingDialogOpen(true)}
               >
                 <ArrowUpRight className="mr-2 h-5 w-5" />
                 Fund Wallet
               </Button>
 
-              {/* Withdraw Button (Disabled for now) */}
-              <Button size="lg" variant="outline" className="w-full" disabled>
+              {/* Withdraw Button */}
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full"
+                onClick={() => setWithdrawalDialogOpen(true)}
+              >
                 <ArrowDownLeft className="mr-2 h-5 w-5" />
                 Withdraw
               </Button>
@@ -135,6 +142,11 @@ export default function WalletSummary() {
       <FundingModal
         open={fundingDialogOpen}
         onOpenChange={setFundingDialogOpen}
+      />
+      {/* Withdrawal Modal */}
+      <WithdrawalModal
+        open={withdrawalDialogOpen}
+        onOpenChange={setWithdrawalDialogOpen}
       />
     </>
   );
