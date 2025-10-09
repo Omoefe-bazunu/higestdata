@@ -2,14 +2,21 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { firestore } from "@/lib/firebaseConfig";
-import { doc, onSnapshot } from "firebase/firestore";
+import { firestore as db } from "@/lib/firebaseConfig";
+import {
+  doc,
+  onSnapshot,
+  updateDoc,
+  addDoc,
+  collection,
+  getDoc,
+} from "firebase/firestore";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, ArrowRight, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { v4 as uuidv4 } from "uuid";
 
 export default function WithdrawalModal({ open, onOpenChange }) {
   const { user } = useAuth();
@@ -42,8 +50,6 @@ export default function WithdrawalModal({ open, onOpenChange }) {
   const [accountNumber, setAccountNumber] = useState("");
   const [accountName, setAccountName] = useState("");
   const [accountResolved, setAccountResolved] = useState(false);
-
-  // Preview Step
   const [recipientCode, setRecipientCode] = useState("");
 
   const WITHDRAWAL_FEE = 50;
@@ -52,7 +58,7 @@ export default function WithdrawalModal({ open, onOpenChange }) {
   useEffect(() => {
     if (!user || !open) return;
 
-    const userRef = doc(firestore, "users", user.uid);
+    const userRef = doc(db, "users", user.uid);
     const unsubscribe = onSnapshot(userRef, (docSnap) => {
       if (docSnap.exists()) {
         setWalletBalance(docSnap.data().walletBalance || 0);
@@ -74,6 +80,15 @@ export default function WithdrawalModal({ open, onOpenChange }) {
       const response = await fetch("/api/withdrawal/banks");
       const data = await response.json();
       if (data.banks) {
+        console.log("Banks data:", data.banks); // Debug log
+        // Check for duplicate codes
+        const codes = data.banks.map((bank) => bank.code);
+        const duplicates = codes.filter(
+          (code, index) => codes.indexOf(code) !== index
+        );
+        if (duplicates.length > 0) {
+          console.warn("Duplicate bank codes found:", duplicates);
+        }
         setBanks(data.banks);
       }
     } catch (error) {
@@ -82,29 +97,44 @@ export default function WithdrawalModal({ open, onOpenChange }) {
     }
   };
 
+  const generateOTP = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  };
+
   const handleSendOTP = async () => {
     if (!user) return;
 
     setLoading(true);
     try {
-      const response = await fetch("/api/withdrawal/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.uid }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to send OTP");
+      const userRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userRef);
+      if (!userDoc.exists()) {
+        throw new Error("User not found");
       }
 
+      const userData = userDoc.data();
+      const otp = generateOTP();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      // Store OTP in Firestore
+      await updateDoc(userRef, {
+        verificationToken: otp,
+        verificationTokenExpiry: expiresAt.toISOString(),
+      });
+
+      // Send OTP via email
+      await fetch("/api/withdrawal/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userData.email, otp }),
+      });
+
       setOtpSent(true);
-      setOtpExpiry(new Date(data.expiresAt));
+      setOtpExpiry(expiresAt);
       toast.success("OTP sent to your email");
     } catch (error) {
       console.error("Send OTP error:", error);
-      toast.error(error.message);
+      toast.error(error.message || "Failed to send OTP");
     } finally {
       setLoading(false);
     }
@@ -118,16 +148,27 @@ export default function WithdrawalModal({ open, onOpenChange }) {
 
     setLoading(true);
     try {
-      const response = await fetch("/api/withdrawal/verify-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.uid, otp }),
-      });
+      const userRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userRef);
 
-      const data = await response.json();
+      if (!userDoc.exists()) {
+        throw new Error("User not found");
+      }
 
-      if (!response.ok) {
-        throw new Error(data.error || "Invalid OTP");
+      const userData = userDoc.data();
+      const storedOTP = userData.verificationToken;
+      const expiryTime = userData.verificationTokenExpiry;
+
+      if (!storedOTP || !expiryTime) {
+        throw new Error("No OTP found. Please request a new one.");
+      }
+
+      if (new Date() > new Date(expiryTime)) {
+        throw new Error("OTP has expired. Please request a new one.");
+      }
+
+      if (storedOTP !== otp) {
+        throw new Error("Invalid OTP");
       }
 
       toast.success("OTP verified successfully");
@@ -197,7 +238,6 @@ export default function WithdrawalModal({ open, onOpenChange }) {
       return;
     }
 
-    // Create transfer recipient
     setLoading(true);
     try {
       const response = await fetch("/api/withdrawal/create-recipient", {
@@ -231,19 +271,20 @@ export default function WithdrawalModal({ open, onOpenChange }) {
 
     setLoading(true);
     try {
+      const userRef = doc(db, "users", user.uid);
+      const totalAmount = parseFloat(amount) + WITHDRAWAL_FEE;
+      const reference = `WDR_${uuidv4().replace(/-/g, "_").substring(0, 40)}`;
       const bankName =
         banks.find((b) => b.code === selectedBank)?.name || "Bank";
 
+      // Initiate Paystack transfer
       const response = await fetch("/api/withdrawal/initiate-transfer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: user.uid,
           amount: parseFloat(amount),
           recipientCode,
-          bankName,
-          accountNumber,
-          accountName,
+          reference,
         }),
       });
 
@@ -252,6 +293,32 @@ export default function WithdrawalModal({ open, onOpenChange }) {
       if (!response.ok) {
         throw new Error(data.error || "Failed to process withdrawal");
       }
+
+      // Update Firestore: deduct balance and create transaction
+      await updateDoc(userRef, {
+        walletBalance: walletBalance - totalAmount,
+      });
+
+      const transactionsRef = collection(db, "users", user.uid, "transactions");
+      await addDoc(transactionsRef, {
+        userId: user.uid,
+        description: `Withdrawal to ${bankName} - ${accountNumber}`,
+        amount: totalAmount,
+        fee: WITHDRAWAL_FEE,
+        type: "debit",
+        status: "Pending",
+        date: new Date().toLocaleDateString(),
+        createdAt: new Date().toISOString(),
+        paystackReference: reference,
+        transferCode: data.transferCode,
+        paymentMethod: "bank_transfer",
+        metadata: {
+          recipientCode,
+          bankName,
+          accountNumber,
+          accountName,
+        },
+      });
 
       toast.success("Withdrawal initiated successfully!");
       resetModal();
@@ -403,8 +470,8 @@ export default function WithdrawalModal({ open, onOpenChange }) {
                   <SelectValue placeholder="Choose your bank" />
                 </SelectTrigger>
                 <SelectContent>
-                  {banks.map((bank) => (
-                    <SelectItem key={bank.code} value={bank.code}>
+                  {banks.map((bank, index) => (
+                    <SelectItem key={`${bank.code}-${index}`} value={bank.code}>
                       {bank.name}
                     </SelectItem>
                   ))}

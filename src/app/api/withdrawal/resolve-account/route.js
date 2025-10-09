@@ -4,10 +4,27 @@ export async function POST(request) {
   try {
     const { accountNumber, bankCode } = await request.json();
 
+    // Validate inputs
     if (!accountNumber || !bankCode) {
       return NextResponse.json(
         { error: "Account number and bank code are required" },
         { status: 400 }
+      );
+    }
+
+    if (!/^\d{10}$/.test(accountNumber)) {
+      console.error("Invalid account number format:", accountNumber);
+      return NextResponse.json(
+        { error: "Account number must be 10 digits" },
+        { status: 400 }
+      );
+    }
+
+    if (!process.env.PAYSTACK_SECRET_KEY) {
+      console.error("PAYSTACK_SECRET_KEY is not set");
+      return NextResponse.json(
+        { error: "Server configuration error" },
+        { status: 500 }
       );
     }
 
@@ -16,6 +33,7 @@ export async function POST(request) {
       {
         headers: {
           Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          "Content-Type": "application/json",
         },
       }
     );
@@ -23,12 +41,14 @@ export async function POST(request) {
     const data = await response.json();
 
     if (!response.ok) {
+      console.error("Paystack resolve account error:", data);
       return NextResponse.json(
         { error: data.message || "Failed to resolve account" },
         { status: response.status }
       );
     }
 
+    console.log("Paystack resolve account success:", data.data);
     return NextResponse.json({
       success: true,
       accountName: data.data.account_name,
@@ -37,7 +57,7 @@ export async function POST(request) {
   } catch (error) {
     console.error("Resolve account error:", error);
     return NextResponse.json(
-      { error: "Failed to resolve account" },
+      { error: "Failed to resolve account", details: error.message },
       { status: 500 }
     );
   }

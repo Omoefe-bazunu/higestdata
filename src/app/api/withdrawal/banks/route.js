@@ -14,11 +14,24 @@ export async function GET() {
       throw new Error(data.message || "Failed to fetch banks");
     }
 
-    return NextResponse.json({ banks: data.data });
+    // Remove duplicates by bank code
+    const uniqueBanks = [
+      ...new Map(data.data.map((bank) => [bank.code, bank])).values(),
+    ];
+
+    // Log for debugging
+    if (data.data.length !== uniqueBanks.length) {
+      console.warn(
+        "Duplicate bank codes detected:",
+        data.data.length - uniqueBanks.length
+      );
+    }
+
+    return NextResponse.json({ banks: uniqueBanks });
   } catch (error) {
     console.error("Fetch banks error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch banks" },
+      { error: "Failed to fetch banks", details: error.message },
       { status: 500 }
     );
   }
