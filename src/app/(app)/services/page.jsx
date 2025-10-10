@@ -16,14 +16,14 @@ const fadeRight = {
 };
 
 const services = [
-  {
-    title: "Crypto Trading",
-    subtitle: "Trade with Confidence",
-    desc: "Buy and sell crypto assets at competitive rates, backed by top-level security and a user-friendly platform.",
-    img: "/crypto.jpg",
-    cta: "Start Trading",
-    url: "/dashboard/crypto",
-  },
+  // {
+  //   title: "Crypto Trading",
+  //   subtitle: "Trade with Confidence",
+  //   desc: "Buy and sell crypto assets at competitive rates, backed by top-level security and a user-friendly platform.",
+  //   img: "/crypto.jpg",
+  //   cta: "Start Trading",
+  //   url: "/dashboard/crypto",
+  // },
   {
     title: "Gift Card Exchange",
     subtitle: "Instant & Reliable",

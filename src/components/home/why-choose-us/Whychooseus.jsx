@@ -32,8 +32,8 @@ export default function WhyChooseUs() {
           </h2>
           <p className="text-gray-600 mb-8 leading-relaxed">
             At Highest Data Fintech Solutions, we create a seamless and secure
-            platform for buying and selling of crypto assets, selling of gift
-            cards, buying of airtime VTU and funding of betting account.
+            platform for selling of gift cards, buying of airtime VTU and
+            funding of betting account.
           </p>
 
           <div className="space-y-6">

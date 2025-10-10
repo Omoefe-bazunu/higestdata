@@ -50,50 +50,10 @@ import {
   getDoc,
   query,
   where,
+  increment,
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { firestore } from "@/lib/firebaseConfig";
-import * as TabsPrimitive from "@radix-ui/react-tabs";
-import { cn } from "@/lib/utils";
-import React from "react";
-
-const Tabs = TabsPrimitive.Root;
-
-const TabsList = React.forwardRef(({ className, ...props }, ref) => (
-  <TabsPrimitive.List
-    ref={ref}
-    className={cn(
-      "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
-      className
-    )}
-    {...props}
-  />
-));
-TabsList.displayName = TabsPrimitive.List.displayName;
-
-const TabsTrigger = React.forwardRef(({ className, ...props }, ref) => (
-  <TabsPrimitive.Trigger
-    ref={ref}
-    className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
-      className
-    )}
-    {...props}
-  />
-));
-TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
-
-const TabsContent = React.forwardRef(({ className, ...props }, ref) => (
-  <TabsPrimitive.Content
-    ref={ref}
-    className={cn(
-      "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-      className
-    )}
-    {...props}
-  />
-));
-TabsContent.displayName = TabsPrimitive.Content.displayName;
 
 // Image Gallery Component
 const ImageGallery = ({ images, title = "Images" }) => {
@@ -106,7 +66,6 @@ const ImageGallery = ({ images, title = "Images" }) => {
     );
   }
 
-  // Handle legacy single image (imageUrl) and new multiple images (imageUrls)
   const imageList = Array.isArray(images)
     ? images
     : [{ url: images, name: "Card Image" }];
@@ -191,7 +150,6 @@ const ImageGallery = ({ images, title = "Images" }) => {
           </DialogHeader>
 
           <div className="relative flex items-center justify-center">
-            {/* Navigation Buttons */}
             {imageList.length > 1 && (
               <>
                 <Button
@@ -213,7 +171,6 @@ const ImageGallery = ({ images, title = "Images" }) => {
               </>
             )}
 
-            {/* Current Image */}
             <div className="w-full flex justify-center">
               <img
                 src={
@@ -229,7 +186,6 @@ const ImageGallery = ({ images, title = "Images" }) => {
             </div>
           </div>
 
-          {/* Image Navigation Dots */}
           {imageList.length > 1 && (
             <div className="flex justify-center gap-2 mt-4">
               {imageList.map((_, index) => (
@@ -246,7 +202,6 @@ const ImageGallery = ({ images, title = "Images" }) => {
             </div>
           )}
 
-          {/* External Link Button */}
           <div className="flex justify-center mt-4">
             <Button
               variant="outline"
@@ -270,16 +225,14 @@ const ImageGallery = ({ images, title = "Images" }) => {
 
 export default function PendingRequestsTab() {
   const [giftCardRequests, setGiftCardRequests] = useState([]);
-  const [cryptoRequests, setCryptoRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState({});
   const [invalidReasons, setInvalidReasons] = useState({});
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const { toast } = useToast();
-  const adminEmails = process.env.NEXT_PUBLIC_ADMINEMAIL?.split(",") || [];
 
-  // Fetch gift card and crypto requests
+  // Fetch gift card requests
   useEffect(() => {
     let isMounted = true;
 
@@ -288,6 +241,7 @@ export default function PendingRequestsTab() {
         setLoading(true);
         const auth = getAuth();
         const user = auth.currentUser;
+
         if (!user) {
           toast({
             title: "Authentication Error",
@@ -301,20 +255,8 @@ export default function PendingRequestsTab() {
         const giftCardSnapshot = await getDocs(
           collection(firestore, "giftCardSubmissions")
         );
-        const giftCardData = giftCardSnapshot.docs
-          .map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-          .filter(
-            (req) => req.status === "pending" || req.status === "flagged"
-          );
 
-        // Fetch crypto orders
-        const cryptoSnapshot = await getDocs(
-          collection(firestore, "cryptoOrders")
-        );
-        const cryptoData = cryptoSnapshot.docs
+        const giftCardData = giftCardSnapshot.docs
           .map((doc) => ({
             id: doc.id,
             ...doc.data(),
@@ -325,13 +267,12 @@ export default function PendingRequestsTab() {
 
         if (isMounted) {
           setGiftCardRequests(giftCardData);
-          setCryptoRequests(cryptoData);
         }
       } catch (err) {
         console.error("Error fetching requests:", err);
         toast({
           title: "Error",
-          description: "Failed to load requests.",
+          description: `Failed to load requests: ${err.message}`,
           variant: "destructive",
         });
       } finally {
@@ -348,55 +289,15 @@ export default function PendingRequestsTab() {
     };
   }, [toast]);
 
-  // Send email notification to user - UPDATED VERSION
-  // const sendUserNotification = async (
-  //   userId,
-  //   status,
-  //   type,
-  //   itemName,
-  //   amount,
-  //   reason = null,
-  //   cryptoName = null
-  // ) => {
-  //   try {
-  //     const response = await fetch("/api/send-user-notification", {
-  //       method: "POST",
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //       },
-  //       body: JSON.stringify({
-  //         userId,
-  //         status,
-  //         type,
-  //         itemName,
-  //         amount,
-  //         reason,
-  //         cryptoName,
-  //       }),
-  //     });
-
-  //     if (!response.ok) {
-  //       const errorText = await response.text();
-  //       console.error("Failed to send user notification:", errorText);
-  //       throw new Error(`Email API failed: ${response.status}`);
-  //     } else {
-  //       console.log("User notification sent successfully");
-  //     }
-  //   } catch (error) {
-  //     console.error("Error sending user notification:", error);
-  //     // Don't throw the error to prevent failing the entire operation
-  //     // Just log it for debugging purposes
-  //   }
-  // };
-
   // Handle status update
-  const handleStatusUpdate = async (requestId, newStatus, type) => {
+  const handleStatusUpdate = async (requestId, newStatus) => {
     const auth = getAuth();
     const user = auth.currentUser;
-    if (!user || !adminEmails.includes(user.email)) {
+
+    if (!user) {
       toast({
-        title: "Permission Error",
-        description: "You are not authorized to update requests.",
+        title: "Authentication Error",
+        description: "You must be logged in to update requests.",
         variant: "destructive",
       });
       return;
@@ -415,10 +316,7 @@ export default function PendingRequestsTab() {
     try {
       setUpdating((prev) => ({ ...prev, [requestId]: true }));
 
-      const collectionName =
-        type === "giftCard" ? "giftCardSubmissions" : "cryptoOrders";
-      const requests = type === "giftCard" ? giftCardRequests : cryptoRequests;
-      const request = requests.find((req) => req.id === requestId);
+      const request = giftCardRequests.find((req) => req.id === requestId);
       if (!request) {
         throw new Error("Request not found");
       }
@@ -426,20 +324,22 @@ export default function PendingRequestsTab() {
       // Fetch user email from Firestore
       const userDocRef = doc(firestore, "users", request.userId);
       const userDoc = await getDoc(userDocRef);
+
       if (!userDoc.exists() || !userDoc.data().email) {
         throw new Error("User email not found");
       }
+
       const userEmail = userDoc.data().email;
 
       // Update submission status
-      const docRef = doc(firestore, collectionName, requestId);
+      const docRef = doc(firestore, "giftCardSubmissions", requestId);
       const updateData = {
-        status: newStatus === "accepted" ? "approved" : "invalid",
+        status: newStatus === "accepted" ? "approved" : "rejected",
         updatedAt: new Date().toISOString(),
       };
 
       if (newStatus === "invalid") {
-        updateData.invalidReason = invalidReasons[requestId];
+        updateData.rejectionReason = invalidReasons[requestId];
       }
 
       await updateDoc(docRef, updateData);
@@ -447,23 +347,20 @@ export default function PendingRequestsTab() {
       // Update related transaction status
       const transactionsQuery = query(
         collection(firestore, "users", request.userId, "transactions"),
-        where(
-          type === "giftCard" ? "relatedSubmissionId" : "relatedOrderId",
-          "==",
-          requestId
-        )
+        where("relatedSubmissionId", "==", requestId)
       );
+
       const transactionsSnapshot = await getDocs(transactionsQuery);
 
       if (!transactionsSnapshot.empty) {
         const transactionDoc = transactionsSnapshot.docs[0];
         const transactionUpdateData = {
-          status: newStatus === "accepted" ? "Completed" : "Not Approved",
+          status: newStatus === "accepted" ? "Completed" : "Failed",
           updatedAt: new Date().toISOString(),
         };
 
         if (newStatus === "invalid") {
-          transactionUpdateData.reasons = invalidReasons[requestId];
+          transactionUpdateData.failureReason = invalidReasons[requestId];
         }
 
         await updateDoc(transactionDoc.ref, transactionUpdateData);
@@ -471,48 +368,26 @@ export default function PendingRequestsTab() {
 
       // If approved, update user's wallet balance
       if (newStatus === "accepted") {
-        const userDoc = await getDoc(userDocRef); // Reuse userDocRef
-        if (userDoc.exists()) {
-          const currentBalance = userDoc.data().walletBalance || 0;
-          let newBalance = currentBalance;
-
-          if (type === "giftCard") {
-            newBalance = currentBalance + request.payoutNaira;
-          } else if (type === "crypto" && request.type === "sell") {
-            newBalance = currentBalance + request.totalNGN;
-          }
-
-          await updateDoc(userDocRef, {
-            walletBalance: newBalance,
-            updatedAt: new Date().toISOString(),
-          });
-        }
+        await updateDoc(userDocRef, {
+          walletBalance: increment(request.payoutNaira),
+          updatedAt: new Date().toISOString(),
+        });
       }
 
       // Send email notification
-      const itemName =
-        request.giftCardName || `${request.cryptoName} (${request.type})`;
-      const amount = request.payoutNaira || request.totalNGN || request.amount;
-
       await sendUserNotification(
         request.userId,
         newStatus === "accepted" ? "approved" : "rejected",
-        type,
-        itemName,
-        amount,
+        "giftCard",
+        request.giftCardName,
+        request.payoutNaira,
         invalidReasons[requestId],
-        type === "crypto" ? request.cryptoName || request.crypto : null,
-        userEmail // Pass fetched userEmail
+        null,
+        userEmail
       );
 
       // Remove from local state
-      if (type === "giftCard") {
-        setGiftCardRequests((prev) =>
-          prev.filter((req) => req.id !== requestId)
-        );
-      } else {
-        setCryptoRequests((prev) => prev.filter((req) => req.id !== requestId));
-      }
+      setGiftCardRequests((prev) => prev.filter((req) => req.id !== requestId));
 
       setInvalidReasons((prev) => {
         const newReasons = { ...prev };
@@ -524,13 +399,13 @@ export default function PendingRequestsTab() {
         title: "Status Updated",
         description: `Request ${
           newStatus === "accepted" ? "approved" : "rejected"
-        }.`,
+        } successfully.`,
       });
     } catch (err) {
       console.error("Error updating status:", err);
       toast({
         title: "Error",
-        description: `Failed to update request status: ${err.message}`,
+        description: `Failed to update request: ${err.message}`,
         variant: "destructive",
       });
     } finally {
@@ -538,7 +413,7 @@ export default function PendingRequestsTab() {
     }
   };
 
-  // Update sendUserNotification to accept userEmail
+  // Send user notification
   const sendUserNotification = async (
     userId,
     status,
@@ -574,7 +449,6 @@ export default function PendingRequestsTab() {
       }
     } catch (error) {
       console.error("Error sending user notification:", error);
-      // Log error but don't fail the operation
     }
   };
 
@@ -584,308 +458,156 @@ export default function PendingRequestsTab() {
   };
 
   // Handle view details
-  const handleViewDetails = (request, type) => {
-    setSelectedRequest({ ...request, requestType: type });
+  const handleViewDetails = (request) => {
+    setSelectedRequest(request);
     setShowDetailsModal(true);
   };
 
   return (
     <>
-      <Tabs defaultValue="gift-cards" className="w-full mt-4">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="gift-cards">Gift Card Requests</TabsTrigger>
-          <TabsTrigger value="crypto">Crypto Orders</TabsTrigger>
-        </TabsList>
-
-        {/* Gift Card Requests Tab */}
-        <TabsContent value="gift-cards">
-          <Card>
-            <CardHeader>
-              <CardTitle>Gift Card Requests</CardTitle>
-              <CardDescription>
-                Review and update the status of pending or flagged gift card
-                requests.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Gift Card</TableHead>
-                    <TableHead>Face Value (USD)</TableHead>
-                    <TableHead>Payout (NGN)</TableHead>
-                    <TableHead>Images</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Submitted At</TableHead>
-                    <TableHead>Invalid Reason</TableHead>
-                    <TableHead>Full Details</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>Gift Card Requests</CardTitle>
+          <CardDescription>
+            Review and update the status of pending or flagged gift card
+            requests.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Gift Card</TableHead>
+                <TableHead>Face Value (USD)</TableHead>
+                <TableHead>Payout (NGN)</TableHead>
+                <TableHead>Images</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Submitted At</TableHead>
+                <TableHead>Invalid Reason</TableHead>
+                <TableHead>Full Details</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell>
+                      <Skeleton className="h-6 w-32" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-6 w-20" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-6 w-20" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-6 w-16" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-6 w-20" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-6 w-32" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-6 w-32" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-6 w-20" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-6 w-20 ml-auto" />
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    Array.from({ length: 4 }).map((_, i) => (
-                      <TableRow key={i}>
-                        <TableCell>
-                          <Skeleton className="h-6 w-32" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-20" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-20" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-16" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-20" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-32" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-32" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-20" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-20 ml-auto" />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : giftCardRequests.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center">
-                        No pending gift card requests.
+                ))
+              ) : giftCardRequests.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8">
+                    No pending gift card requests.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                giftCardRequests.map((req) => {
+                  const imageCount = req.imageUrls
+                    ? req.imageUrls.length
+                    : req.imageUrl
+                    ? 1
+                    : 0;
+
+                  return (
+                    <TableRow key={req.id}>
+                      <TableCell>{req.giftCardName}</TableCell>
+                      <TableCell>
+                        ${req.faceValue?.toFixed(2) || "N/A"}
+                      </TableCell>
+                      <TableCell>
+                        ₦{req.payoutNaira?.toLocaleString() || "N/A"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Images className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{imageCount}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="capitalize">{req.status}</TableCell>
+                      <TableCell>
+                        {req.submittedAt || req.createdAt
+                          ? new Date(
+                              req.submittedAt || req.createdAt
+                            ).toLocaleString()
+                          : "N/A"}
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          placeholder="Reason for rejection"
+                          value={invalidReasons[req.id] || ""}
+                          onChange={(e) =>
+                            handleInvalidReasonChange(req.id, e.target.value)
+                          }
+                          disabled={updating[req.id]}
+                          className="w-40"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleViewDetails(req)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Select
+                          onValueChange={(value) =>
+                            handleStatusUpdate(req.id, value)
+                          }
+                          disabled={updating[req.id]}
+                        >
+                          <SelectTrigger className="w-32 ml-auto">
+                            <SelectValue placeholder="Update status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="accepted">Accept</SelectItem>
+                            <SelectItem value="invalid">Reject</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                     </TableRow>
-                  ) : (
-                    giftCardRequests.map((req) => {
-                      // Handle both legacy single image and new multiple images
-                      const imageCount = req.imageUrls
-                        ? req.imageUrls.length
-                        : req.imageUrl
-                        ? 1
-                        : 0;
-
-                      return (
-                        <TableRow key={req.id}>
-                          <TableCell>{req.giftCardName}</TableCell>
-                          <TableCell>
-                            ${req.faceValue?.toFixed(2) || "N/A"}
-                          </TableCell>
-                          <TableCell>
-                            ₦{req.payoutNaira?.toLocaleString() || "N/A"}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Images className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm">{imageCount}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>{req.status}</TableCell>
-                          <TableCell>
-                            {req.submittedAt || req.createdAt
-                              ? new Date(
-                                  req.submittedAt || req.createdAt
-                                ).toLocaleString()
-                              : "N/A"}
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              placeholder="Reason for invalid"
-                              value={invalidReasons[req.id] || ""}
-                              onChange={(e) =>
-                                handleInvalidReasonChange(
-                                  req.id,
-                                  e.target.value
-                                )
-                              }
-                              disabled={updating[req.id]}
-                              className="w-40"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleViewDetails(req, "giftCard")}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Select
-                              onValueChange={(value) =>
-                                handleStatusUpdate(req.id, value, "giftCard")
-                              }
-                              disabled={updating[req.id]}
-                            >
-                              <SelectTrigger className="w-32 ml-auto">
-                                <SelectValue placeholder="Update status" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="accepted">Accept</SelectItem>
-                                <SelectItem value="invalid">
-                                  Mark Invalid
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Crypto Orders Tab */}
-        <TabsContent value="crypto">
-          <Card>
-            <CardHeader>
-              <CardTitle>Crypto Orders</CardTitle>
-              <CardDescription>
-                Review pending or flagged crypto buy/sell orders.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Crypto</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Total (NGN)</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Submitted At</TableHead>
-                    <TableHead>Invalid Reason</TableHead>
-                    <TableHead>Full Details</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    Array.from({ length: 2 }).map((_, i) => (
-                      <TableRow key={i}>
-                        <TableCell>
-                          <Skeleton className="h-6 w-32" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-20" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-20" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-20" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-20" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-32" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-32" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-20" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-6 w-20 ml-auto" />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : cryptoRequests.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center">
-                        No pending crypto orders.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    cryptoRequests.map((req) => (
-                      <TableRow key={req.id}>
-                        <TableCell>
-                          {req.cryptoName || req.crypto} (
-                          {req.cryptoSymbol || "N/A"})
-                        </TableCell>
-                        <TableCell className="capitalize">
-                          {req.type || "N/A"}
-                        </TableCell>
-                        <TableCell>{req.amount || "N/A"}</TableCell>
-                        <TableCell>
-                          ₦{req.totalNGN?.toLocaleString() || "N/A"}
-                        </TableCell>
-                        <TableCell>{req.status}</TableCell>
-                        <TableCell>
-                          {req.submittedAt || req.createdAt
-                            ? new Date(
-                                req.submittedAt || req.createdAt
-                              ).toLocaleString()
-                            : "N/A"}
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            placeholder="Reason for invalid"
-                            value={invalidReasons[req.id] || ""}
-                            onChange={(e) =>
-                              handleInvalidReasonChange(req.id, e.target.value)
-                            }
-                            disabled={updating[req.id]}
-                            className="w-40"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleViewDetails(req, "crypto")}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Select
-                            onValueChange={(value) =>
-                              handleStatusUpdate(req.id, value, "crypto")
-                            }
-                            disabled={updating[req.id]}
-                          >
-                            <SelectTrigger className="w-32 ml-auto">
-                              <SelectValue placeholder="Update status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="accepted">Accept</SelectItem>
-                              <SelectItem value="invalid">
-                                Mark Invalid
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       {/* Details Modal */}
       <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {selectedRequest?.requestType === "giftCard"
-                ? "Gift Card Request Details"
-                : "Crypto Order Details"}
-            </DialogTitle>
+            <DialogTitle>Gift Card Request Details</DialogTitle>
             <DialogDescription>
               Full details of the submitted request
             </DialogDescription>
@@ -893,156 +615,61 @@ export default function PendingRequestsTab() {
 
           {selectedRequest && (
             <div className="space-y-6">
-              {selectedRequest.requestType === "giftCard" ? (
-                // Gift Card Details
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="font-semibold">Gift Card Name</Label>
-                      <p>{selectedRequest.giftCardName}</p>
-                    </div>
-                    <div>
-                      <Label className="font-semibold">Face Value (USD)</Label>
-                      <p>${selectedRequest.faceValue?.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <Label className="font-semibold">Payout (NGN)</Label>
-                      <p>₦{selectedRequest.payoutNaira?.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <Label className="font-semibold">Exchange Rate</Label>
-                      <p>₦{selectedRequest.exchangeRate?.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <Label className="font-semibold">Rate Percentage</Label>
-                      <p>{selectedRequest.ratePercentage}%</p>
-                    </div>
-                    <div>
-                      <Label className="font-semibold">Status</Label>
-                      <p className="capitalize">{selectedRequest.status}</p>
-                    </div>
-                    <div>
-                      <Label className="font-semibold">Card Code</Label>
-                      <p className="font-mono text-sm bg-gray-100 p-2 rounded">
-                        {selectedRequest.cardCode}
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="font-semibold">Submitted At</Label>
-                      <p>
-                        {new Date(
-                          selectedRequest.submittedAt ||
-                            selectedRequest.createdAt
-                        ).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="col-span-2">
-                      <Label className="font-semibold">User ID</Label>
-                      <p className="text-xs font-mono">
-                        {selectedRequest.userId}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Card Images Section */}
-                  <div className="space-y-4">
-                    <ImageGallery
-                      images={
-                        selectedRequest.imageUrls ||
-                        (selectedRequest.imageUrl
-                          ? [selectedRequest.imageUrl]
-                          : [])
-                      }
-                      title="Card Images"
-                    />
-                  </div>
-                </>
-              ) : (
-                // Crypto Order Details
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="font-semibold">Cryptocurrency</Label>
-                    <p>
-                      {selectedRequest.cryptoName} (
-                      {selectedRequest.cryptoSymbol})
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="font-semibold">Order Type</Label>
-                    <p className="capitalize">{selectedRequest.type}</p>
-                  </div>
-                  <div>
-                    <Label className="font-semibold">Amount</Label>
-                    <p>
-                      {selectedRequest.amount} {selectedRequest.cryptoSymbol}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="font-semibold">Live Price (USD)</Label>
-                    <p>${selectedRequest.livePrice?.toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <Label className="font-semibold">Final Price (USD)</Label>
-                    <p>${selectedRequest.finalPriceUSD?.toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <Label className="font-semibold">Final Price (NGN)</Label>
-                    <p>₦{selectedRequest.finalPriceNGN?.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <Label className="font-semibold">Total (USD)</Label>
-                    <p>${selectedRequest.totalUSD?.toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <Label className="font-semibold">Total (NGN)</Label>
-                    <p>₦{selectedRequest.totalNGN?.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <Label className="font-semibold">Admin Margin</Label>
-                    <p>{selectedRequest.adminMargin}%</p>
-                  </div>
-                  <div>
-                    <Label className="font-semibold">Status</Label>
-                    <p className="capitalize">{selectedRequest.status}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <Label className="font-semibold">Wallet Address</Label>
-                    <p className="text-xs break-all font-mono bg-gray-100 p-2 rounded">
-                      {selectedRequest.walletAddress || "N/A"}
-                    </p>
-                  </div>
-                  {selectedRequest.sendingWalletAddress && (
-                    <div className="col-span-2">
-                      <Label className="font-semibold">
-                        Sending Wallet Address
-                      </Label>
-                      <p className="text-xs break-all font-mono bg-gray-100 p-2 rounded">
-                        {selectedRequest.sendingWalletAddress}
-                      </p>
-                    </div>
-                  )}
-                  <div>
-                    <Label className="font-semibold">User ID</Label>
-                    <p className="text-xs font-mono">
-                      {selectedRequest.userId}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="font-semibold">Created At</Label>
-                    <p>
-                      {new Date(selectedRequest.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                  {selectedRequest.proof && (
-                    <div className="col-span-2">
-                      <ImageGallery
-                        images={`https://firebasestorage.googleapis.com/v0/b/entcarepat.appspot.com/o/crypto-orders%2F${selectedRequest.userId}%2F${selectedRequest.id}%2F${selectedRequest.proof}?alt=media`}
-                        title="Proof Image"
-                      />
-                    </div>
-                  )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="font-semibold">Gift Card Name</Label>
+                  <p>{selectedRequest.giftCardName}</p>
                 </div>
-              )}
+                <div>
+                  <Label className="font-semibold">Face Value (USD)</Label>
+                  <p>${selectedRequest.faceValue?.toFixed(2)}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Payout (NGN)</Label>
+                  <p>₦{selectedRequest.payoutNaira?.toLocaleString()}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Exchange Rate</Label>
+                  <p>₦{selectedRequest.exchangeRate?.toFixed(2)}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Rate Percentage</Label>
+                  <p>{selectedRequest.ratePercentage}%</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Status</Label>
+                  <p className="capitalize">{selectedRequest.status}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Card Code</Label>
+                  <p className="font-mono text-sm bg-gray-100 p-2 rounded break-all">
+                    {selectedRequest.cardCode}
+                  </p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Submitted At</Label>
+                  <p>
+                    {new Date(
+                      selectedRequest.submittedAt || selectedRequest.createdAt
+                    ).toLocaleString()}
+                  </p>
+                </div>
+                <div className="col-span-2">
+                  <Label className="font-semibold">User ID</Label>
+                  <p className="text-xs font-mono">{selectedRequest.userId}</p>
+                </div>
+              </div>
+
+              {/* Card Images Section */}
+              <div className="space-y-4">
+                <ImageGallery
+                  images={
+                    selectedRequest.imageUrls ||
+                    (selectedRequest.imageUrl ? [selectedRequest.imageUrl] : [])
+                  }
+                  title="Card Images"
+                />
+              </div>
             </div>
           )}
         </DialogContent>

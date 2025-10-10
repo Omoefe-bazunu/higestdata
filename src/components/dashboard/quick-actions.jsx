@@ -16,12 +16,12 @@ const actions = [
     icon: Gift,
     variant: "secondary",
   },
-  {
-    href: "/dashboard/crypto",
-    label: "Trade Crypto",
-    icon: Bitcoin,
-    variant: "secondary",
-  },
+  // {
+  //   href: "/dashboard/crypto",
+  //   label: "Trade Crypt",
+  //   icon: Bitcoin,
+  //   variant: "secondary",
+  // },
   {
     href: "/dashboard/betting",
     label: "Fund Betting A/C",

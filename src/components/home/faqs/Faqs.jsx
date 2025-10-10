@@ -9,7 +9,7 @@ const faqs = [
   {
     question: "What services can I access after signing up?",
     answer:
-      "Once you sign up, you’ll gain access to your personal dashboard where you can buy and sell crypto, gift cards, airtime, fund your wallet, and much more.",
+      "Once you sign up, you’ll gain access to your personal dashboard where you can buy and sell gift cards, airtime, fund your betting wallet, and much more.",
   },
   {
     question: "Is my data and money safe with Highest Data?",

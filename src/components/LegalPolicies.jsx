@@ -82,12 +82,12 @@ export default function LegalPolicies() {
                           services:
                         </p>
                         <ul className="list-disc list-inside space-y-1 ml-4">
-                          <li>Cryptocurrency trading (buying and selling)</li>
+                          {/* <li>Cryptocurrency trading (buying and selling)</li> */}
                           <li>Gift card trading</li>
                           <li>Airtime and data purchase</li>
                           <li>Cable TV subscription</li>
                           <li>Sports betting account funding</li>
-                          <li>Wallet funding and withdrawal via Flutterwave</li>
+                          <li>Wallet funding and withdrawal via Paystack</li>
                         </ul>
                       </section>
 
@@ -139,9 +139,9 @@ export default function LegalPolicies() {
                         <div className="space-y-3 ">
                           <p>
                             <strong>5.1 Wallet Funding:</strong> Users can fund
-                            their wallets using Flutterwave payment gateway.
-                            Funds are typically credited within minutes, subject
-                            to payment processor confirmation.
+                            their wallets using Paystack payment gateway. Funds
+                            are typically credited within minutes, subject to
+                            payment processor confirmation.
                           </p>
 
                           <p>
@@ -160,7 +160,7 @@ export default function LegalPolicies() {
                           <p>
                             <strong>5.4 Withdrawals:</strong> Wallet withdrawals
                             are processed within 24-48 hours to your registered
-                            bank account via Flutterwave.
+                            bank account via Paystack.
                           </p>
                         </div>
                       </section>
@@ -339,9 +339,7 @@ export default function LegalPolicies() {
                             <strong>2.3 Transaction Data:</strong>
                           </p>
                           <ul className="list-disc list-inside space-y-1 ml-4">
-                            <li>
-                              Payment information processed via Flutterwave
-                            </li>
+                            <li>Payment information processed via Paystack</li>
                             <li>Transaction history and wallet activity</li>
                             <li>Crypto addresses and gift card details</li>
                           </ul>
@@ -380,7 +378,7 @@ export default function LegalPolicies() {
 
                           <p>
                             <strong>4.1 Service Providers:</strong> Third-party
-                            payment processors (Flutterwave), API providers
+                            payment processors (Paystack), API providers
                             (eBills), and cloud hosting services for operational
                             purposes.
                           </p>
@@ -477,11 +475,10 @@ export default function LegalPolicies() {
                           9. Third-Party Services
                         </h3>
                         <p className="">
-                          Our platform integrates with Flutterwave for payments
-                          and other third-party services. These providers have
-                          their own privacy policies, and we recommend reviewing
-                          them. We are not responsible for their privacy
-                          practices.
+                          Our platform integrates with Paystack for payments and
+                          other third-party services. These providers have their
+                          own privacy policies, and we recommend reviewing them.
+                          We are not responsible for their privacy practices.
                         </p>
                       </section>
 
@@ -578,8 +575,8 @@ export default function LegalPolicies() {
                         <div className="space-y-3 ">
                           <p>
                             <strong>2.1 Failed Payments:</strong> If your
-                            payment via Flutterwave is debited but your wallet
-                            is not credited within 24 hours, we will investigate
+                            payment via Paystack is debited but your wallet is
+                            not credited within 24 hours, we will investigate
                             and process a full refund or credit your wallet
                             accordingly.
                           </p>

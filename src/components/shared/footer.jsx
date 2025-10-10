@@ -56,9 +56,9 @@ export default function Footer() {
         <div>
           <h3 className="text-lg font-semibold mb-4">Services</h3>
           <ul className="space-y-2">
-            <li className="text-gray-300 hover:text-orange-400 transition cursor-pointer">
+            {/* <li className="text-gray-300 hover:text-orange-400 transition cursor-pointer">
               <Link href="/dashboard/crypto">Crypto Trading</Link>
-            </li>
+            </li> */}
             <li className="text-gray-300 hover:text-orange-400 transition cursor-pointer">
               <Link href="/dashboard/gift-cards">Gift Card Exchange</Link>
             </li>
@@ -82,8 +82,9 @@ export default function Footer() {
               <Phone size={18} /> +234 703 891 1469; 09159082405
             </li>
             <li className="flex items-center gap-3">
-              <MapPin size={18} /> HON BEN IGBAKPA HOUSE WATER BOARD RD, LAKYARD
-              CLUB, OGHARA, ETHIOPE WEST
+              <MapPin size={18} /> Okemute Gbogborogbo Compound, Old Benin Road,
+              Opposite Lawyer Filling Station, Oghara, Ethiope West, Delta
+              State.
             </li>
           </ul>
 

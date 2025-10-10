@@ -1,5 +1,3 @@
-"use client";
-
 import { useRef, useState, useEffect } from "react";
 import { getAuth } from "firebase/auth";
 import { collection, addDoc, updateDoc, doc, getDoc } from "firebase/firestore";
@@ -38,8 +36,8 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
   const [selectedCard, setSelectedCard] = useState("");
   const [faceValue, setFaceValue] = useState("");
   const [cardCode, setCardCode] = useState("");
-  const [cardImages, setCardImages] = useState([]); // Changed to array
-  const [imagePreviews, setImagePreviews] = useState([]); // Changed to array
+  const [cardImages, setCardImages] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [isValid, setIsValid] = useState(false);
 
   const MAX_IMAGES = 10;
@@ -62,16 +60,15 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
       ? (parseFloat(faceValue) * rate * exchangeRate) / 100
       : 0;
 
-  // Validate form inputs
+  // Validate form inputs (cardCode is now optional)
   useEffect(() => {
     const valid =
       selectedCard &&
       faceValue &&
       parseFloat(faceValue) > 0 &&
-      cardCode.trim() &&
-      cardImages.length > 0; // At least one image required
+      cardImages.length > 0;
     setIsValid(valid);
-  }, [selectedCard, faceValue, cardCode, cardImages]);
+  }, [selectedCard, faceValue, cardImages]);
 
   // Handle multiple image selection
   const handleImageChange = (event) => {
@@ -132,7 +129,6 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
       setCardImages((prev) => [...prev, ...validFiles]);
     }
 
-    // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -201,7 +197,6 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
   // Send email notification function
   const sendAdminNotification = async (submissionData) => {
     try {
-      // Fetch user email
       const userDocRef = doc(firestore, "users", submissionData.userId);
       const userDoc = await getDoc(userDocRef);
       if (!userDoc.exists() || !userDoc.data().email) {
@@ -236,6 +231,7 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
       console.error("Error sending notification:", error);
     }
   };
+
   // Handle form submission
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -266,7 +262,6 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
       if (!selectedCard) errors.cardType = ["Card type is required"];
       if (!faceValue || isNaN(faceValue) || parseFloat(faceValue) <= 0)
         errors.cardValue = ["Valid card value in USD is required"];
-      if (!cardCode.trim()) errors.cardCode = ["Card code is required"];
       if (cardImages.length === 0)
         errors.cardImages = ["At least one card image is required"];
 
@@ -294,11 +289,11 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
         giftCardId: selectedCard,
         giftCardName: selectedCardData.name,
         faceValue: parseFloat(faceValue),
-        cardCode,
+        cardCode: cardCode || null, // Card code is optional
         payoutNaira,
         status: "pending",
         submittedAt: new Date().toISOString(),
-        imageUrls: [], // Will be updated after upload
+        imageUrls: [],
         imageCount: cardImages.length,
         exchangeRate,
         ratePercentage: rate,
@@ -318,7 +313,6 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
         imageUrls = await uploadImages(cardImages, user.uid, docRef.id);
         console.log("Images uploaded successfully:", imageUrls);
 
-        // Update the submission with the image URLs
         await updateDoc(doc(firestore, "giftCardSubmissions", docRef.id), {
           imageUrls: imageUrls,
         });
@@ -463,7 +457,7 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="cardCode">Card Code</Label>
+        <Label htmlFor="cardCode">Card Code (Optional)</Label>
         <Input
           id="cardCode"
           name="cardCode"
@@ -472,11 +466,6 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
           placeholder="XXXX-XXXX-XXXX-XXXX"
           disabled={!isAuthenticated}
         />
-        {formState.errors?.cardCode && (
-          <p className="text-sm text-destructive">
-            {formState.errors.cardCode[0]}
-          </p>
-        )}
       </div>
 
       <div className="space-y-2">
@@ -484,7 +473,6 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
           Card Images * (Maximum {MAX_IMAGES} images)
         </Label>
         <div className="space-y-4">
-          {/* Upload Button */}
           {cardImages.length < MAX_IMAGES && (
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
               <input
@@ -515,7 +503,6 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
             </div>
           )}
 
-          {/* Image Previews */}
           {imagePreviews.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">

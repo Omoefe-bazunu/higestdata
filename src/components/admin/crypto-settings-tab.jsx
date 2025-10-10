@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect } from "react";
 import { fetchLiveCryptoRates } from "@/lib/cryptoRates";
 import { firestore } from "@/lib/firebaseConfig";
@@ -25,35 +23,34 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Save, Copy, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getAuth } from "firebase/auth";
 
 export default function CryptoSettingsTab() {
-  const [rates, setRates] = useState([]); // live API rates (for display only)
-  const [customRates, setCustomRates] = useState({}); // per-coin margins
+  const [rates, setRates] = useState([]);
+  const [customRates, setCustomRates] = useState({});
   const [wallets, setWallets] = useState({});
   const [loading, setLoading] = useState(true);
-
   const [newWalletSymbol, setNewWalletSymbol] = useState("");
   const [newWalletAddress, setNewWalletAddress] = useState("");
-
   const { toast } = useToast();
 
-  // 🔹 Fetch live prices + Firestore settings
+  // Fetch live prices and Firestore settings
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true);
 
-        // Load live crypto rates (for display only)
+        // Fetch live crypto rates
         const liveData = await fetchLiveCryptoRates();
         setRates(liveData);
 
-        // Load wallets
+        // Fetch wallets
         const walletSnap = await getDoc(
           doc(firestore, "settings", "cryptoWallets")
         );
         if (walletSnap.exists()) setWallets(walletSnap.data());
 
-        // Load margins
+        // Fetch margins
         const configSnap = await getDoc(
           doc(firestore, "settings", "cryptoConfig")
         );
@@ -74,8 +71,18 @@ export default function CryptoSettingsTab() {
     fetchData();
   }, [toast]);
 
-  // 🔹 Save settings
+  // Save settings
   const handleSave = async () => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) {
+      toast({
+        title: "Authentication Error",
+        description: "You must be logged in to save changes.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       // Save wallet addresses
       await setDoc(doc(firestore, "settings", "cryptoWallets"), wallets, {
@@ -115,12 +122,12 @@ export default function CryptoSettingsTab() {
     }
   };
 
-  // 🔹 Handle wallet changes
+  // Handle wallet changes
   const handleWalletChange = (id, address) => {
-    setWallets((prev) => ({ ...prev, [id]: address })); // ✅ Use ID as key
+    setWallets((prev) => ({ ...prev, [id]: address }));
   };
 
-  // 🔹 Handle adding new wallet
+  // Handle adding new wallet
   const handleAddWallet = () => {
     if (!newWalletSymbol || !newWalletAddress) {
       toast({
@@ -142,7 +149,7 @@ export default function CryptoSettingsTab() {
 
     setWallets((prev) => ({
       ...prev,
-      [coinToAdd.id]: newWalletAddress, // ✅ Use ID as key
+      [coinToAdd.id]: newWalletAddress,
     }));
     setNewWalletSymbol("");
     setNewWalletAddress("");
@@ -152,7 +159,7 @@ export default function CryptoSettingsTab() {
     });
   };
 
-  // 🔹 Handle margin changes per coin
+  // Handle margin changes per coin
   const handleRateChange = (id, margin) => {
     setCustomRates((prev) => ({
       ...prev,
@@ -160,18 +167,19 @@ export default function CryptoSettingsTab() {
     }));
   };
 
-  // 🔹 Calculate final sell price
+  // Calculate final sell price
   const calculateSellPrice = (id, marketPrice) => {
     const margin = customRates[id] || 0;
     return marketPrice * (1 + margin / 100);
   };
 
-  // 🔹 Calculate profit per unit
+  // Calculate profit per unit
   const calculateProfit = (id, marketPrice) => {
     const finalPrice = calculateSellPrice(id, marketPrice);
     return finalPrice - marketPrice;
   };
 
+  // Copy wallet address to clipboard
   const handleCopy = (address) => {
     navigator.clipboard.writeText(address);
     toast({
@@ -207,6 +215,7 @@ export default function CryptoSettingsTab() {
                     variant="ghost"
                     size="icon"
                     onClick={() => handleCopy(address)}
+                    disabled={!address}
                   >
                     <Copy className="h-4 w-4" />
                   </Button>

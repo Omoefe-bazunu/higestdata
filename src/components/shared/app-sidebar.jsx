@@ -23,30 +23,16 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/dashboard/transactions", label: "Transactions", icon: Repeat },
   { href: "/dashboard/gift-cards", label: "Gift Cards", icon: Gift },
-  { href: "/dashboard/crypto", label: "Crypto Trade", icon: Bitcoin },
+  // { href: "/dashboard/crypto", label: "Crypto Trade", icon: Bitcoin },
   { href: "/dashboard/buy-airtime", label: "Airtime & Data", icon: RadioTower },
   { href: "/dashboard/betting", label: "Betting Funding", icon: CreditCard },
-  {
-    href: "/dashboard/admin",
-    label: "Admin Panel",
-    icon: ShieldCheck,
-    admin: true,
-  },
 ];
-
-// Load admin emails from env
-const adminEmails = (process.env.NEXT_PUBLIC_ADMINEMAIL || "")
-  .split(",")
-  .map((email) => email.trim().toLowerCase());
 
 export default function AppSidebar({ onLinkClick }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
   const isActive = (href) => pathname === href;
-
-  // Check if current user email is in the admin list
-  const isAdmin = user?.email && adminEmails.includes(user.email.toLowerCase());
 
   return (
     <aside className="h-full w-full flex flex-col bg-card border-r">
@@ -91,31 +77,8 @@ export default function AppSidebar({ onLinkClick }) {
               </li>
             ))}
         </ul>
-
-        {isAdmin && (
-          <>
-            <Separator className="my-4" />
-            <ul className="space-y-2">
-              {navItems
-                .filter((item) => item.admin)
-                .map(({ href, label, icon: Icon }) => (
-                  <li key={href}>
-                    <Link href={href} onClick={onLinkClick}>
-                      <Button
-                        variant={isActive(href) ? "secondary" : "ghost"}
-                        className="w-full justify-start"
-                      >
-                        <Icon className="mr-2 h-4 w-4" />
-                        {label}
-                      </Button>
-                    </Link>
-                  </li>
-                ))}
-            </ul>
-          </>
-        )}
       </nav>
-
+      {/* This section is to allow users make changes to personla data or logout. Its not needed for now cuz there's already a sign out in the navbar */}
       <div className="mt-auto p-4 border-t hidden">
         <Button
           variant="ghost"

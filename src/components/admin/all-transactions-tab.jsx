@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getAllTransactions } from "@/lib/data"; // 🔹 use new admin query
+import { getAllTransactions } from "@/lib/data";
 import {
   Card,
   CardContent,
@@ -46,7 +46,7 @@ export default function AllTransactionsTab() {
     async function fetchData() {
       try {
         setLoading(true);
-        const data = await getAllTransactions(); // 🔹 fetch admin-level transactions
+        const data = await getAllTransactions();
         setTransactions(data);
       } catch (err) {
         console.error("Error fetching transactions:", err);

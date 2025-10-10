@@ -24,7 +24,7 @@ export async function POST(request) {
 
     // Send OTP via email
     const { data, error } = await resend.emails.send({
-      from: "Higher Exchange <info@higher.com.ng>", // Ensure this domain is verified in Resend
+      from: "Higher Exchange <info@highestdata.com.ng>", // Ensure this domain is verified in Resend
       to: email,
       subject: "Withdrawal OTP Verification",
       html: `

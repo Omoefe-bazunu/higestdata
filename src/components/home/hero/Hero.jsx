@@ -34,9 +34,9 @@ export default function Hero() {
             transition={{ duration: 1, delay: 0.3 }}
             className="text-normal max-w-xl mx-auto lg:w-full mb-8"
           >
-            Buy and sell crypto assets, trade gift cards, purchase airtime &
-            data, subscribe to cable TV, and fund your sports betting account —
-            all at amazing rates through a secure, responsive system.
+            Trade gift cards, purchase airtime & data, subscribe to cable TV,
+            and fund your sports betting account — all at amazing rates through
+            a secure, responsive system.
           </motion.p>
 
           {/* Button */}

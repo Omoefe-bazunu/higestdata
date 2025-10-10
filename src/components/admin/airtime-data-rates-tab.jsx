@@ -1,6 +1,3 @@
-// components/AdminRatesDashboard.js
-// Updated admin dashboard for managing VTU rates with profit margins
-
 "use client";
 
 import { useState, useEffect } from "react";

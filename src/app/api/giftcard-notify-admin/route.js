@@ -34,9 +34,9 @@ export async function POST(request) {
       );
     }
 
-    const companyName = "Higher Exchange";
+    const companyName = "Highest Data Fintech Solutions";
     const logoUrl =
-      "https://firebasestorage.googleapis.com/v0/b/entcarepat.appspot.com/o/App%20Icon_GPL.webp?alt=media&token=893f7df9-4613-4477-86a4-9cf3a2880ce8";
+      "https://firebasestorage.googleapis.com/v0/b/haven-aa6a7.firebasestorage.app/o/general%2FHIGHEST%20ICON%20COLORED.png?alt=media&token=2eea2fd9-4677-4297-8a4b-e6119ba3c9e8";
 
     // Admin email content
     const adminSubject = `New Gift Card Sell Order: ${giftCardName}`;
@@ -92,7 +92,7 @@ export async function POST(request) {
 
     // Send email to admin
     await resend.emails.send({
-      from: `${companyName} <info@higher.com.ng>`,
+      from: `${companyName} <info@highestdata.com.ng>`,
       to: ADMIN_EMAIL,
       subject: adminSubject,
       html: adminHtml,

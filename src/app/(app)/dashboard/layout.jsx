@@ -1,23 +1,63 @@
 "use client";
 
-import { useState } from "react";
-import { Menu, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Menu } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import AppSidebar from "@/components/shared/app-sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading) {
+      if (!user) {
+        router.push("/login");
+      } else {
+        setLoading(false);
+      }
+    }
+  }, [user, authLoading, router]);
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const closeSidebar = () => setSidebarOpen(false);
 
+  // Show loading state while checking authentication
+  if (loading || authLoading) {
+    return (
+      <div className="flex min-h-screen w-full pt-20">
+        <div className="hidden md:block w-64 border-r">
+          <div className="p-4 space-y-4">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        </div>
+        <div className="flex-1 p-8">
+          <Skeleton className="h-8 w-48 mb-4" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  // Only render dashboard if user is authenticated
+  if (!user) {
+    return null;
+  }
+
   return (
     <div className="flex min-h-screen w-full pt-20">
-      {" "}
-      {/* pt-20 for main header space */}
       {/* Desktop Sidebar */}
       <div className="hidden md:block">
         <AppSidebar />
       </div>
+
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div
@@ -26,6 +66,7 @@ export default function DashboardLayout({ children }) {
           onClick={closeSidebar}
         />
       )}
+
       {/* Mobile Sidebar */}
       <div
         className={`
@@ -38,6 +79,7 @@ export default function DashboardLayout({ children }) {
           <AppSidebar onLinkClick={closeSidebar} />
         </div>
       </div>
+
       {/* Main Content */}
       <div className="flex flex-col w-full min-w-0">
         {/* Mobile Header with Toggle */}
