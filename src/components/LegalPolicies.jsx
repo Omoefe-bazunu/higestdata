@@ -152,7 +152,7 @@ export default function LegalPolicies() {
                           </p>
 
                           <p>
-                            <strong>5.3 Crypto & Gift Card Trading:</strong>{" "}
+                            <strong>5.3 Gift Card Trading:</strong>{" "}
                             Transactions are subject to current market rates and
                             may require verification before processing.
                           </p>

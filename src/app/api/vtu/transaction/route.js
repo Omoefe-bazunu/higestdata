@@ -1,250 +1,467 @@
-// app/api/vtu/transaction/route.js
 import { NextResponse } from "next/server";
-import { ebillsService } from "@/lib/ebillsService";
-import { flutterwaveService } from "@/lib/flutterwaveService";
-import { walletService } from "@/lib/walletService";
-import { doc, getDoc } from "firebase/firestore";
-import { firestore } from "@/lib/firebaseConfig";
+import {
+  buyAirtime,
+  buyData,
+  buyTv,
+  getAccessToken,
+  getBalance,
+} from "@/lib/ebills";
 
-export async function POST(req) {
-  const body = await req.json();
-
+export async function POST(request) {
+  const data = await request.json();
   const {
     userId,
-    serviceType, // 'airtime', 'data', 'tv'
-    phone,
+    serviceType,
     amount,
-    network, // 'mtn', 'glo', 'airtel', '9mobile'
-    variationId, // For data/tv plans
-    customerId, // For TV subscriptions
-  } = body;
+    phone,
+    network,
+    variationId,
+    customerId,
+    finalPrice,
+  } = data;
 
-  if (!userId || !serviceType) {
+  console.log("Transaction request received:", {
+    userId,
+    serviceType,
+    amount,
+    network,
+    finalPrice,
+  });
+
+  // Validate input
+  if (
+    !userId ||
+    !serviceType ||
+    !amount ||
+    !finalPrice ||
+    (!phone && serviceType !== "cable") ||
+    (!network && serviceType !== "cable") ||
+    (!customerId && serviceType === "cable")
+  ) {
+    console.error("Invalid input:", {
+      userId,
+      serviceType,
+      amount,
+      finalPrice,
+      phone,
+      network,
+      customerId,
+    });
+    const transactionId = `txn_${Date.now()}_${Math.random()
+      .toString(36)
+      .slice(2)}`;
+    const transactionData = {
+      userId,
+      description: `${serviceType || "Unknown"} purchase failed`,
+      amount: amount || 0,
+      type: "debit",
+      status: "failed",
+      date: new Date().toISOString(),
+      phone: phone || null,
+      network: network || null,
+      variationId: variationId || null,
+      customerId: customerId || null,
+      serviceType: serviceType || null,
+      requestId: null,
+      error: "Missing required fields",
+    };
     return NextResponse.json(
-      { error: "Missing required fields" },
+      { error: "Missing required fields", transactionId, transactionData },
       { status: 400 }
     );
   }
 
-  let vtuTransactionId = null;
-  let walletDebited = false;
-
-  try {
-    // Step 1: Get user rates
-    const userRates = await getUserRates(serviceType, network, variationId);
-    const finalAmount = userRates.price;
-
-    // Step 2: Check wallet balance
-    const hasSufficientBalance = await walletService.hasSufficientBalance(
+  // Validate Firebase ID token
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    console.error("No authorization token provided");
+    const transactionId = `txn_${Date.now()}_${Math.random()
+      .toString(36)
+      .slice(2)}`;
+    const transactionData = {
       userId,
-      finalAmount
+      description: `${serviceType} purchase failed`,
+      amount: amount || 0,
+      type: "debit",
+      status: "failed",
+      date: new Date().toISOString(),
+      phone: phone || null,
+      network: network || null,
+      variationId: variationId || null,
+      customerId: customerId || null,
+      serviceType,
+      requestId: null,
+      error: "Unauthorized: No authentication token",
+    };
+    return NextResponse.json(
+      {
+        error: "Unauthorized: No authentication token",
+        transactionId,
+        transactionData,
+      },
+      { status: 401 }
     );
-    if (!hasSufficientBalance) {
+  }
+
+  const token = authHeader.split("Bearer ")[1];
+  try {
+    const verifyResponse = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken: token }),
+      }
+    );
+    if (!verifyResponse.ok) {
+      console.error("Token verification failed:", await verifyResponse.text());
+      const transactionId = `txn_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2)}`;
+      const transactionData = {
+        userId,
+        description: `${serviceType} purchase failed`,
+        amount: amount || 0,
+        type: "debit",
+        status: "failed",
+        date: new Date().toISOString(),
+        phone: phone || null,
+        network: network || null,
+        variationId: variationId || null,
+        customerId: customerId || null,
+        serviceType,
+        requestId: null,
+        error: "Unauthorized: Invalid token",
+      };
       return NextResponse.json(
         {
-          error: "Insufficient wallet balance",
-          requiredAmount: finalAmount,
-          message: "Please fund your wallet and try again",
+          error: "Unauthorized: Invalid token",
+          transactionId,
+          transactionData,
+        },
+        { status: 401 }
+      );
+    }
+    const verifyData = await verifyResponse.json();
+    const authenticatedUserId = verifyData.users[0].localId;
+    if (authenticatedUserId !== userId) {
+      console.error("User ID mismatch:", {
+        requestUserId: userId,
+        authUserId: authenticatedUserId,
+      });
+      const transactionId = `txn_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2)}`;
+      const transactionData = {
+        userId,
+        description: `${serviceType} purchase failed`,
+        amount: amount || 0,
+        type: "debit",
+        status: "failed",
+        date: new Date().toISOString(),
+        phone: phone || null,
+        network: network || null,
+        variationId: variationId || null,
+        customerId: customerId || null,
+        serviceType,
+        requestId: null,
+        error: "Unauthorized: User ID mismatch",
+      };
+      return NextResponse.json(
+        {
+          error: "Unauthorized: User ID mismatch",
+          transactionId,
+          transactionData,
+        },
+        { status: 401 }
+      );
+    }
+  } catch (error) {
+    console.error("Token verification error:", error);
+    const transactionId = `txn_${Date.now()}_${Math.random()
+      .toString(36)
+      .slice(2)}`;
+    const transactionData = {
+      userId,
+      description: `${serviceType} purchase failed`,
+      amount: amount || 0,
+      type: "debit",
+      status: "failed",
+      date: new Date().toISOString(),
+      phone: phone || null,
+      network: network || null,
+      variationId: variationId || null,
+      customerId: customerId || null,
+      serviceType,
+      requestId: null,
+      error: "Unauthorized: Token verification failed",
+    };
+    return NextResponse.json(
+      {
+        error: "Unauthorized: Token verification failed",
+        transactionId,
+        transactionData,
+      },
+      { status: 401 }
+    );
+  }
+
+  const transactionId = `txn_${Date.now()}_${Math.random()
+    .toString(36)
+    .slice(2)}`;
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+  try {
+    // Validate service_id for airtime and data
+    if (["airtime", "data"].includes(serviceType)) {
+      const validServices = ["mtn", "glo", "airtel", "9mobile"];
+      if (!validServices.includes(network.toLowerCase())) {
+        console.error("Invalid service_id:", network);
+        const transactionData = {
+          userId,
+          description: `${serviceType} purchase failed`,
+          amount,
+          type: "debit",
+          status: "failed",
+          date: new Date().toISOString(),
+          phone: phone || null,
+          network: network || null,
+          variationId: variationId || null,
+          customerId: customerId || null,
+          serviceType,
+          requestId,
+          error: "Invalid network provider",
+        };
+        return NextResponse.json(
+          { error: "Invalid network provider", transactionId, transactionData },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (serviceType === "cable") {
+      const validProviders = ["dstv", "gotv", "startimes"];
+      if (!validProviders.includes(network.toLowerCase())) {
+        console.error("Invalid provider:", network);
+        const transactionData = {
+          userId,
+          description: `${serviceType} purchase failed`,
+          amount,
+          type: "debit",
+          status: "failed",
+          date: new Date().toISOString(),
+          phone: phone || null,
+          network: network || null,
+          variationId: variationId || null,
+          customerId: customerId || null,
+          serviceType,
+          requestId,
+          error: "Invalid cable provider",
+        };
+        return NextResponse.json(
+          { error: "Invalid cable provider", transactionId, transactionData },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Check eBills wallet balance
+    await getAccessToken();
+    const eBillsBalance = await getBalance();
+
+    // For airtime: calculate actual amount to send to eBills
+    // For data/cable: amount is what goes to eBills
+    const ebillsAmount =
+      serviceType === "airtime"
+        ? Math.round((amount * 100) / finalPrice)
+        : amount;
+
+    if (eBillsBalance < ebillsAmount) {
+      console.error("Insufficient eBills balance:", {
+        balance: eBillsBalance,
+        required: ebillsAmount,
+      });
+      const transactionData = {
+        userId,
+        description: `${serviceType} purchase failed`,
+        amount: finalPrice,
+        type: "debit",
+        status: "failed",
+        date: new Date().toISOString(),
+        phone: phone || null,
+        network: network || null,
+        variationId: variationId || null,
+        customerId: customerId || null,
+        serviceType,
+        requestId,
+        error: "Insufficient eBills wallet balance",
+      };
+      return NextResponse.json(
+        {
+          error: "Insufficient eBills wallet balance",
+          transactionId,
+          transactionData,
+        },
+        { status: 402 }
+      );
+    }
+
+    let apiResponse;
+
+    if (serviceType === "airtime") {
+      console.log("Airtime purchase:", {
+        phone,
+        serviceId: network,
+        amount: ebillsAmount,
+        requestId,
+      });
+      apiResponse = await buyAirtime({
+        phone,
+        serviceId: network,
+        amount: ebillsAmount,
+        requestId,
+      });
+    } else if (serviceType === "data") {
+      console.log("Data purchase:", {
+        phone,
+        serviceId: network,
+        variationId,
+        requestId,
+      });
+      apiResponse = await buyData({
+        phone,
+        serviceId: network,
+        variationId,
+        requestId,
+      });
+    } else if (serviceType === "cable") {
+      console.log("TV purchase:", {
+        customerId,
+        provider: network,
+        variationId,
+        requestId,
+      });
+      apiResponse = await buyTv({
+        customerId,
+        provider: network,
+        variationId,
+        requestId,
+      });
+    } else {
+      console.error("Invalid service type:", serviceType);
+      const transactionData = {
+        userId,
+        description: `${serviceType} purchase failed`,
+        amount: finalPrice,
+        type: "debit",
+        status: "failed",
+        date: new Date().toISOString(),
+        phone: phone || null,
+        network: network || null,
+        variationId: variationId || null,
+        customerId: customerId || null,
+        serviceType,
+        requestId,
+        error: "Invalid service type",
+      };
+      return NextResponse.json(
+        { error: "Invalid service type", transactionId, transactionData },
+        { status: 400 }
+      );
+    }
+
+    if (!apiResponse.success) {
+      console.error("eBills API error:", apiResponse);
+      const transactionData = {
+        userId,
+        description: `${serviceType} purchase failed`,
+        amount: finalPrice,
+        type: "debit",
+        status: "failed",
+        date: new Date().toISOString(),
+        phone: phone || null,
+        network: network || null,
+        variationId: variationId || null,
+        customerId: customerId || null,
+        serviceType,
+        requestId,
+        error: apiResponse.message || "eBills transaction failed",
+      };
+      return NextResponse.json(
+        {
+          error: apiResponse.message || "eBills transaction failed",
+          transactionId,
+          transactionData,
         },
         { status: 400 }
       );
     }
 
-    // Step 3: Init eBills auth
-    await ebillsService.getAccessToken();
-
-    // Step 4: Check eBills balance
-    const ebillsBalance = await ebillsService.checkBalance();
-    const ebillsAvailableBalance = ebillsBalance.data?.balance || 0;
-
-    if (ebillsAvailableBalance < finalAmount) {
-      console.log("eBills balance insufficient, funding wallet...");
-
-      const fundingAmount = Math.max(finalAmount * 1.2, 10000);
-      const flutterwaveResponse = await flutterwaveService.fundEBillsWallet(
-        fundingAmount,
-        `Fund eBills wallet for ${serviceType} transaction`
-      );
-
-      console.log(
-        "Flutterwave funding initiated:",
-        flutterwaveResponse.data?.id
-      );
-
-      // wait 3s before continuing
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-    }
-
-    // Step 5: Debit wallet
-    const walletResult = await walletService.debitWallet(
+    // finalPrice is what gets deducted from user wallet
+    // amount/ebillsAmount is what was sent to eBills
+    const transactionData = {
       userId,
-      finalAmount,
-      `${serviceType.toUpperCase()} purchase - ${network || "N/A"}`,
-      serviceType
-    );
-    walletDebited = true;
-
-    // Step 6: Create VTU transaction
-    const vtuTransactionData = {
+      description: `${serviceType} purchase - ${network || customerId}`,
+      amount: finalPrice, // What was deducted from wallet
+      type: "debit",
+      status:
+        apiResponse.data.status === "completed-api" ? "success" : "pending",
+      date: new Date().toISOString(),
+      phone: phone || null,
+      network: network || null,
+      variationId: variationId || null,
+      customerId: customerId || null,
       serviceType,
-      amount: finalAmount,
-      phone,
-      network,
-      variationId,
-      customerId,
-      status: "processing",
-      walletTransactionId: walletResult.transactionId,
+      requestId,
+      ebillsAmount, // Full amount sent to eBills
+      eBillsResponse: apiResponse,
     };
 
-    const vtuResult = await walletService.createVTUTransaction(
-      userId,
-      vtuTransactionData
-    );
-    vtuTransactionId = vtuResult.transactionId;
-
-    // Step 7: Generate request ID
-    const requestId = `req_${Date.now()}_${serviceType}_${userId.substr(-6)}`;
-
-    // Step 8: Call eBills API
-    let ebillsResponse;
-    switch (serviceType) {
-      case "airtime":
-        ebillsResponse = await ebillsService.purchaseAirtime(
-          phone,
-          network,
-          finalAmount,
-          requestId
-        );
-        break;
-      case "data":
-        ebillsResponse = await ebillsService.purchaseData(
-          phone,
-          network,
-          variationId,
-          requestId
-        );
-        break;
-      case "tv":
-        ebillsResponse = await ebillsService.purchaseTvSubscription(
-          customerId,
-          network,
-          variationId,
-          requestId
-        );
-        break;
-      default:
-        throw new Error("Invalid service type");
-    }
-
-    // Step 9: Update status
-    const isSuccess =
-      ebillsResponse.status === "success" ||
-      ebillsResponse.data?.status === "success";
-
-    await walletService.updateVTUTransactionStatus(
-      userId,
-      vtuTransactionId,
-      isSuccess ? "completed" : "failed",
-      ebillsResponse
-    );
-
-    // Step 10: Refund if failed
-    if (!isSuccess) {
-      await walletService.refundWallet(
-        userId,
-        finalAmount,
-        `${serviceType.toUpperCase()} transaction failed`,
-        walletResult.transactionId
-      );
-    }
-
-    return NextResponse.json({
-      success: isSuccess,
-      message: isSuccess
-        ? "Transaction completed successfully"
-        : "Transaction failed",
-      transactionId: vtuTransactionId,
-      ebillsResponse,
-      walletBalance: isSuccess
-        ? walletResult.newBalance
-        : walletResult.newBalance + finalAmount,
+    console.log("Transaction successful:", {
+      transactionId,
+      serviceType,
+      walletDeduction: finalPrice,
+      ebillsAmount,
     });
-  } catch (error) {
-    console.error("VTU transaction error:", error);
-
-    if (walletDebited && vtuTransactionId) {
-      try {
-        const finalAmount = await getUserRates(
-          serviceType,
-          network,
-          variationId
-        );
-        await walletService.refundWallet(
-          userId,
-          finalAmount.price,
-          `${serviceType.toUpperCase()} transaction failed - System error`,
-          null
-        );
-
-        await walletService.updateVTUTransactionStatus(
-          userId,
-          vtuTransactionId,
-          "failed",
-          {
-            error: error.message,
-          }
-        );
-      } catch (refundError) {
-        console.error("Refund error:", refundError);
-      }
-    }
 
     return NextResponse.json(
       {
-        error: error.message,
-        success: false,
-        message: "Transaction failed due to system error",
+        success: true,
+        transactionId,
+        message: `${serviceType} purchase ${
+          apiResponse.data.status === "completed-api"
+            ? "completed"
+            : "processing"
+        }`,
+        transactionData,
       },
-      { status: 500 }
+      { status: 200 }
     );
-  }
-}
-
-// Helper
-async function getUserRates(serviceType, network, variationId) {
-  try {
-    let ratesDoc;
-
-    if (serviceType === "airtime") {
-      ratesDoc = await getDoc(doc(firestore, "settings", "airtimeRates"));
-      const rates = ratesDoc.data()?.rates || {};
-      const networkRate = rates[network];
-
-      return {
-        price: networkRate?.price || 100,
-        profit: networkRate?.profit || 0,
-      };
-    } else if (serviceType === "data") {
-      ratesDoc = await getDoc(doc(firestore, "settings", "dataRates"));
-      const rates = ratesDoc.data()?.rates || {};
-      const planRate = rates[network]?.[variationId];
-
-      return { price: planRate?.price || 1000, profit: planRate?.profit || 0 };
-    } else if (serviceType === "tv") {
-      ratesDoc = await getDoc(doc(firestore, "settings", "tvRates"));
-      const rates = ratesDoc.data()?.rates || {};
-      const tvRate = rates[network]?.[variationId];
-
-      return { price: tvRate?.price || 5000, profit: tvRate?.profit || 0 };
-    }
-
-    throw new Error("Invalid service type for rate lookup");
   } catch (error) {
-    console.error("Error getting user rates:", error);
-    return {
-      price:
-        serviceType === "airtime" ? 100 : serviceType === "data" ? 1000 : 5000,
-      profit: 0,
+    console.error("Transaction error:", error);
+    const transactionData = {
+      userId,
+      description: `${serviceType} purchase failed`,
+      amount: finalPrice || 0,
+      type: "debit",
+      status: "failed",
+      date: new Date().toISOString(),
+      phone: phone || null,
+      network: network || null,
+      variationId: variationId || null,
+      customerId: customerId || null,
+      serviceType: serviceType || null,
+      requestId: requestId || null,
+      error: error.message || "Transaction failed",
     };
+
+    return NextResponse.json(
+      {
+        error: error.message || "Transaction failed",
+        transactionId,
+        transactionData,
+      },
+      { status: error.message.includes("insufficient_funds") ? 402 : 500 }
+    );
   }
 }

@@ -1,12 +1,15 @@
-// components/VTUPurchaseForm.js
-// Updated VTU form with wallet integration
-
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp,
+  updateDoc,
+} from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import {
   Card,
@@ -33,14 +36,11 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
-  DialogClose,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 
-// Reusable VTU Purchase Form
 function PurchaseForm({ type, user, router }) {
   const [network, setNetwork] = useState("");
   const [phone, setPhone] = useState("");
@@ -49,29 +49,32 @@ function PurchaseForm({ type, user, router }) {
   const [provider, setProvider] = useState("");
   const [cardNumber, setCardNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFetchingPlans, setIsFetchingPlans] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [showInsufficientModal, setShowInsufficientModal] = useState(false);
   const [dataPlans, setDataPlans] = useState([]);
   const [tvPlans, setTvPlans] = useState([]);
+  const [airtimeRates, setAirtimeRates] = useState({});
+  const [dataProviders, setDataProviders] = useState([]);
+  const [tvProviders, setTvProviders] = useState([]);
   const { toast } = useToast();
 
   const isAuthenticated = !!user;
 
-  // Fetch user wallet balance
   useEffect(() => {
     if (user) {
       fetchWalletBalance();
+      fetchProviders();
+      fetchAirtimeRates();
     }
   }, [user]);
 
-  // Fetch data plans when network changes
   useEffect(() => {
     if (network && type === "Data") {
       fetchDataPlans(network);
     }
   }, [network, type]);
 
-  // Fetch TV plans when provider changes
   useEffect(() => {
     if (provider && type === "Cable") {
       fetchTVPlans(provider);
@@ -86,69 +89,204 @@ function PurchaseForm({ type, user, router }) {
       }
     } catch (error) {
       console.error("Error fetching wallet balance:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load wallet balance",
+        variant: "destructive",
+      });
     }
   };
 
-  // Fetch available data plans from rates
+  const fetchAirtimeRates = async () => {
+    try {
+      const ratesDoc = await getDoc(doc(firestore, "settings", "airtimeRates"));
+      if (ratesDoc.exists()) {
+        const rates = ratesDoc.data()?.rates || {};
+        setAirtimeRates(rates);
+      }
+    } catch (error) {
+      console.error("Error fetching airtime rates:", error);
+    }
+  };
+
+  const fetchProviders = async () => {
+    try {
+      const dataDoc = await getDoc(doc(firestore, "settings", "dataRates"));
+      if (dataDoc.exists()) {
+        const rates = dataDoc.data()?.rates || {};
+        setDataProviders(
+          Object.keys(rates).map((key) => ({
+            id: key,
+            name: rates[key].name || key.toUpperCase(),
+          }))
+        );
+      }
+
+      const tvDoc = await getDoc(doc(firestore, "settings", "tvRates"));
+      if (tvDoc.exists()) {
+        const rates = tvDoc.data()?.rates || {};
+        setTvProviders(
+          Object.keys(rates).map((key) => ({
+            id: key,
+            name: rates[key].name || key.toUpperCase(),
+          }))
+        );
+      }
+    } catch (error) {
+      console.error("Error fetching providers:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load providers",
+        variant: "destructive",
+      });
+    }
+  };
+
   const fetchDataPlans = async (networkProvider) => {
     try {
-      const ratesDoc = await getDoc(doc(firestore, "settings", "dataRates"));
-      if (ratesDoc.exists()) {
-        const rates = ratesDoc.data()?.rates || {};
-        const networkPlans = rates[networkProvider] || {};
+      setIsFetchingPlans(true);
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("User not authenticated");
 
-        const plans = Object.keys(networkPlans).map((planId) => ({
-          id: planId,
-          name: networkPlans[planId].name || planId,
-          price: networkPlans[planId].price || 0,
-        }));
+      const token = await currentUser.getIdToken();
+      const response = await fetch("/api/vtu/fetch-rates", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ type: "data", provider: networkProvider }),
+      });
 
-        setDataPlans(plans);
+      console.log("fetchDataPlans response status:", response.status);
+      console.log("fetchDataPlans response headers:", [...response.headers]);
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error("fetchDataPlans response text:", text);
+        throw new Error(
+          `HTTP ${response.status}: ${text || "Failed to fetch data plans"}`
+        );
       }
+
+      const result = await response.json();
+      console.log("fetchDataPlans result:", result);
+
+      const ratesDoc = await getDoc(doc(firestore, "settings", "dataRates"));
+      const discount = ratesDoc.exists()
+        ? ratesDoc.data()?.rates?.[networkProvider]?.finalDiscount || 0
+        : 0;
+
+      const plans = Object.keys(result.rates?.[networkProvider] || {}).map(
+        (planId) => {
+          const plan = result.rates[networkProvider][planId];
+          const basePrice = parseFloat(plan.price) || 0;
+          const finalPrice = basePrice * (1 - discount / 100);
+          return {
+            id: planId,
+            name: plan.name || planId,
+            price: finalPrice,
+          };
+        }
+      );
+
+      setDataPlans(plans);
     } catch (error) {
       console.error("Error fetching data plans:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load data plans",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFetchingPlans(false);
     }
   };
 
-  // Fetch available TV plans from rates
   const fetchTVPlans = async (tvProvider) => {
     try {
-      const ratesDoc = await getDoc(doc(firestore, "settings", "tvRates"));
-      if (ratesDoc.exists()) {
-        const rates = ratesDoc.data()?.rates || {};
-        const providerPlans = rates[tvProvider] || {};
+      setIsFetchingPlans(true);
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("User not authenticated");
 
-        const plans = Object.keys(providerPlans).map((planId) => ({
-          id: planId,
-          name: providerPlans[planId].name || planId,
-          price: providerPlans[planId].price || 0,
-        }));
+      const token = await currentUser.getIdToken();
+      const response = await fetch("/api/vtu/fetch-rates", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ type: "tv", provider: tvProvider }),
+      });
 
-        setTvPlans(plans);
+      console.log("fetchTVPlans response status:", response.status);
+      console.log("fetchTVPlans response headers:", [...response.headers]);
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error("fetchTVPlans response text:", text);
+        throw new Error(
+          `HTTP ${response.status}: ${text || "Failed to fetch TV plans"}`
+        );
       }
+
+      const result = await response.json();
+      console.log("fetchTVPlans result:", result);
+
+      const ratesDoc = await getDoc(doc(firestore, "settings", "tvRates"));
+      const discount = ratesDoc.exists()
+        ? ratesDoc.data()?.rates?.[tvProvider]?.finalDiscount || 0
+        : 0;
+      const serviceFee = ratesDoc.exists()
+        ? ratesDoc.data()?.rates?.[tvProvider]?.finalServiceFee || 0
+        : 0;
+
+      const plans = Object.keys(result.rates?.[tvProvider] || {}).map(
+        (planId) => {
+          const plan = result.rates[tvProvider][planId];
+          const basePrice = parseFloat(plan.price) || 0;
+          const finalPrice = basePrice * (1 - discount / 100) + serviceFee;
+          return {
+            id: planId,
+            name: plan.name || planId,
+            price: finalPrice,
+          };
+        }
+      );
+
+      setTvPlans(plans);
     } catch (error) {
       console.error("Error fetching TV plans:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load TV plans",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFetchingPlans(false);
     }
   };
 
-  // Get transaction amount based on service type
   const getTransactionAmount = () => {
     if (type === "Airtime") {
-      return parseFloat(amount || 0);
+      const rate = airtimeRates[network]?.finalPrice || 100;
+      const vendAmount = parseFloat(amount || "0");
+      return vendAmount * (rate / 100);
     } else if (type === "Data") {
       const selectedPlan = dataPlans.find((plan) => plan.id === dataPlan);
       return selectedPlan ? selectedPlan.price : 0;
     } else if (type === "Cable") {
       const selectedPlan = tvPlans.find((plan) => plan.id === dataPlan);
-      return selectedPlan ? selectedPlan.price : parseFloat(amount || 0);
+      return selectedPlan ? selectedPlan.price : 0;
     }
     return 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !user) {
       toast({
         title: "Authentication Required",
         description: "Please sign in to continue.",
@@ -157,10 +295,9 @@ function PurchaseForm({ type, user, router }) {
       return;
     }
 
-    const transactionAmount = getTransactionAmount();
+    const chargeAmount = getTransactionAmount();
 
-    // Validate transaction amount
-    if (!transactionAmount || transactionAmount <= 0) {
+    if (!chargeAmount || chargeAmount <= 0) {
       toast({
         title: "Invalid Amount",
         description: "Please enter a valid amount or select a plan.",
@@ -169,8 +306,7 @@ function PurchaseForm({ type, user, router }) {
       return;
     }
 
-    // Check wallet balance
-    if (walletBalance < transactionAmount) {
+    if (walletBalance < chargeAmount) {
       setShowInsufficientModal(true);
       return;
     }
@@ -178,56 +314,110 @@ function PurchaseForm({ type, user, router }) {
     setIsSubmitting(true);
 
     try {
-      // Prepare transaction data
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        throw new Error("User not authenticated");
+      }
+
+      const token = await currentUser.getIdToken(true);
+      const finalPrice =
+        type === "Airtime"
+          ? airtimeRates[network]?.finalPrice || 100
+          : chargeAmount;
+
       const transactionData = {
-        userId: user.uid,
+        userId: currentUser.uid,
         serviceType: type.toLowerCase(),
-        amount: transactionAmount,
-        phone: phone,
-        network: network,
-        variationId: dataPlan,
-        customerId: cardNumber,
+        amount: chargeAmount,
+        phone: phone || undefined,
+        network: network || undefined,
+        variationId: dataPlan || undefined,
+        customerId: cardNumber || undefined,
+        finalPrice,
       };
 
-      // Call VTU transaction API
       const response = await fetch("/api/vtu/transaction", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(transactionData),
       });
 
       const result = await response.json();
 
-      if (result.success) {
+      if (response.status === 402) {
         toast({
-          title: "Transaction Successful",
-          description: `${type} purchase completed successfully.`,
-        });
-
-        // Reset form
-        setNetwork("");
-        setPhone("");
-        setAmount("");
-        setDataPlan("");
-        setProvider("");
-        setCardNumber("");
-
-        // Refresh wallet balance
-        fetchWalletBalance();
-      } else {
-        toast({
-          title: "Transaction Failed",
-          description: result.message || "Please try again.",
+          title: "Insufficient Balance",
+          description:
+            "Your wallet balance is not enough for this transaction.",
           variant: "destructive",
         });
+        return;
       }
+
+      if (!response.ok) {
+        if (result.transactionData) {
+          const transactionId =
+            result.transactionId ||
+            `txn_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+          await setDoc(
+            doc(
+              firestore,
+              "users",
+              currentUser.uid,
+              "transactions",
+              transactionId
+            ),
+            {
+              ...result.transactionData,
+              createdAt: serverTimestamp(),
+            }
+          );
+        }
+        throw new Error(result.error || "Transaction failed");
+      }
+
+      await updateDoc(doc(firestore, "users", currentUser.uid), {
+        walletBalance: walletBalance - result.transactionData.amount,
+      });
+
+      if (result.transactionData) {
+        await setDoc(
+          doc(
+            firestore,
+            "users",
+            currentUser.uid,
+            "transactions",
+            result.transactionId
+          ),
+          {
+            ...result.transactionData,
+            createdAt: serverTimestamp(),
+          }
+        );
+      }
+
+      toast({
+        title: "Transaction Successful",
+        description: `${type} purchase completed successfully.`,
+      });
+
+      setNetwork("");
+      setPhone("");
+      setAmount("");
+      setDataPlan("");
+      setProvider("");
+      setCardNumber("");
+      fetchWalletBalance();
     } catch (error) {
       console.error("Transaction error:", error);
       toast({
         title: "Transaction Failed",
-        description: "Network error. Please try again.",
+        description: error.message || "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -237,7 +427,6 @@ function PurchaseForm({ type, user, router }) {
 
   return (
     <>
-      {/* Wallet Balance Display */}
       <div className="bg-primary/5 p-4 rounded-lg mb-6">
         <div className="flex items-center gap-2 mb-2">
           <Wallet className="h-4 w-4" />
@@ -245,41 +434,65 @@ function PurchaseForm({ type, user, router }) {
         </div>
         <p className="text-2xl font-bold">₦{walletBalance.toLocaleString()}</p>
       </div>
-
       <form onSubmit={handleSubmit} className="space-y-6">
         {type !== "Cable" && (
           <div className="space-y-2">
             <Label htmlFor="network">Network Provider</Label>
             <Select value={network} onValueChange={setNetwork}>
-              <SelectTrigger id="network">
+              <SelectTrigger id="network" className="text-foreground">
                 <SelectValue placeholder="Select Network" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="mtn">MTN</SelectItem>
-                <SelectItem value="glo">Glo</SelectItem>
-                <SelectItem value="airtel">Airtel</SelectItem>
-                <SelectItem value="9mobile">9mobile</SelectItem>
+                {type === "Airtime" ? (
+                  Object.keys(airtimeRates).length > 0 ? (
+                    Object.keys(airtimeRates).map((networkId) => (
+                      <SelectItem key={networkId} value={networkId}>
+                        {airtimeRates[networkId].name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="p-2 text-sm text-muted-foreground">
+                      No airtime networks available
+                    </div>
+                  )
+                ) : dataProviders.length > 0 ? (
+                  dataProviders.map((prov) => (
+                    <SelectItem key={prov.id} value={prov.id}>
+                      {prov.name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="p-2 text-sm text-muted-foreground">
+                    No data providers available
+                  </div>
+                )}
               </SelectContent>
             </Select>
           </div>
         )}
-
         {type === "Cable" && (
           <>
             <div className="space-y-2">
               <Label htmlFor="provider">Cable Provider</Label>
               <Select value={provider} onValueChange={setProvider}>
-                <SelectTrigger id="provider">
+                <SelectTrigger id="provider" className="text-foreground">
                   <SelectValue placeholder="Select Provider" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="dstv">DSTV</SelectItem>
-                  <SelectItem value="gotv">GoTV</SelectItem>
-                  <SelectItem value="startimes">Startimes</SelectItem>
+                  {tvProviders.length > 0 ? (
+                    tvProviders.map((prov) => (
+                      <SelectItem key={prov.id} value={prov.id}>
+                        {prov.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="p-2 text-sm text-muted-foreground">
+                      No TV providers available
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="cardNumber">Smart Card Number</Label>
               <Input
@@ -292,7 +505,6 @@ function PurchaseForm({ type, user, router }) {
             </div>
           </>
         )}
-
         {type !== "Cable" && (
           <div className="space-y-2">
             <Label htmlFor="phone">Phone Number</Label>
@@ -306,16 +518,14 @@ function PurchaseForm({ type, user, router }) {
             />
           </div>
         )}
-
         <div className="space-y-2">
           <Label htmlFor="amount">
             {type === "Airtime"
-              ? "Amount"
+              ? "Amount (₦)"
               : type === "Cable"
               ? "Subscription Plan"
               : "Data Plan"}
           </Label>
-
           {type === "Airtime" && (
             <Input
               id="amount"
@@ -327,39 +537,55 @@ function PurchaseForm({ type, user, router }) {
               required
             />
           )}
-
           {type === "Data" && (
             <Select value={dataPlan} onValueChange={setDataPlan} required>
-              <SelectTrigger id="data-plan">
+              <SelectTrigger id="data-plan" className="text-foreground">
                 <SelectValue placeholder="Select Data Plan" />
               </SelectTrigger>
               <SelectContent>
-                {dataPlans.map((plan) => (
-                  <SelectItem key={plan.id} value={plan.id}>
-                    {plan.name} - ₦{plan.price.toLocaleString()}
-                  </SelectItem>
-                ))}
+                {isFetchingPlans ? (
+                  <div className="flex justify-center p-4">
+                    <Loader className="h-4 w-4 animate-spin" />
+                  </div>
+                ) : dataPlans.length > 0 ? (
+                  dataPlans.map((plan) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.name} - ₦{plan.price.toLocaleString()}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="p-4 text-center text-muted-foreground">
+                    No plans available
+                  </div>
+                )}
               </SelectContent>
             </Select>
           )}
-
           {type === "Cable" && (
             <Select value={dataPlan} onValueChange={setDataPlan} required>
-              <SelectTrigger id="tv-plan">
+              <SelectTrigger id="tv-plan" className="text-foreground">
                 <SelectValue placeholder="Select Subscription Plan" />
               </SelectTrigger>
               <SelectContent>
-                {tvPlans.map((plan) => (
-                  <SelectItem key={plan.id} value={plan.id}>
-                    {plan.name} - ₦{plan.price.toLocaleString()}
-                  </SelectItem>
-                ))}
+                {isFetchingPlans ? (
+                  <div className="flex justify-center p-4">
+                    <Loader className="h-4 w-4 animate-spin" />
+                  </div>
+                ) : tvPlans.length > 0 ? (
+                  tvPlans.map((plan) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.name} - ₦{plan.price.toLocaleString()}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="p-4 text-center text-muted-foreground">
+                    No plans available
+                  </div>
+                )}
               </SelectContent>
             </Select>
           )}
         </div>
-
-        {/* Amount Preview */}
         {getTransactionAmount() > 0 && (
           <div className="bg-muted p-3 rounded-lg">
             <p className="text-sm">
@@ -371,7 +597,6 @@ function PurchaseForm({ type, user, router }) {
             </p>
           </div>
         )}
-
         <Button
           type="submit"
           className="w-full"
@@ -386,8 +611,6 @@ function PurchaseForm({ type, user, router }) {
           )}
         </Button>
       </form>
-
-      {/* Insufficient Balance Modal */}
       <Dialog
         open={showInsufficientModal}
         onOpenChange={setShowInsufficientModal}
@@ -428,15 +651,11 @@ function PurchaseForm({ type, user, router }) {
               <Button
                 onClick={() => {
                   setShowInsufficientModal(false);
-                  // Redirect to funding page
-                  window.location.href = "/dashboard/wallet";
+                  router.push("/dashboard/wallet");
                 }}
                 className="flex-1"
               >
                 Fund Wallet
-              </Button>
-              <Button asChild variant="outline">
-                <DialogClose>Cancel</DialogClose>
               </Button>
             </div>
           </div>
@@ -456,13 +675,14 @@ export default function BuyAirtimePage() {
     const unsub = auth.onAuthStateChanged((usr) => {
       if (usr) {
         setUser(usr);
-        setAuthChecked(true); // only mark as checked if authenticated
+        setAuthChecked(true);
       } else {
-        router.replace("/login"); // ensure redirect happens without flash
+        router.replace("/login");
       }
     });
     return () => unsub();
   }, [router]);
+
   if (!authChecked) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -481,7 +701,6 @@ export default function BuyAirtimePage() {
           Instantly top up or pay subscriptions. Fast, easy, and reliable.
         </p>
       </div>
-
       <Card className="overflow-hidden">
         <div className="grid md:grid-cols-2">
           <div className="p-6 md:p-8">
@@ -491,8 +710,7 @@ export default function BuyAirtimePage() {
                 <TabsTrigger value="data">Data</TabsTrigger>
                 <TabsTrigger value="cable">Cable TV</TabsTrigger>
               </TabsList>
-
-              <TabsContent value="airtime">
+              <TabsContent value="airtime" className="space-y-4">
                 <CardHeader className="px-0">
                   <CardTitle>Buy Airtime</CardTitle>
                   <CardDescription>
@@ -501,8 +719,7 @@ export default function BuyAirtimePage() {
                 </CardHeader>
                 <PurchaseForm type="Airtime" user={user} router={router} />
               </TabsContent>
-
-              <TabsContent value="data">
+              <TabsContent value="data" className="space-y-4">
                 <CardHeader className="px-0">
                   <CardTitle>Buy Data</CardTitle>
                   <CardDescription>
@@ -511,8 +728,7 @@ export default function BuyAirtimePage() {
                 </CardHeader>
                 <PurchaseForm type="Data" user={user} router={router} />
               </TabsContent>
-
-              <TabsContent value="cable">
+              <TabsContent value="cable" className="space-y-4">
                 <CardHeader className="px-0">
                   <CardTitle>Cable TV Subscription</CardTitle>
                   <CardDescription>
@@ -523,7 +739,6 @@ export default function BuyAirtimePage() {
               </TabsContent>
             </Tabs>
           </div>
-
           <div className="bg-muted/50 p-8 md:p-12 flex flex-col justify-center">
             <div className="relative aspect-video mb-8 rounded-lg overflow-hidden">
               <Image
