@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RadioTower, Gift, Bitcoin, CreditCard } from "lucide-react";
+import {
+  RadioTower,
+  Gift,
+  Bitcoin,
+  CreditCard,
+  Tv,
+  UtilityPole,
+  School,
+} from "lucide-react";
 
 const actions = [
   {
@@ -26,7 +34,25 @@ const actions = [
     href: "/dashboard/betting",
     label: "Fund Betting A/C",
     icon: CreditCard,
+    variant: "secondary",
+  },
+  {
+    href: "/dashboard/cable-tv",
+    label: "Renew your Cable Tv",
+    icon: Tv,
     variant: "outline",
+  },
+  {
+    href: "/dashboard/electricity-bill",
+    label: " Electricity Recharge",
+    icon: UtilityPole,
+    variant: "outline",
+  },
+  {
+    href: "/dashboard/scratch-cards",
+    label: "Buy Scratch Cards",
+    icon: School,
+    variant: "secondary",
   },
 ];
 

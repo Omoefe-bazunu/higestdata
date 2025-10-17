@@ -15,6 +15,7 @@ import {
   X,
   Tv,
   UtilityPole,
+  School,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -33,6 +34,11 @@ const navItems = [
     href: "/dashboard/electricity-bill",
     label: "Electricity Bill",
     icon: UtilityPole,
+  },
+  {
+    href: "/dashboard/scratch-cards",
+    label: "Exam Scratch Cards",
+    icon: School,
   },
 ];
 
