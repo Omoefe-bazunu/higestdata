@@ -7,35 +7,31 @@ import {
   collection,
   serverTimestamp,
   runTransaction,
-  query,
-  where,
-  getDocs,
 } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import { getAccessToken, getBalance } from "@/lib/ebills";
 
-// Valid betting providers
-const VALID_BETTING_PROVIDERS = [
-  "1xBet",
-  "BangBet",
-  "Bet9ja",
-  "BetKing",
-  "BetLand",
-  "BetLion",
-  "BetWay",
-  "CloudBet",
-  "LiveScoreBet",
-  "MerryBet",
-  "NaijaBet",
-  "NairaBet",
-  "SupaBet",
+const VALID_PROVIDERS = [
+  "ikeja-electric",
+  "eko-electric",
+  "kano-electric",
+  "portharcourt-electric",
+  "jos-electric",
+  "ibadan-electric",
+  "kaduna-electric",
+  "abuja-electric",
+  "enugu-electric",
+  "benin-electric",
+  "aba-electric",
+  "yola-electric",
 ];
 
-// Verify customer ID via eBills API
-async function verifyCustomer(token, customerId, serviceId) {
+const VALID_VARIATIONS = ["prepaid", "postpaid"];
+
+async function verifyCustomer(token, customerId, serviceId, variationId) {
   try {
     const response = await fetch(
-      `https://ebills.africa/wp-json/api/v2/verify-customer?service_id=${serviceId}&customer_id=${customerId}`,
+      `https://ebills.africa/wp-json/api/v2/verify-customer?service_id=${serviceId}&customer_id=${customerId}&variation_id=${variationId}`,
       {
         method: "GET",
         headers: {
@@ -47,7 +43,7 @@ async function verifyCustomer(token, customerId, serviceId) {
 
     const responseText = await response.text();
     console.log(
-      `Verify customer response: ${response.status} - ${responseText}`
+      `Verify electricity customer response: ${response.status} - ${responseText}`
     );
 
     if (!response.ok) {
@@ -67,12 +63,12 @@ async function verifyCustomer(token, customerId, serviceId) {
   }
 }
 
-// Fund betting account via eBills API
-async function fundBettingAccount(
+async function purchaseElectricity(
   token,
   requestId,
   customerId,
   serviceId,
+  variationId,
   amount
 ) {
   try {
@@ -80,11 +76,12 @@ async function fundBettingAccount(
       request_id: requestId,
       customer_id: customerId,
       service_id: serviceId,
-      amount: amount,
+      variation_id: variationId,
+      amount: Number(amount),
     };
 
     const response = await fetch(
-      "https://ebills.africa/wp-json/api/v2/betting",
+      "https://ebills.africa/wp-json/api/v2/electricity",
       {
         method: "POST",
         headers: {
@@ -97,7 +94,7 @@ async function fundBettingAccount(
 
     const responseText = await response.text();
     console.log(
-      `Betting funding response: ${response.status} - ${responseText}`
+      `Electricity purchase response: ${response.status} - ${responseText}`
     );
 
     if (!response.ok) {
@@ -105,11 +102,13 @@ async function fundBettingAccount(
       if (response.status === 400 && error.code === "missing_fields")
         throw new Error("Missing required fields");
       if (response.status === 400 && error.code === "invalid_service_id")
-        throw new Error("Invalid betting provider");
+        throw new Error("Invalid electricity provider");
+      if (response.status === 400 && error.code === "invalid_variation_id")
+        throw new Error("Invalid meter type");
       if (response.status === 400 && error.code === "below_minimum_amount")
-        throw new Error("Amount below minimum (₦100)");
-      if (response.status === 400 && error.code === "above_maximum_amount")
-        throw new Error("Amount above maximum (₦100,000)");
+        throw new Error("Amount below minimum");
+      if (response.status === 400 && error.code === "below_customer_arrears")
+        throw new Error("Amount below outstanding arrears");
       if (response.status === 402 && error.code === "insufficient_funds")
         throw new Error("Insufficient eBills wallet balance");
       if (response.status === 409 && error.code === "duplicate_request_id")
@@ -118,94 +117,102 @@ async function fundBettingAccount(
         throw new Error("Duplicate order within 3 minutes");
       if (response.status === 403 && error.code === "rest_forbidden")
         throw new Error("Unauthorized access");
-      throw new Error(`eBills betting API failed: ${response.status}`);
+      throw new Error(
+        `Error purchasing electricity: ${response.status} - ${responseText}`
+      );
     }
 
     return JSON.parse(responseText);
   } catch (error) {
-    console.error("Error funding betting account:", error);
+    console.error("Error purchasing electricity:", error);
     throw error;
   }
 }
 
-// Generate unique request ID
-function generateRequestId(userId, serviceType = "betting") {
+function generateRequestId(userId) {
   const timestamp = Date.now();
   const random = Math.floor(Math.random() * 1000);
-  return `req_${timestamp}_${serviceType}_${userId.slice(-6)}_${random}`;
+  return `req_${timestamp}_electricity_${userId.slice(-6)}_${random}`;
 }
 
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { userId, serviceType, amount, provider, customerId } = body;
+    const { userId, serviceType, amount, provider, customerId, variationId } =
+      body;
 
-    // Validate required fields
-    if (!userId || !serviceType || !amount || !provider || !customerId) {
+    if (
+      !userId ||
+      !serviceType ||
+      !amount ||
+      !provider ||
+      !customerId ||
+      !variationId
+    ) {
       return NextResponse.json(
         { success: false, message: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    // Validate service type
-    if (serviceType !== "betting") {
+    if (serviceType !== "electricity") {
       return NextResponse.json(
         { success: false, message: "Invalid service type" },
         { status: 400 }
       );
     }
 
-    // Validate provider
-    if (!VALID_BETTING_PROVIDERS.includes(provider)) {
+    if (!VALID_PROVIDERS.includes(provider)) {
       return NextResponse.json(
-        { success: false, message: "Invalid betting provider" },
+        { success: false, message: "Invalid electricity provider" },
         { status: 400 }
       );
     }
 
-    // Validate amount
-    const bettingAmount = parseFloat(amount);
-    if (isNaN(bettingAmount) || bettingAmount <= 0) {
+    if (!VALID_VARIATIONS.includes(variationId)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid meter type" },
+        { status: 400 }
+      );
+    }
+
+    const electricityAmount = parseFloat(amount);
+    if (isNaN(electricityAmount) || electricityAmount <= 0) {
       return NextResponse.json(
         { success: false, message: "Invalid amount" },
         { status: 400 }
       );
     }
 
-    // Minimum amount validation
-    if (bettingAmount < 100) {
+    if (electricityAmount < 1000) {
       return NextResponse.json(
-        { success: false, message: "Minimum funding amount is ₦100" },
+        { success: false, message: "Minimum purchase amount is ₦1000" },
         { status: 400 }
       );
     }
 
-    // Maximum amount validation
-    if (bettingAmount > 100000) {
+    if (electricityAmount > 100000) {
       return NextResponse.json(
-        { success: false, message: "Maximum funding amount is ₦100,000" },
+        { success: false, message: "Maximum purchase amount is ₦100,000" },
         { status: 400 }
       );
     }
 
-    // Fetch betting rates from Firestore
-    const ratesDoc = await getDoc(doc(firestore, "settings", "bettingRates"));
-    const bettingRates = ratesDoc.exists()
+    const ratesDoc = await getDoc(
+      doc(firestore, "settings", "electricityRates")
+    );
+    const electricityRates = ratesDoc.exists()
       ? ratesDoc.data()
-      : { serviceCharge: 10, chargeType: "percentage" };
+      : { serviceCharge: 0, chargeType: "percentage" };
 
-    // Calculate service charge
     const serviceCharge =
-      bettingRates.chargeType === "percentage"
-        ? (bettingAmount * bettingRates.serviceCharge) / 100
-        : parseFloat(bettingRates.serviceCharge) || 0;
+      electricityRates.chargeType === "percentage"
+        ? (electricityAmount * electricityRates.serviceCharge) / 100
+        : parseFloat(electricityRates.serviceCharge) || 0;
 
-    const totalAmount = bettingAmount + serviceCharge;
+    const totalAmount = electricityAmount + serviceCharge;
 
-    // Run transaction to ensure atomic operations
     const result = await runTransaction(firestore, async (transaction) => {
-      // Get user document
       const userDocRef = doc(firestore, "users", userId);
       const userDoc = await transaction.get(userDocRef);
 
@@ -216,37 +223,50 @@ export async function POST(request) {
       const userData = userDoc.data();
       const currentBalance = userData.walletBalance || 0;
 
-      // Check if user has sufficient balance
       if (currentBalance < totalAmount) {
         throw new Error("Insufficient wallet balance");
       }
 
-      // Get eBills token
       const token = await getAccessToken();
-
-      // Check eBills wallet balance
       const ebillsBalance = await getBalance();
-      if (ebillsBalance < bettingAmount) {
+      if (ebillsBalance < electricityAmount) {
         throw new Error("Insufficient eBills wallet balance");
       }
 
-      // Verify customer ID
-      const customerData = await verifyCustomer(token, customerId, provider);
+      const customerData = await verifyCustomer(
+        token,
+        customerId,
+        provider,
+        variationId
+      );
       if (!customerData) {
-        throw new Error("Invalid customer ID");
+        throw new Error("Invalid meter number or type");
       }
 
-      // Generate unique request ID
-      const requestId = generateRequestId(userId, "betting");
+      if (customerData.min_purchase_amount > electricityAmount) {
+        throw new Error(
+          `Amount below minimum (${customerData.min_purchase_amount})`
+        );
+      }
 
-      // Create transaction record (pending status)
+      if (
+        customerData.customer_arrears > 0 &&
+        electricityAmount < customerData.customer_arrears
+      ) {
+        throw new Error(
+          `Amount below outstanding arrears (${customerData.customer_arrears})`
+        );
+      }
+
+      const requestId = generateRequestId(userId);
       const transactionData = {
         userId,
         requestId,
-        serviceType: "betting",
+        serviceType: "electricity",
         provider,
         customerId,
-        bettingAmount,
+        variationId,
+        amount: electricityAmount,
         serviceCharge,
         totalAmount,
         status: "pending",
@@ -259,18 +279,17 @@ export async function POST(request) {
         transactionData
       );
 
-      // Call eBills API to fund betting account
       let ebillsResponse;
       try {
-        ebillsResponse = await fundBettingAccount(
+        ebillsResponse = await purchaseElectricity(
           token,
           requestId,
           customerId,
           provider,
-          bettingAmount
+          variationId,
+          electricityAmount
         );
       } catch (ebillsError) {
-        // Update transaction as failed
         transaction.update(transactionRef, {
           status: "failed",
           errorMessage: ebillsError.message,
@@ -279,32 +298,29 @@ export async function POST(request) {
         throw ebillsError;
       }
 
-      // Check eBills response
       if (!ebillsResponse || ebillsResponse.code !== "success") {
         const errorMessage =
           ebillsResponse?.message || "eBills API call failed";
-
-        // Update transaction as failed
         transaction.update(transactionRef, {
           status: "failed",
           errorMessage,
           ebillsResponse,
           updatedAt: serverTimestamp(),
         });
-
         throw new Error(errorMessage);
       }
 
-      // Deduct total amount from user's wallet
       const newBalance = currentBalance - totalAmount;
       transaction.update(userDocRef, {
         walletBalance: newBalance,
         updatedAt: serverTimestamp(),
       });
 
-      // Update transaction as successful
       transaction.update(transactionRef, {
-        status: "successful",
+        status:
+          ebillsResponse.data.status === "completed-api"
+            ? "successful"
+            : "processing",
         ebillsResponse,
         previousBalance: currentBalance,
         newBalance,
@@ -323,20 +339,21 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      message: `₦${bettingAmount.toLocaleString()} has been credited to your ${provider} account`,
+      message: `₦${electricityAmount.toLocaleString()} electricity units credited to your meter`,
       data: {
         transactionId: result.transactionId,
         requestId: result.requestId,
-        bettingAmount,
+        amount: electricityAmount,
         serviceCharge,
         totalAmount,
         provider,
         customerId,
+        variationId,
         newBalance: result.newBalance,
       },
     });
   } catch (error) {
-    console.error("Betting funding error:", error);
+    console.error("Electricity purchase error:", error);
 
     if (error.message === "User not found") {
       return NextResponse.json(
@@ -363,9 +380,19 @@ export async function POST(request) {
       );
     }
 
-    if (error.message === "Invalid customer ID") {
+    if (
+      error.message.includes("below minimum") ||
+      error.message.includes("below outstanding arrears")
+    ) {
       return NextResponse.json(
-        { success: false, message: "Invalid customer ID" },
+        { success: false, message: error.message },
+        { status: 400 }
+      );
+    }
+
+    if (error.message === "Invalid meter number or type") {
+      return NextResponse.json(
+        { success: false, message: "Invalid meter number or type" },
         { status: 400 }
       );
     }
@@ -385,49 +412,6 @@ export async function POST(request) {
         success: false,
         message: "Transaction failed. Please try again.",
       },
-      { status: 500 }
-    );
-  }
-}
-
-export async function GET(request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const requestId = searchParams.get("requestId");
-
-    if (requestId) {
-      const transactionsRef = collection(firestore, "transactions");
-      const q = query(transactionsRef, where("requestId", "==", requestId));
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        return NextResponse.json(
-          { success: false, message: "Transaction not found" },
-          { status: 404 }
-        );
-      }
-
-      const transactionDoc = querySnapshot.docs[0];
-      const transactionData = transactionDoc.data();
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          id: transactionDoc.id,
-          ...transactionData,
-        },
-      });
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: "Betting API is operational",
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error("Betting API GET error:", error);
-    return NextResponse.json(
-      { success: false, message: "Internal server error" },
       { status: 500 }
     );
   }

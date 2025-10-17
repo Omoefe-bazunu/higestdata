@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import AllTransactionsTab from "@/components/admin/all-transactions-tab";
+import ElectricityRatesForm from "@/components/admin/electricity-bill-rates-tab";
 // import CryptoSettingsTab from "@/components/admin/crypto-settings-tab";
 import GiftCardRatesTab from "@/components/admin/gift-card-rates-tab";
 import AirtimeDataRatesTab from "@/components/admin/airtime-data-rates-tab";
@@ -201,6 +202,7 @@ export default function AdminPage() {
                   <SelectItem value="airtime-data">
                     Airtime/Data Rates
                   </SelectItem>
+                  <SelectItem value="electricity">Electricity Rates</SelectItem>
                   <SelectItem value="betting">Betting Rates</SelectItem>
                   <SelectItem value="pending-requests">
                     Pending Requests
@@ -218,6 +220,7 @@ export default function AdminPage() {
                 <TabsTrigger value="airtime-data">
                   Airtime/Data Rates
                 </TabsTrigger>
+                <TabsTrigger value="electricity">Electricity Rates</TabsTrigger>
                 <TabsTrigger value="betting">Betting Rates</TabsTrigger>
                 <TabsTrigger value="pending-requests">
                   Pending Requests
@@ -236,6 +239,9 @@ export default function AdminPage() {
             </TabsContent>
             <TabsContent value="airtime-data" className="mt-8">
               <AirtimeDataRatesTab />
+            </TabsContent>
+            <TabsContent value="electricity" className="mt-8">
+              <ElectricityRatesForm />
             </TabsContent>
             <TabsContent value="betting" className="mt-8">
               <BettingRatesTab />

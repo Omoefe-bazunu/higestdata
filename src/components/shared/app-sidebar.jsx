@@ -13,6 +13,8 @@ import {
   Settings,
   Bitcoin,
   X,
+  Tv,
+  UtilityPole,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -25,7 +27,13 @@ const navItems = [
   { href: "/dashboard/gift-cards", label: "Gift Cards", icon: Gift },
   // { href: "/dashboard/crypto", label: "Crypto Trade", icon: Bitcoin },
   { href: "/dashboard/buy-airtime", label: "Airtime & Data", icon: RadioTower },
+  { href: "/dashboard/cable-tv", label: "Cable Tv", icon: Tv },
   { href: "/dashboard/betting", label: "Betting Funding", icon: CreditCard },
+  {
+    href: "/dashboard/electricity-bill",
+    label: "Electricity Bill",
+    icon: UtilityPole,
+  },
 ];
 
 export default function AppSidebar({ onLinkClick }) {

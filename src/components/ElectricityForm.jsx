@@ -22,67 +22,60 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  CheckCircle,
-  Loader,
-  AlertTriangle,
-  Wallet,
-  DollarSign,
-} from "lucide-react";
+import { CheckCircle, Loader, AlertTriangle, Wallet, Zap } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
-  DialogClose,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 
-// Betting providers supported by eBills
-const BETTING_PROVIDERS = [
-  { id: "1xBet", name: "1xBet", logo: "/betting/1xbet.png" },
-  { id: "BangBet", name: "BangBet", logo: "/betting/bangbet.png" },
-  { id: "Bet9ja", name: "Bet9ja", logo: "/betting/bet9ja.png" },
-  { id: "BetKing", name: "BetKing", logo: "/betting/betking.png" },
-  { id: "BetLand", name: "BetLand", logo: "/betting/betland.png" },
-  { id: "BetLion", name: "BetLion", logo: "/betting/betlion.png" },
-  { id: "BetWay", name: "BetWay", logo: "/betting/betway.png" },
-  { id: "CloudBet", name: "CloudBet", logo: "/betting/cloudbet.png" },
-  {
-    id: "LiveScoreBet",
-    name: "LiveScoreBet",
-    logo: "/betting/livescorebet.png",
-  },
-  { id: "MerryBet", name: "MerryBet", logo: "/betting/merrybet.png" },
-  { id: "NaijaBet", name: "NaijaBet", logo: "/betting/naijabet.png" },
-  { id: "NairaBet", name: "NairaBet", logo: "/betting/nairabet.png" },
-  { id: "SupaBet", name: "SupaBet", logo: "/betting/supabet.png" },
+const ELECTRICITY_PROVIDERS = [
+  { id: "ikeja-electric", name: "Ikeja (IKEDC)" },
+  { id: "eko-electric", name: "Eko (EKEDC)" },
+  { id: "kano-electric", name: "Kano (KEDCO)" },
+  { id: "portharcourt-electric", name: "Portharcourt (PHED)" },
+  { id: "jos-electric", name: "Jos (JED)" },
+  { id: "ibadan-electric", name: "Ibadan (IBEDC)" },
+  { id: "kaduna-electric", name: "Kaduna (KAEDCO)" },
+  { id: "abuja-electric", name: "Abuja (AEDC)" },
+  { id: "enugu-electric", name: "Enugu (EEDC)" },
+  { id: "benin-electric", name: "Benin (BEDC)" },
+  { id: "aba-electric", name: "Aba (ABEDC)" },
+  { id: "yola-electric", name: "Yola (YEDC)" },
 ];
 
-function BettingForm({ user, router }) {
+const METER_TYPES = [
+  { id: "prepaid", name: "Prepaid" },
+  { id: "postpaid", name: "Postpaid" },
+];
+
+function ElectricityForm({ user, router }) {
   const [provider, setProvider] = useState("");
-  const [customerId, setCustomerId] = useState("");
+  const [meterNumber, setMeterNumber] = useState("");
+  const [meterType, setMeterType] = useState("");
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [customerVerified, setCustomerVerified] = useState(false);
+  const [meterVerified, setMeterVerified] = useState(false);
+  const [customerDetails, setCustomerDetails] = useState(null);
   const [walletBalance, setWalletBalance] = useState(0);
   const [showInsufficientModal, setShowInsufficientModal] = useState(false);
-  const [bettingRates, setBettingRates] = useState({
-    serviceCharge: 10,
+  const [electricityRates, setElectricityRates] = useState({
+    serviceCharge: 0,
     chargeType: "percentage",
   });
   const { toast } = useToast();
 
   const isAuthenticated = !!user;
 
-  // Fetch user wallet balance and betting rates
   useEffect(() => {
     if (user) {
       fetchWalletBalance();
-      fetchBettingRates();
+      fetchElectricityRates();
     }
   }, [user]);
 
@@ -94,56 +87,76 @@ function BettingForm({ user, router }) {
       }
     } catch (error) {
       console.error("Error fetching wallet balance:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load wallet balance",
+        variant: "destructive",
+      });
     }
   };
 
-  const fetchBettingRates = async () => {
+  const fetchElectricityRates = async () => {
     try {
-      const ratesDoc = await getDoc(doc(firestore, "settings", "bettingRates"));
+      const ratesDoc = await getDoc(
+        doc(firestore, "settings", "electricityRates")
+      );
       if (ratesDoc.exists()) {
         const data = ratesDoc.data();
-        setBettingRates({
+        setElectricityRates({
           serviceCharge: data.serviceCharge || 0,
-          chargeType: data.chargeType || "fixed",
+          chargeType: data.chargeType || "percentage",
         });
       }
     } catch (error) {
-      console.error("Error fetching betting rates:", error);
+      console.error("Error fetching electricity rates:", error);
     }
   };
 
-  // Verify customer ID
-  const verifyCustomerId = async () => {
-    if (!provider || !customerId) return;
+  const verifyMeterNumber = async () => {
+    if (!provider || !meterNumber || !meterType) return;
     setIsVerifying(true);
     try {
-      const response = await fetch(
-        `/api/betting/verify?provider=${provider}&customerId=${customerId}`,
-        {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      const response = await fetch("/api/electricity/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service_id: provider,
+          customer_id: meterNumber,
+          variation_id: meterType,
+        }),
+      });
       const result = await response.json();
       if (result.success && result.data) {
-        setCustomerVerified(true);
+        setMeterVerified(true);
+        setCustomerDetails(result.data);
         toast({
-          title: "Customer Verified",
-          description: `Customer ID verified for ${provider}.`,
+          title: "Meter Verified",
+          description: (
+            <div>
+              <p>
+                <strong>Name:</strong> {result.data.customer_name}
+              </p>
+              <p>
+                <strong>Address:</strong> {result.data.customer_address}
+              </p>
+            </div>
+          ),
         });
       } else {
-        setCustomerVerified(false);
+        setMeterVerified(false);
+        setCustomerDetails(null);
         toast({
           title: "Verification Failed",
-          description: result.message || "Invalid customer ID.",
+          description: result.message || "Invalid meter number or type.",
           variant: "destructive",
         });
       }
     } catch (error) {
-      setCustomerVerified(false);
+      setMeterVerified(false);
+      setCustomerDetails(null);
       toast({
         title: "Verification Error",
-        description: "Unable to verify customer ID. Please try again.",
+        description: "Unable to verify meter number. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -151,40 +164,34 @@ function BettingForm({ user, router }) {
     }
   };
 
-  // Get betting amount (what goes to betting account)
-  const getBettingAmount = () => {
+  const getElectricityAmount = () => {
     return parseFloat(amount || 0);
   };
 
-  // Get service charge
   const getServiceCharge = () => {
-    const bettingAmount = getBettingAmount();
-    const serviceCharge = parseFloat(bettingRates.serviceCharge) || 0;
-
-    if (bettingRates.chargeType === "percentage") {
-      return (bettingAmount * serviceCharge) / 100;
-    } else {
-      return serviceCharge;
-    }
+    const electricityAmount = getElectricityAmount();
+    const serviceCharge = parseFloat(electricityRates.serviceCharge) || 0;
+    return electricityRates.chargeType === "percentage"
+      ? (electricityAmount * serviceCharge) / 100
+      : serviceCharge;
   };
 
-  // Get total amount to be charged (betting amount + service charge)
   const getTotalAmount = () => {
-    return getBettingAmount() + getServiceCharge();
+    return getElectricityAmount() + getServiceCharge();
   };
 
-  // Check if submit button should be disabled
   const isSubmitDisabled = () => {
-    const bettingAmount = getBettingAmount();
+    const electricityAmount = getElectricityAmount();
     const totalAmount = getTotalAmount();
     return (
       !isAuthenticated ||
       !provider ||
-      !customerId ||
-      !customerVerified ||
-      !bettingAmount ||
-      bettingAmount < 100 ||
-      bettingAmount > 100000 ||
+      !meterNumber ||
+      !meterType ||
+      !meterVerified ||
+      !electricityAmount ||
+      electricityAmount < 1000 ||
+      electricityAmount > 100000 ||
       walletBalance < totalAmount ||
       isSubmitting ||
       isVerifying
@@ -203,49 +210,45 @@ function BettingForm({ user, router }) {
       return;
     }
 
-    const bettingAmount = getBettingAmount();
+    const electricityAmount = getElectricityAmount();
     const totalAmount = getTotalAmount();
 
-    // Validate betting amount
-    if (!bettingAmount || bettingAmount <= 0) {
+    if (!electricityAmount || electricityAmount <= 0) {
       toast({
         title: "Invalid Amount",
-        description: "Please enter a valid amount (₦100–₦100,000).",
+        description: "Please enter a valid amount (₦1000–₦100,000).",
         variant: "destructive",
       });
       return;
     }
 
-    // Minimum and maximum amount validation
-    if (bettingAmount < 100) {
+    if (electricityAmount < 1000) {
       toast({
         title: "Minimum Amount Required",
-        description: "Minimum funding amount is ₦100.",
+        description: "Minimum purchase amount is ₦1000.",
         variant: "destructive",
       });
       return;
     }
 
-    if (bettingAmount > 100000) {
+    if (electricityAmount > 100000) {
       toast({
         title: "Maximum Amount Exceeded",
-        description: "Maximum funding amount is ₦100,000.",
+        description: "Maximum purchase amount is ₦100,000.",
         variant: "destructive",
       });
       return;
     }
 
-    // Check wallet balance
     if (walletBalance < totalAmount) {
       setShowInsufficientModal(true);
       return;
     }
 
-    // Check customer verification
-    if (!customerVerified) {
+    if (!meterVerified) {
       toast({
-        title: "Customer Not Verified",
-        description: "Please verify your customer ID before proceeding.",
+        title: "Meter Not Verified",
+        description: "Please verify your meter number before proceeding.",
         variant: "destructive",
       });
       return;
@@ -254,22 +257,29 @@ function BettingForm({ user, router }) {
     setIsSubmitting(true);
 
     try {
-      // Prepare transaction data
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        throw new Error("User not authenticated");
+      }
+
       const transactionData = {
-        userId: user.uid,
-        serviceType: "betting",
-        bettingAmount,
+        userId: currentUser.uid,
+        serviceType: "electricity",
+        amount: electricityAmount,
         serviceCharge: getServiceCharge(),
         totalAmount,
         provider,
-        customerId,
+        customerId: meterNumber,
+        variationId: meterType,
       };
 
-      // Call betting transaction API
-      const response = await fetch("/api/betting/fund", {
+      const response = await fetch("/api/electricity/purchase", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${await currentUser.getIdToken(true)}`,
         },
         body: JSON.stringify(transactionData),
       });
@@ -278,17 +288,15 @@ function BettingForm({ user, router }) {
 
       if (result.success) {
         toast({
-          title: "Funding Successful",
-          description: `₦${bettingAmount.toLocaleString()} has been credited to your ${provider} account.`,
+          title: "Purchase Successful",
+          description: `₦${electricityAmount.toLocaleString()} electricity units credited to your meter.`,
         });
-
-        // Reset form
         setProvider("");
-        setCustomerId("");
+        setMeterNumber("");
+        setMeterType("");
         setAmount("");
-        setCustomerVerified(false);
-
-        // Refresh wallet balance
+        setMeterVerified(false);
+        setCustomerDetails(null);
         fetchWalletBalance();
       } else {
         toast({
@@ -311,7 +319,6 @@ function BettingForm({ user, router }) {
 
   return (
     <>
-      {/* Wallet Balance Display */}
       <div className="bg-primary/5 p-4 rounded-lg mb-6">
         <div className="flex items-center gap-2 mb-2">
           <Wallet className="h-4 w-4" />
@@ -320,8 +327,7 @@ function BettingForm({ user, router }) {
         <p className="text-2xl font-bold">₦{walletBalance.toLocaleString()}</p>
       </div>
 
-      {/* Insufficient Balance Warning */}
-      {getTotalAmount() > walletBalance && getBettingAmount() > 0 && (
+      {getTotalAmount() > walletBalance && getElectricityAmount() > 0 && (
         <Alert variant="destructive" className="mb-6">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Insufficient Balance</AlertTitle>
@@ -333,19 +339,32 @@ function BettingForm({ user, router }) {
         </Alert>
       )}
 
+      {meterVerified && customerDetails && (
+        <Alert className="mb-6">
+          <CheckCircle className="h-4 w-4 text-green-500" />
+          <AlertTitle>Meter Verified</AlertTitle>
+          <AlertDescription>
+            <p>
+              <strong>Name:</strong> {customerDetails.customer_name}
+            </p>
+            <p>
+              <strong>Address:</strong> {customerDetails.customer_address}
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-2">
-          <Label htmlFor="provider">Betting Provider *</Label>
+          <Label htmlFor="provider">Electricity Provider *</Label>
           <Select value={provider} onValueChange={setProvider} required>
             <SelectTrigger id="provider">
-              <SelectValue placeholder="Choose betting provider" />
+              <SelectValue placeholder="Select provider" />
             </SelectTrigger>
             <SelectContent>
-              {BETTING_PROVIDERS.map((betting) => (
-                <SelectItem key={betting.id} value={betting.id}>
-                  <div className="flex items-center gap-2">
-                    <span>{betting.name}</span>
-                  </div>
+              {ELECTRICITY_PROVIDERS.map((prov) => (
+                <SelectItem key={prov.id} value={prov.id}>
+                  {prov.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -353,29 +372,30 @@ function BettingForm({ user, router }) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="customerId">Customer ID *</Label>
+          <Label htmlFor="meterNumber">Meter/Account Number *</Label>
           <div className="flex gap-2">
             <Input
-              id="customerId"
-              value={customerId}
+              id="meterNumber"
+              value={meterNumber}
               onChange={(e) => {
-                setCustomerId(e.target.value);
-                setCustomerVerified(false);
+                setMeterNumber(e.target.value);
+                setMeterVerified(false);
+                setCustomerDetails(null);
               }}
-              placeholder="Enter customer (account) ID"
+              placeholder="Enter meter or account number"
               required
             />
             <Button
               type="button"
-              onClick={verifyCustomerId}
-              disabled={!provider || !customerId || isVerifying}
+              onClick={verifyMeterNumber}
+              disabled={!provider || !meterNumber || !meterType || isVerifying}
             >
               {isVerifying ? (
                 <>
                   <Loader className="mr-2 h-4 w-4 animate-spin" />
                   Verifying...
                 </>
-              ) : customerVerified ? (
+              ) : meterVerified ? (
                 <>
                   <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
                   Verified
@@ -386,8 +406,24 @@ function BettingForm({ user, router }) {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Your betting account ID or username. Verify before funding.
+            Your meter or account number. Verify before purchasing.
           </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="meterType">Meter Type *</Label>
+          <Select value={meterType} onValueChange={setMeterType} required>
+            <SelectTrigger id="meterType">
+              <SelectValue placeholder="Select meter type" />
+            </SelectTrigger>
+            <SelectContent>
+              {METER_TYPES.map((type) => (
+                <SelectItem key={type.id} value={type.id}>
+                  {type.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-2">
@@ -398,25 +434,23 @@ function BettingForm({ user, router }) {
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="Enter amount"
-            min="100"
+            min="1000"
             max="100000"
             required
           />
           <p className="text-xs text-muted-foreground">
-            Minimum: ₦100, Maximum: ₦100,000
+            Minimum: ₦1000, Maximum: ₦100,000
           </p>
         </div>
 
-        {/* Amount Preview */}
-        {getBettingAmount() > 0 && (
+        {getElectricityAmount() > 0 && (
           <div className="bg-muted p-4 rounded-lg space-y-3">
             <div className="flex justify-between text-sm">
-              <span>Betting Amount:</span>
+              <span>Electricity Amount:</span>
               <span className="font-medium">
-                ₦{getBettingAmount().toLocaleString()}
+                ₦{getElectricityAmount().toLocaleString()}
               </span>
             </div>
-
             {getServiceCharge() > 0 && (
               <div className="flex justify-between text-sm">
                 <span>Service Charge:</span>
@@ -425,7 +459,6 @@ function BettingForm({ user, router }) {
                 </span>
               </div>
             )}
-
             <div className="border-t pt-2">
               <div className="flex justify-between">
                 <span className="font-semibold">Total to be charged:</span>
@@ -434,12 +467,11 @@ function BettingForm({ user, router }) {
                 </span>
               </div>
             </div>
-
             <p className="text-xs text-muted-foreground">
-              ₦{getBettingAmount().toLocaleString()} will be credited to your
-              betting account.
+              ₦{getElectricityAmount().toLocaleString()} will be credited to
+              your meter.{" "}
               {getServiceCharge() > 0 &&
-                " Service charge will be deducted from your wallet."}
+                "Service charge will be deducted from your wallet."}
             </p>
           </div>
         )}
@@ -451,12 +483,11 @@ function BettingForm({ user, router }) {
               Processing...
             </>
           ) : (
-            `Fund Betting Account`
+            "Purchase Electricity"
           )}
         </Button>
       </form>
 
-      {/* Insufficient Balance Modal */}
       <Dialog
         open={showInsufficientModal}
         onOpenChange={setShowInsufficientModal}
@@ -474,8 +505,8 @@ function BettingForm({ user, router }) {
           <div className="space-y-4">
             <div className="bg-muted p-4 rounded-lg">
               <p className="text-sm">
-                <span className="font-medium">Betting Amount:</span> ₦
-                {getBettingAmount().toLocaleString()}
+                <span className="font-medium">Electricity Amount:</span> ₦
+                {getElectricityAmount().toLocaleString()}
               </p>
               {getServiceCharge() > 0 && (
                 <p className="text-sm">
@@ -521,7 +552,7 @@ function BettingForm({ user, router }) {
   );
 }
 
-export default function BettingPage() {
+export default function ElectricityPage() {
   const [user, setUser] = useState(null);
   const router = useRouter();
   const [authChecked, setAuthChecked] = useState(false);
@@ -551,11 +582,10 @@ export default function BettingPage() {
     <div className="space-y-8 mt-4">
       <div>
         <h1 className="text-3xl font-bold font-headline">
-          Fund Your Betting Accounts
+          Pay Electricity Bills
         </h1>
         <p className="text-muted-foreground">
-          Top up your favorite betting platforms instantly. Fast, secure, and
-          reliable.
+          Purchase electricity units instantly. Fast, secure, and reliable.
         </p>
       </div>
 
@@ -563,35 +593,35 @@ export default function BettingPage() {
         <div className="grid md:grid-cols-2">
           <div className="p-6 md:p-8">
             <CardHeader className="px-0">
-              <CardTitle>Fund Betting Account</CardTitle>
+              <CardTitle>Electricity Bill Payment</CardTitle>
               <CardDescription>
-                Select your betting provider and enter your account details.
+                Select your provider and enter your meter details.
               </CardDescription>
             </CardHeader>
-            <BettingForm user={user} router={router} />
+            <ElectricityForm user={user} router={router} />
           </div>
 
           <div className="bg-muted/50 p-8 md:p-12 flex flex-col justify-center">
-            <div className="relative aspect-video mb-8 rounded-lg overflow-hidden bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center">
+            <div className="relative aspect-video mb-8 rounded-lg overflow-hidden bg-gradient-to-br from-yellow-500 to-orange-600 flex items-center justify-center">
               <div className="text-center text-white">
-                <DollarSign className="h-16 w-16 mx-auto mb-4 opacity-80" />
-                <h3 className="text-xl font-semibold mb-2">
-                  Betting Made Easy
-                </h3>
-                <p className="text-sm opacity-90">Fund all major platforms</p>
+                <Zap className="h-16 w-16 mx-auto mb-4 opacity-80" />
+                <h3 className="text-xl font-semibold mb-2">Power Your Home</h3>
+                <p className="text-sm opacity-90">
+                  Pay bills for all major providers
+                </p>
               </div>
             </div>
             <h3 className="text-xl font-semibold mb-4 text-secondary-foreground">
-              Supported Platforms
+              Supported Providers
             </h3>
             <p className="text-muted-foreground mb-4">
-              Fund your accounts on 1xBet, BangBet, Bet9ja, BetKing, BetLand,
-              BetWay, and many more betting platforms.
+              Pay bills for Ikeja, Eko, Kano, Portharcourt, Jos, Ibadan, and
+              more.
             </p>
             <ul className="space-y-2 text-sm">
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Instant account funding</span>
+                <span>Instant meter crediting</span>
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />
@@ -599,7 +629,7 @@ export default function BettingPage() {
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Support for 13+ betting platforms</span>
+                <span>Support for prepaid and postpaid meters</span>
               </li>
             </ul>
           </div>

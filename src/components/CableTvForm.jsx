@@ -3,13 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
-import {
-  doc,
-  getDoc,
-  setDoc,
-  serverTimestamp,
-  updateDoc,
-} from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import {
   Card,
@@ -28,9 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import Image from "next/image";
-import { CheckCircle, Loader, AlertTriangle, Wallet } from "lucide-react";
+import { CheckCircle, Loader, AlertTriangle, Wallet, Tv } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -41,18 +33,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-function PurchaseForm({ type, user, router }) {
-  const [network, setNetwork] = useState("");
-  const [phone, setPhone] = useState("");
-  const [amount, setAmount] = useState("");
-  const [dataPlan, setDataPlan] = useState("");
+function CableTVForm({ user, router }) {
+  const [provider, setProvider] = useState("");
+  const [cardNumber, setCardNumber] = useState("");
+  const [plan, setPlan] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isFetchingPlans, setIsFetchingPlans] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [cardVerified, setCardVerified] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
+  const [tvProviders, setTvProviders] = useState([]);
+  const [tvPlans, setTvPlans] = useState([]);
+  const [isFetchingPlans, setIsFetchingPlans] = useState(false);
   const [showInsufficientModal, setShowInsufficientModal] = useState(false);
-  const [dataPlans, setDataPlans] = useState([]);
-  const [airtimeRates, setAirtimeRates] = useState({});
-  const [dataProviders, setDataProviders] = useState([]);
   const { toast } = useToast();
 
   const isAuthenticated = !!user;
@@ -61,15 +53,14 @@ function PurchaseForm({ type, user, router }) {
     if (user) {
       fetchWalletBalance();
       fetchProviders();
-      fetchAirtimeRates();
     }
   }, [user]);
 
   useEffect(() => {
-    if (network && type === "Data") {
-      fetchDataPlans(network);
+    if (provider) {
+      fetchTVPlans(provider);
     }
-  }, [network, type]);
+  }, [provider]);
 
   const fetchWalletBalance = async () => {
     try {
@@ -87,67 +78,51 @@ function PurchaseForm({ type, user, router }) {
     }
   };
 
-  const fetchAirtimeRates = async () => {
-    try {
-      const ratesDoc = await getDoc(doc(firestore, "settings", "airtimeRates"));
-      if (ratesDoc.exists()) {
-        const rates = ratesDoc.data()?.rates || {};
-        setAirtimeRates(rates);
-      }
-    } catch (error) {
-      console.error("Error fetching airtime rates:", error);
-    }
-  };
-
   const fetchProviders = async () => {
     try {
-      const dataDoc = await getDoc(doc(firestore, "settings", "dataRates"));
-      if (dataDoc.exists()) {
-        const rates = dataDoc.data()?.rates || {};
-        setDataProviders(
-          Object.keys(rates)
-            .filter((key) =>
-              ["mtn", "airtel", "glo", "9mobile", "smile"].includes(key)
-            )
-            .map((key) => ({
-              id: key,
-              name: rates[key].name || key.toUpperCase(),
-            }))
+      const tvDoc = await getDoc(doc(firestore, "settings", "tvRates"));
+      if (tvDoc.exists()) {
+        const rates = tvDoc.data()?.rates || {};
+        setTvProviders(
+          Object.keys(rates).map((key) => ({
+            id: key,
+            name: rates[key].name || key.toUpperCase(),
+          }))
         );
       }
     } catch (error) {
-      console.error("Error fetching providers:", error);
+      console.error("Error fetching TV providers:", error);
       toast({
         title: "Error",
-        description: "Failed to load providers",
+        description: "Failed to load TV providers",
         variant: "destructive",
       });
     }
   };
 
-  const fetchDataPlans = async (networkProvider) => {
+  const fetchTVPlans = async (tvProvider) => {
     try {
       setIsFetchingPlans(true);
-      const ratesDoc = await getDoc(doc(firestore, "settings", "dataRates"));
+      const ratesDoc = await getDoc(doc(firestore, "settings", "tvRates"));
       if (!ratesDoc.exists()) {
-        throw new Error("Data rates not found in Firestore");
+        throw new Error("TV rates not found in Firestore");
       }
 
       const rates = ratesDoc.data()?.rates || {};
-      const plans = Object.keys(rates[networkProvider]?.plans || {}).map(
+      const plans = Object.keys(rates[tvProvider]?.plans || {}).map(
         (planId) => ({
           id: planId,
-          name: rates[networkProvider].plans[planId].name,
-          price: rates[networkProvider].plans[planId].finalPrice || 0,
+          name: rates[tvProvider].plans[planId].name,
+          price: rates[tvProvider].plans[planId].finalPrice || 0,
         })
       );
 
-      setDataPlans(plans);
+      setTvPlans(plans);
     } catch (error) {
-      console.error("Error fetching data plans:", error);
+      console.error("Error fetching TV plans:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to load data plans",
+        description: error.message || "Failed to load TV plans",
         variant: "destructive",
       });
     } finally {
@@ -155,35 +130,68 @@ function PurchaseForm({ type, user, router }) {
     }
   };
 
-  const getTransactionAmount = () => {
-    if (type === "Airtime") {
-      const rate = airtimeRates[network]?.finalPrice || 100;
-      const vendAmount = parseFloat(amount || "0");
-      return vendAmount * (rate / 100);
-    } else if (type === "Data") {
-      const selectedPlan = dataPlans.find((plan) => plan.id === dataPlan);
-      return selectedPlan ? selectedPlan.price : 0;
+  const verifyCardNumber = async () => {
+    if (!provider || !cardNumber) return;
+    setIsVerifying(true);
+    try {
+      const response = await fetch(
+        `/api/tv/verify?provider=${provider}&customerId=${cardNumber}`,
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+      const result = await response.json();
+      if (result.success && result.data) {
+        setCardVerified(true);
+        toast({
+          title: "Smart Card Verified",
+          description: `Smart card number verified for ${provider}.`,
+        });
+      } else {
+        setCardVerified(false);
+        toast({
+          title: "Verification Failed",
+          description: result.message || "Invalid smart card number.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      setCardVerified(false);
+      toast({
+        title: "Verification Error",
+        description: "Unable to verify smart card number. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsVerifying(false);
     }
-    return 0;
+  };
+
+  const getTransactionAmount = () => {
+    const selectedPlan = tvPlans.find((p) => p.id === plan);
+    return selectedPlan ? selectedPlan.price : 0;
   };
 
   const isSubmitDisabled = () => {
     const amount = getTransactionAmount();
     return (
       !isAuthenticated ||
-      !network ||
-      !phone ||
-      (type === "Airtime" && (!amount || amount <= 0)) ||
-      (type === "Data" && !dataPlan) ||
+      !provider ||
+      !cardNumber ||
+      !plan ||
+      !cardVerified ||
+      amount <= 0 ||
       walletBalance < amount ||
       isSubmitting ||
-      isFetchingPlans
+      isVerifying
     );
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!isAuthenticated || !user) {
+
+    if (!isAuthenticated) {
       toast({
         title: "Authentication Required",
         description: "Please sign in to continue.",
@@ -192,19 +200,28 @@ function PurchaseForm({ type, user, router }) {
       return;
     }
 
-    const chargeAmount = getTransactionAmount();
+    const amount = getTransactionAmount();
 
-    if (!chargeAmount || chargeAmount <= 0) {
+    if (!amount || amount <= 0) {
       toast({
-        title: "Invalid Amount",
-        description: "Please enter a valid amount or select a plan.",
+        title: "Invalid Plan",
+        description: "Please select a valid subscription plan.",
         variant: "destructive",
       });
       return;
     }
 
-    if (walletBalance < chargeAmount) {
+    if (walletBalance < amount) {
       setShowInsufficientModal(true);
+      return;
+    }
+
+    if (!cardVerified) {
+      toast({
+        title: "Smart Card Not Verified",
+        description: "Please verify your smart card number before proceeding.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -219,19 +236,13 @@ function PurchaseForm({ type, user, router }) {
       }
 
       const token = await currentUser.getIdToken(true);
-      const finalPrice =
-        type === "Airtime"
-          ? airtimeRates[network]?.finalPrice || 100
-          : chargeAmount;
-
       const transactionData = {
         userId: currentUser.uid,
-        serviceType: type.toLowerCase(),
-        amount: chargeAmount,
-        phone,
-        network,
-        variationId: dataPlan || undefined,
-        finalPrice,
+        serviceType: "cable",
+        amount,
+        provider,
+        customerId: cardNumber,
+        variationId: plan,
       };
 
       const response = await fetch("/api/vtu/transaction", {
@@ -298,14 +309,14 @@ function PurchaseForm({ type, user, router }) {
       }
 
       toast({
-        title: "Transaction Successful",
-        description: `${type} purchase completed successfully.`,
+        title: "Subscription Successful",
+        description: "Cable TV subscription completed successfully.",
       });
 
-      setNetwork("");
-      setPhone("");
-      setAmount("");
-      setDataPlan("");
+      setProvider("");
+      setCardNumber("");
+      setPlan("");
+      setCardVerified(false);
       fetchWalletBalance();
     } catch (error) {
       console.error("Transaction error:", error);
@@ -321,6 +332,7 @@ function PurchaseForm({ type, user, router }) {
 
   return (
     <>
+      {/* Wallet Balance Display */}
       <div className="bg-primary/5 p-4 rounded-lg mb-6">
         <div className="flex items-center gap-2 mb-2">
           <Wallet className="h-4 w-4" />
@@ -329,6 +341,7 @@ function PurchaseForm({ type, user, router }) {
         <p className="text-2xl font-bold">₦{walletBalance.toLocaleString()}</p>
       </div>
 
+      {/* Insufficient Balance Warning */}
       {getTransactionAmount() > walletBalance && getTransactionAmount() > 0 && (
         <Alert variant="destructive" className="mb-6">
           <AlertTriangle className="h-4 w-4" />
@@ -343,33 +356,21 @@ function PurchaseForm({ type, user, router }) {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-2">
-          <Label htmlFor="network">Network Provider *</Label>
-          <Select value={network} onValueChange={setNetwork} required>
-            <SelectTrigger id="network" className="text-foreground">
-              <SelectValue placeholder="Select Network" />
+          <Label htmlFor="provider">Cable Provider *</Label>
+          <Select value={provider} onValueChange={setProvider} required>
+            <SelectTrigger id="provider">
+              <SelectValue placeholder="Select cable provider" />
             </SelectTrigger>
             <SelectContent>
-              {type === "Airtime" ? (
-                Object.keys(airtimeRates).length > 0 ? (
-                  Object.keys(airtimeRates).map((networkId) => (
-                    <SelectItem key={networkId} value={networkId}>
-                      {airtimeRates[networkId].name}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <div className="p-2 text-sm text-muted-foreground">
-                    No airtime networks available
-                  </div>
-                )
-              ) : dataProviders.length > 0 ? (
-                dataProviders.map((prov) => (
+              {tvProviders.length > 0 ? (
+                tvProviders.map((prov) => (
                   <SelectItem key={prov.id} value={prov.id}>
                     {prov.name}
                   </SelectItem>
                 ))
               ) : (
                 <div className="p-2 text-sm text-muted-foreground">
-                  No data providers available
+                  No TV providers available
                 </div>
               )}
             </SelectContent>
@@ -377,66 +378,81 @@ function PurchaseForm({ type, user, router }) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="phone">Phone Number *</Label>
-          <Input
-            id="phone"
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="08012345678"
-            required
-          />
+          <Label htmlFor="cardNumber">Smart Card Number *</Label>
+          <div className="flex gap-2">
+            <Input
+              id="cardNumber"
+              value={cardNumber}
+              onChange={(e) => {
+                setCardNumber(e.target.value);
+                setCardVerified(false);
+              }}
+              placeholder="Enter smart card number"
+              required
+            />
+            <Button
+              type="button"
+              onClick={verifyCardNumber}
+              disabled={!provider || !cardNumber || isVerifying}
+            >
+              {isVerifying ? (
+                <>
+                  <Loader className="mr-2 h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : cardVerified ? (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                  Verified
+                </>
+              ) : (
+                "Verify"
+              )}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Your cable provider smart card number or account ID. Verify before
+            subscribing.
+          </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="amount">
-            {type === "Airtime" ? "Amount (₦)" : "Data Plan"} *
-          </Label>
-          {type === "Airtime" && (
-            <Input
-              id="amount"
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="e.g., 1000"
-              min="50"
-              required
-            />
-          )}
-          {type === "Data" && (
-            <Select value={dataPlan} onValueChange={setDataPlan} required>
-              <SelectTrigger id="data-plan" className="text-foreground">
-                <SelectValue placeholder="Select Data Plan" />
-              </SelectTrigger>
-              <SelectContent>
-                {isFetchingPlans ? (
-                  <div className="flex justify-center p-4">
-                    <Loader className="h-4 w-4 animate-spin" />
-                  </div>
-                ) : dataPlans.length > 0 ? (
-                  dataPlans.map((plan) => (
-                    <SelectItem key={plan.id} value={plan.id}>
-                      {plan.name} - ₦{plan.price.toLocaleString()}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <div className="p-4 text-center text-muted-foreground">
-                    No plans available
-                  </div>
-                )}
-              </SelectContent>
-            </Select>
-          )}
+          <Label htmlFor="plan">Subscription Plan *</Label>
+          <Select value={plan} onValueChange={setPlan} required>
+            <SelectTrigger id="plan">
+              <SelectValue placeholder="Select subscription plan" />
+            </SelectTrigger>
+            <SelectContent>
+              {isFetchingPlans ? (
+                <div className="flex justify-center p-4">
+                  <Loader className="h-4 w-4 animate-spin" />
+                </div>
+              ) : tvPlans.length > 0 ? (
+                tvPlans.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name} - ₦{p.price.toLocaleString()}
+                  </SelectItem>
+                ))
+              ) : (
+                <div className="p-4 text-center text-muted-foreground">
+                  No plans available
+                </div>
+              )}
+            </SelectContent>
+          </Select>
         </div>
 
+        {/* Amount Preview */}
         {getTransactionAmount() > 0 && (
-          <div className="bg-muted p-3 rounded-lg">
-            <p className="text-sm">
-              <span className="font-medium">Amount to be charged:</span> ₦
-              {getTransactionAmount().toLocaleString()}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              This will be deducted from your wallet balance.
+          <div className="bg-muted p-4 rounded-lg space-y-3">
+            <div className="flex justify-between text-sm">
+              <span>Subscription Amount:</span>
+              <span className="font-medium">
+                ₦{getTransactionAmount().toLocaleString()}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This amount will be deducted from your wallet.
             </p>
           </div>
         )}
@@ -444,14 +460,16 @@ function PurchaseForm({ type, user, router }) {
         <Button type="submit" className="w-full" disabled={isSubmitDisabled()}>
           {isSubmitting ? (
             <>
-              <Loader className="mr-2 h-4 w-4 animate-spin" /> Processing...
+              <Loader className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
             </>
           ) : (
-            `Purchase ${type}`
+            "Subscribe to Cable TV"
           )}
         </Button>
       </form>
 
+      {/* Insufficient Balance Modal */}
       <Dialog
         open={showInsufficientModal}
         onOpenChange={setShowInsufficientModal}
@@ -506,7 +524,7 @@ function PurchaseForm({ type, user, router }) {
   );
 }
 
-export default function BuyAirtimePage() {
+export default function CableTVPage() {
   const [user, setUser] = useState(null);
   const router = useRouter();
   const [authChecked, setAuthChecked] = useState(false);
@@ -535,66 +553,55 @@ export default function BuyAirtimePage() {
   return (
     <div className="space-y-8 mt-4">
       <div>
-        <h1 className="text-3xl font-bold font-headline">Buy Airtime & Data</h1>
+        <h1 className="text-3xl font-bold font-headline">
+          Cable TV Subscription
+        </h1>
         <p className="text-muted-foreground">
-          Instantly top up airtime or data plans. Fast, easy, and reliable.
+          Pay for your cable TV subscriptions instantly. Fast, secure, and
+          reliable.
         </p>
       </div>
+
       <Card className="overflow-hidden">
         <div className="grid md:grid-cols-2">
           <div className="p-6 md:p-8">
-            <Tabs defaultValue="airtime" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="airtime">Airtime</TabsTrigger>
-                <TabsTrigger value="data">Data</TabsTrigger>
-              </TabsList>
-              <TabsContent value="airtime" className="space-y-4">
-                <CardHeader className="px-0">
-                  <CardTitle>Buy Airtime</CardTitle>
-                  <CardDescription>
-                    Enter details to top up airtime.
-                  </CardDescription>
-                </CardHeader>
-                <PurchaseForm type="Airtime" user={user} router={router} />
-              </TabsContent>
-              <TabsContent value="data" className="space-y-4">
-                <CardHeader className="px-0">
-                  <CardTitle>Buy Data</CardTitle>
-                  <CardDescription>
-                    Choose a data plan that suits you.
-                  </CardDescription>
-                </CardHeader>
-                <PurchaseForm type="Data" user={user} router={router} />
-              </TabsContent>
-            </Tabs>
+            <CardHeader className="px-0">
+              <CardTitle>Cable TV Subscription</CardTitle>
+              <CardDescription>
+                Select your provider and enter your smart card details.
+              </CardDescription>
+            </CardHeader>
+            <CableTVForm user={user} router={router} />
           </div>
+
           <div className="bg-muted/50 p-8 md:p-12 flex flex-col justify-center">
-            <div className="relative aspect-video mb-8 rounded-lg overflow-hidden">
-              <Image
-                src="/vtu.png"
-                alt="Mobile services illustration"
-                fill
-                style={{ objectFit: "cover" }}
-              />
+            <div className="relative aspect-video mb-8 rounded-lg overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+              <div className="text-center text-white">
+                <Tv className="h-16 w-16 mx-auto mb-4 opacity-80" />
+                <h3 className="text-xl font-semibold mb-2">Stay Entertained</h3>
+                <p className="text-sm opacity-90">
+                  Subscribe to all major providers
+                </p>
+              </div>
             </div>
             <h3 className="text-xl font-semibold mb-4 text-secondary-foreground">
-              Seamlessly Connected
+              Supported Providers
             </h3>
             <p className="text-muted-foreground mb-4">
-              Stay online with instant airtime and data recharges.
+              Pay for DStv, GOtv, Startimes, Showmax, and more.
             </p>
             <ul className="space-y-2 text-sm">
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Instant delivery on all services</span>
+                <span>Instant subscription activation</span>
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Secure payments from your wallet</span>
+                <span>Secure wallet integration</span>
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Competitive rates and reliable plans</span>
+                <span>Support for all major cable providers</span>
               </li>
             </ul>
           </div>
