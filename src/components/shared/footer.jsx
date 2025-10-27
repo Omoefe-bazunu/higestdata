@@ -76,7 +76,7 @@ export default function Footer() {
           <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
           <ul className="space-y-3 text-gray-300">
             <li className="flex items-center gap-3">
-              <Mail size={18} /> info@highestdata.com
+              <Mail size={18} /> info@highestdata.com.ng
             </li>
             <li className="flex items-center gap-3">
               <Phone size={18} /> +234 703 891 1469; 09159082405

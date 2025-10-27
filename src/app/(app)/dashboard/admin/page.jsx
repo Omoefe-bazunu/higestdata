@@ -32,6 +32,7 @@ import GiftCardRatesTab from "@/components/admin/gift-card-rates-tab";
 import AirtimeDataRatesTab from "@/components/admin/airtime-data-rates-tab";
 import PendingRequestsTab from "@/components/admin/pending-requests-tab";
 import BettingRatesTab from "@/components/admin/betting-rates-tab";
+import ExamCardRatesPage from "@/components/admin/exam-rates-tab";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("transactions");
@@ -204,6 +205,7 @@ export default function AdminPage() {
                   </SelectItem>
                   <SelectItem value="electricity">Electricity Rates</SelectItem>
                   <SelectItem value="betting">Betting Rates</SelectItem>
+                  <SelectItem value="exam-cards">Exam-Card-Rates</SelectItem>
                   <SelectItem value="pending-requests">
                     Pending Requests
                   </SelectItem>
@@ -222,6 +224,7 @@ export default function AdminPage() {
                 </TabsTrigger>
                 <TabsTrigger value="electricity">Electricity Rates</TabsTrigger>
                 <TabsTrigger value="betting">Betting Rates</TabsTrigger>
+                <TabsTrigger value="exam-cards">Exam Card Rates</TabsTrigger>
                 <TabsTrigger value="pending-requests">
                   Pending Requests
                 </TabsTrigger>
@@ -245,6 +248,9 @@ export default function AdminPage() {
             </TabsContent>
             <TabsContent value="betting" className="mt-8">
               <BettingRatesTab />
+            </TabsContent>
+            <TabsContent value="exam-cards" className="mt-8">
+              <ExamCardRatesPage />
             </TabsContent>
             <TabsContent value="pending-requests" className="mt-8">
               <PendingRequestsTab />

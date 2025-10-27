@@ -73,13 +73,14 @@ export default function AboutUs() {
             <p className="text-lg md:text-xl text-center md:text-left text-gray-300 mb-6 leading-relaxed">
               At <span className="font-semibold">Highest Data</span>, we
               simplify digital transactions with a secure, user-friendly
-              platform. From crypto trading to gift cards, airtime, and wallet
-              funding, our mission is to make financial services accessible,
-              fast, and reliable.
+              platform. From gift cards trade to airtime, data, electricity
+              bills, cable data subscription, exam scratch cards, and betting
+              wallet funding, our mission is to make financial services
+              accessible, fast, and reliable.
             </p>
             <p className="text-lg md:text-xl text-center md:text-left text-gray-300 leading-relaxed">
               We exist to empower individuals and businesses with a seamless,
-              secure ecosystem for confident transactions — ensuring every
+              secure ecosystem for confident transactions, ensuring every
               digital trade is trustworthy and efficient.
             </p>
           </motion.div>

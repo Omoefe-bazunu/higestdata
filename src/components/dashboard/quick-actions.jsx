@@ -49,7 +49,7 @@ const actions = [
     variant: "outline",
   },
   {
-    href: "/dashboard/scratch-cards",
+    href: "/dashboard/exam-cards",
     label: "Buy Scratch Cards",
     icon: School,
     variant: "secondary",

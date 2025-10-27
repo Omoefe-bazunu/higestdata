@@ -216,11 +216,11 @@ export default function ContactPage() {
             </h2>
             <div className="space-y-4 text-gray-700">
               <p>
-                Address: OKEMUTE GBOGBOROGBO COMPOUND, OLD BENIN ROAD, OPPOSITE
-                LAWYER FILLING STATION, OGHARA, ETHIOPE WEST, DELTA STATE.
+                Address: Okemute Gbogborogbo Compound, Old Benin Road, Opposite
+                Lawyer Filling Station, Oghara, Ethiope West, Delta State.
               </p>
-              <p>Phone: +234 703 891 1469</p>
-              <p>Email: info@highestdata.com</p>
+              <p>Phone: +23409159082405</p>
+              <p>Email: info@highestdata.com.ng</p>
             </div>
           </motion.div>
         </div>

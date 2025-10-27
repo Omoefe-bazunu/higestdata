@@ -36,7 +36,7 @@ const navItems = [
     icon: UtilityPole,
   },
   {
-    href: "/dashboard/scratch-cards",
+    href: "/dashboard/exam-cards",
     label: "Exam Scratch Cards",
     icon: School,
   },

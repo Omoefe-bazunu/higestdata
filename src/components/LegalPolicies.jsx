@@ -82,7 +82,6 @@ export default function LegalPolicies() {
                           services:
                         </p>
                         <ul className="list-disc list-inside space-y-1 ml-4">
-                          {/* <li>Cryptocurrency trading (buying and selling)</li> */}
                           <li>Gift card trading</li>
                           <li>Airtime and data purchase</li>
                           <li>Cable TV subscription</li>
@@ -152,9 +151,9 @@ export default function LegalPolicies() {
                           </p>
 
                           <p>
-                            <strong>5.3 Gift Card Trading:</strong>{" "}
-                            Transactions are subject to current market rates and
-                            may require verification before processing.
+                            <strong>5.3 Gift Card Trading:</strong> Transactions
+                            are subject to current market rates and may require
+                            verification before processing.
                           </p>
 
                           <p>
@@ -217,7 +216,7 @@ export default function LegalPolicies() {
                           damages arising from the use of our services,
                           including but not limited to network failures,
                           third-party service disruptions, or market volatility
-                          in crypto and gift card trading.
+                          in gift card trading.
                         </p>
                       </section>
 
@@ -341,7 +340,7 @@ export default function LegalPolicies() {
                           <ul className="list-disc list-inside space-y-1 ml-4">
                             <li>Payment information processed via Paystack</li>
                             <li>Transaction history and wallet activity</li>
-                            <li>Crypto addresses and gift card details</li>
+                            <li>Gift card details</li>
                           </ul>
                         </div>
                       </section>
@@ -575,10 +574,9 @@ export default function LegalPolicies() {
                         <div className="space-y-3 ">
                           <p>
                             <strong>2.1 Failed Payments:</strong> If your
-                            payment via Paystack is debited but your wallet is
-                            not credited within 24 hours, we will investigate
-                            and process a full refund or credit your wallet
-                            accordingly.
+                            payment is debited but your wallet is not credited
+                            within 24 hours, we will investigate and process a
+                            full refund or credit your wallet accordingly.
                           </p>
 
                           <p>
@@ -688,42 +686,7 @@ export default function LegalPolicies() {
 
                       <section>
                         <h3 className="text-lg font-semibold mb-3">
-                          6. Cryptocurrency Trading
-                        </h3>
-                        <div className="space-y-3 ">
-                          <p>
-                            <strong>6.1 Rate Changes:</strong> Crypto
-                            transactions are final once confirmed. Rate
-                            fluctuations after transaction initiation do not
-                            qualify for refunds.
-                          </p>
-
-                          <p>
-                            <strong>6.2 Wrong Wallet Address:</strong> Crypto
-                            sent to incorrect addresses cannot be reversed or
-                            refunded. Always double-check wallet addresses.
-                          </p>
-
-                          <p>
-                            <strong>6.3 Pending Transactions:</strong> If a
-                            crypto transaction is pending for more than 24
-                            hours, contact support for investigation and
-                            possible refund.
-                          </p>
-
-                          <p>
-                            <strong>6.4 Disputed Transactions:</strong> Claims
-                            must be submitted within 24 hours with supporting
-                            evidence (transaction hash, screenshots, etc.).
-                          </p>
-                        </div>
-                      </section>
-
-                      <Separator />
-
-                      <section>
-                        <h3 className="text-lg font-semibold mb-3">
-                          7. Gift Card Trading
+                          6. Gift Card Trading
                         </h3>
                         <div className="space-y-3 ">
                           <p>
@@ -751,7 +714,7 @@ export default function LegalPolicies() {
 
                       <section>
                         <h3 className="text-lg font-semibold mb-3">
-                          8. Wallet Withdrawal Refunds
+                          7. Wallet Withdrawal Refunds
                         </h3>
                         <div className="space-y-3 ">
                           <p>
@@ -779,7 +742,7 @@ export default function LegalPolicies() {
 
                       <section>
                         <h3 className="text-lg font-semibold mb-3">
-                          9. Service Fees
+                          8. Service Fees
                         </h3>
                         <p className="">
                           Service fees charged on transactions are
@@ -841,8 +804,8 @@ export default function LegalPolicies() {
                               payment method within 7-14 days
                             </li>
                             <li>
-                              Crypto and gift card transactions: Refunded to
-                              wallet within 24 hours
+                              Gift card transactions: Refunded to wallet within
+                              24 hours
                             </li>
                           </ul>
                         </div>
@@ -862,10 +825,7 @@ export default function LegalPolicies() {
                           <li>Completed and successful transactions</li>
                           <li>Change of mind after transaction completion</li>
                           <li>Services already rendered and consumed</li>
-                          <li>
-                            Market rate fluctuations in crypto and gift card
-                            trading
-                          </li>
+                          <li>Market rate fluctuations in gift card trading</li>
                           <li>
                             Disputes raised more than 7 days after transaction
                           </li>
