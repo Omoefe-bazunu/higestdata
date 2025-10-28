@@ -21,7 +21,7 @@ import Image from "next/image";
 import { Eye, EyeOff } from "lucide-react";
 
 export default function SignupPage() {
-  const { signup, loginWithGoogle, logout } = useAuth();
+  const { signup, loginWithGoogle } = useAuth();
   const router = useRouter();
 
   const [fullName, setFullName] = useState("");
@@ -71,9 +71,8 @@ export default function SignupPage() {
       if (!emailResponse.ok)
         throw new Error("Failed to send verification email");
 
-      await logout();
-
-      router.push("/verify-account"); // No email in URL
+      // User stays logged in - redirect to verify page
+      router.push("/verify-account");
     } catch (err) {
       console.error("Signup error:", err);
       setMessage(`❌ ${err.message}`);
@@ -120,9 +119,8 @@ export default function SignupPage() {
       if (!emailResponse.ok)
         throw new Error("Failed to send verification email");
 
-      await logout();
-
-      router.push("/verify-account"); // No email in URL
+      // User stays logged in - redirect to verify page
+      router.push("/verify-account");
     } catch (err) {
       console.error("Google signup error:", err);
       setMessage(`❌ ${err.message}`);

@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { firestore } from "@/lib/firebaseConfig";
+import { doc, updateDoc, getDoc } from "firebase/firestore";
 import {
   Card,
   CardContent,
@@ -15,39 +18,82 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
 export default function VerifyAccountPage() {
-  const [email, setEmail] = useState("");
+  const { user } = useAuth();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
 
-    try {
-      const res = await fetch("/api/email-verification/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, token: code }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        toast({ title: "Success", description: "Email verified!" });
-        setTimeout(() => router.push("/login"), 1000);
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Failed",
-          description: data.message,
-        });
-      }
-    } catch {
+    if (!user) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Network error",
+        description: "Please sign up first",
+      });
+      router.push("/signup");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Get user document
+      const userRef = doc(firestore, "users", user.uid);
+      const userDoc = await getDoc(userRef);
+
+      if (!userDoc.exists()) {
+        throw new Error("User not found");
+      }
+
+      const userData = userDoc.data();
+
+      // Verify the code matches
+      if (userData.verificationToken !== code.trim()) {
+        toast({
+          variant: "destructive",
+          title: "Invalid Code",
+          description: "The verification code is incorrect",
+        });
+        return;
+      }
+
+      // Check if token has expired (30 minutes)
+      if (userData.tokenCreatedAt) {
+        const tokenDate = userData.tokenCreatedAt.toDate();
+        const thirtyMinutesInMs = 30 * 60 * 1000;
+        const isExpired = Date.now() - tokenDate.getTime() > thirtyMinutesInMs;
+
+        if (isExpired) {
+          toast({
+            variant: "destructive",
+            title: "Code Expired",
+            description: "Please request a new verification code",
+          });
+          return;
+        }
+      }
+
+      // Update user document - mark as verified
+      await updateDoc(userRef, {
+        isVerified: true,
+        verificationToken: null,
+        tokenCreatedAt: null,
+      });
+
+      toast({
+        title: "Success",
+        description: "Email verified successfully!",
+      });
+
+      setTimeout(() => router.push("/dashboard"), 1000);
+    } catch (error) {
+      console.error("Verification error:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Verification failed",
       });
     } finally {
       setLoading(false);
@@ -55,23 +101,32 @@ export default function VerifyAccountPage() {
   };
 
   const handleResendCode = async () => {
-    if (!email) return toast({ variant: "destructive", title: "Enter email" });
+    if (!user) {
+      toast({
+        variant: "destructive",
+        title: "Please sign up first",
+      });
+      return;
+    }
 
     setLoading(true);
     try {
       const res = await fetch("/api/email-verification/resend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: user.email }),
       });
       const data = await res.json();
-      res.ok
-        ? toast({ title: "Code resent" })
-        : toast({
-            variant: "destructive",
-            title: "Failed",
-            description: data.error,
-          });
+
+      if (res.ok) {
+        toast({ title: "Code resent to your email" });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Failed",
+          description: data.error,
+        });
+      }
     } catch {
       toast({ variant: "destructive", title: "Network error" });
     } finally {
@@ -86,22 +141,14 @@ export default function VerifyAccountPage() {
           <CardTitle className="text-2xl font-semibold">
             Verify Your Email
           </CardTitle>
-          <CardDescription>Enter your email and 6-digit code</CardDescription>
+          <CardDescription>
+            Enter the 6-digit code sent to {user?.email}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                required
-                placeholder="your@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Code</Label>
+              <Label>Verification Code</Label>
               <Input
                 type="text"
                 required
@@ -125,7 +172,8 @@ export default function VerifyAccountPage() {
               <button
                 type="button"
                 onClick={handleResendCode}
-                className="text-sm text-primary hover:underline"
+                disabled={loading}
+                className="text-sm text-primary hover:underline disabled:opacity-50"
               >
                 Resend code
               </button>
