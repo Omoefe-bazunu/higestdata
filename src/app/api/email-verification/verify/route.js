@@ -1,6 +1,6 @@
 //app/api/email-verification/route.js
 
-import { db } from "@/lib/firebase";
+import { firestore } from "@/lib/firebaseConfig";
 import {
   collection,
   query,
@@ -26,7 +26,7 @@ export async function POST(req) {
     const normalizedEmail = email.trim().toLowerCase();
     console.log("Normalized email:", normalizedEmail);
 
-    const usersRef = collection(db, "users");
+    const usersRef = collection(firestore, "users");
     const q = query(
       usersRef,
       where("email", "==", normalizedEmail),

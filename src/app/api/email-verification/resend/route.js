@@ -1,6 +1,6 @@
 // app/api/email-verification/resend/route.js
 import { NextResponse } from "next/server";
-import { db } from "@/lib/firebase";
+import { firestore } from "@/lib/firebaseConfig";
 import {
   collection,
   query,
@@ -20,7 +20,7 @@ export async function POST(request) {
     const normalizedEmail = email.trim().toLowerCase();
 
     // Find user in Firestore
-    const usersRef = collection(db, "users");
+    const usersRef = collection(firestore, "users");
     const q = query(usersRef, where("email", "==", normalizedEmail));
     const querySnapshot = await getDocs(q);
 
