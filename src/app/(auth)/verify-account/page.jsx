@@ -111,24 +111,60 @@ export default function VerifyAccountPage() {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/email-verification/resend", {
+      // Get user data to retrieve name
+      const userRef = doc(firestore, "users", user.uid);
+      const userDoc = await getDoc(userRef);
+
+      if (!userDoc.exists()) {
+        throw new Error("User not found");
+      }
+
+      const userData = userDoc.data();
+      const firstName = userData.name?.split(" ")[0] || "User";
+
+      // Generate new verification code
+      const newVerificationCode = Math.floor(
+        100000 + Math.random() * 900000
+      ).toString();
+
+      // Update user document with new code
+      await updateDoc(userRef, {
+        verificationToken: newVerificationCode,
+        tokenCreatedAt: new Date(),
+      });
+
+      // Send verification email using /send endpoint
+      const res = await fetch("/api/email-verification/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: user.email }),
+        body: JSON.stringify({
+          email: user.email,
+          firstName: firstName,
+          verificationCode: newVerificationCode,
+        }),
       });
+
       const data = await res.json();
 
       if (res.ok) {
-        toast({ title: "Code resent to your email" });
+        toast({
+          title: "Code Resent",
+          description: "A new verification code has been sent to your email",
+        });
       } else {
         toast({
           variant: "destructive",
           title: "Failed",
-          description: data.error,
+          description: data.error || "Failed to resend code",
         });
       }
-    } catch {
-      toast({ variant: "destructive", title: "Network error" });
+    } catch (error) {
+      console.error("Resend error:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to resend verification code",
+      });
     } finally {
       setLoading(false);
     }
