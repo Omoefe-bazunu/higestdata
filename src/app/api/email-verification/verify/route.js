@@ -1,5 +1,5 @@
 // app/api/email-verification/verify/route.js
-import { db } from "@/lib/firebase";
+import { firestore } from "@/lib/firebaseConfig";
 import {
   collection,
   query,
@@ -16,7 +16,7 @@ export async function POST(req) {
       return NextResponse.json({ message: "Missing fields" }, { status: 400 });
 
     const normalizedEmail = email.trim().toLowerCase();
-    const usersRef = collection(db, "users");
+    const usersRef = collection(firestore, "users");
     const q = query(
       usersRef,
       where("email", "==", normalizedEmail),
