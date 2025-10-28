@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-
 const ADMIN_EMAIL = "highestdatafintechsolutions@gmail.com";
 
 export async function POST(request) {
@@ -12,7 +11,8 @@ export async function POST(request) {
       submissionId,
       giftCardName,
       faceValue,
-      rate,
+      currency,
+      ratePerUnit,
       payoutNaira,
       userId,
       userEmail,
@@ -23,7 +23,8 @@ export async function POST(request) {
       !submissionId ||
       !giftCardName ||
       !faceValue ||
-      !rate ||
+      !currency ||
+      !ratePerUnit ||
       !payoutNaira ||
       !userId ||
       !userEmail
@@ -38,8 +39,7 @@ export async function POST(request) {
     const logoUrl =
       "https://firebasestorage.googleapis.com/v0/b/haven-aa6a7.firebasestorage.app/o/general%2FHIGHEST%20ICON%20COLORED.png?alt=media&token=2eea2fd9-4677-4297-8a4b-e6119ba3c9e8";
 
-    // Admin email content
-    const adminSubject = `New Gift Card Sell Order: ${giftCardName}`;
+    const adminSubject = `New Gift Card Sell Order: ${giftCardName} (${currency})`;
     const adminHtml = `
       <div style="font-family: Arial, sans-serif; color: #333;">
         <div style="text-align: center; margin-bottom: 20px;">
@@ -50,8 +50,10 @@ export async function POST(request) {
         <ul>
           <li><strong>Submission ID:</strong> ${submissionId}</li>
           <li><strong>Gift Card Name:</strong> ${giftCardName}</li>
-          <li><strong>Face Value:</strong> $${faceValue.toFixed(2)}</li>
-          <li><strong>Rate:</strong> ${rate}%</li>
+          <li><strong>Face Value:</strong> ${faceValue.toFixed(
+            2
+          )} ${currency}</li>
+          <li><strong>Rate:</strong> ₦${ratePerUnit.toLocaleString()} per ${currency}</li>
           <li><strong>Payout (NGN):</strong> ₦${payoutNaira.toLocaleString()}</li>
           <li><strong>User ID:</strong> ${userId}</li>
           ${
@@ -64,7 +66,6 @@ export async function POST(request) {
       </div>
     `;
 
-    // User email content
     const userSubject = `Your Gift Card Sell Order for ${giftCardName} Has Been Received`;
     const userHtml = `
       <div style="font-family: Arial, sans-serif; color: #333;">
@@ -76,8 +77,10 @@ export async function POST(request) {
         <p><strong>Order Details:</strong></p>
         <ul>
           <li><strong>Gift Card Name:</strong> ${giftCardName}</li>
-          <li><strong>Face Value:</strong> $${faceValue.toFixed(2)}</li>
-          <li><strong>Rate:</strong> ${rate}%</li>
+          <li><strong>Face Value:</strong> ${faceValue.toFixed(
+            2
+          )} ${currency}</li>
+          <li><strong>Rate:</strong> ₦${ratePerUnit.toLocaleString()} per ${currency}</li>
           <li><strong>Expected Payout (NGN):</strong> ₦${payoutNaira.toLocaleString()}</li>
           ${
             imageCount
@@ -85,12 +88,11 @@ export async function POST(request) {
               : ""
           }
         </ul>
-        <p>We are processing your order. You'll receive an update once it's reviewed (typically 15-30 minutes).</p>
+        <p>We are processing your order. You'll receive an update once it's reviewed (typically 15–30 minutes).</p>
         <p>Best regards,<br>${companyName} Team</p>
       </div>
     `;
 
-    // Send email to admin
     await resend.emails.send({
       from: `${companyName} <info@highestdata.com.ng>`,
       to: ADMIN_EMAIL,
@@ -98,7 +100,6 @@ export async function POST(request) {
       html: adminHtml,
     });
 
-    // Send email to user
     await resend.emails.send({
       from: `${companyName} <info@higher.com.ng>`,
       to: userEmail,

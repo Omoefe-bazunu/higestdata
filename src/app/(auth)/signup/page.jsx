@@ -18,10 +18,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Image from "next/image";
-import { Eye, EyeOff } from "lucide-react"; // 👈 icons
+import { Eye, EyeOff } from "lucide-react";
 
 export default function SignupPage() {
-  const { signup, loginWithGoogle } = useAuth();
+  const { signup, loginWithGoogle, logout } = useAuth();
   const router = useRouter();
 
   const [fullName, setFullName] = useState("");
@@ -29,7 +29,12 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const [showPassword, setShowPassword] = useState(false); // 👈 state for toggle
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Generate 6-digit verification code
+  const generateVerificationCode = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -41,17 +46,43 @@ export default function SignupPage() {
       const userCredential = await signup(email, password);
       const user = userCredential.user;
 
-      // 2️⃣ Create a Firestore doc for the user
+      // 2️⃣ Generate verification token
+      const verificationCode = generateVerificationCode();
+
+      // 3️⃣ Create Firestore doc with verification data
       await setDoc(doc(firestore, "users", user.uid), {
         name: fullName,
-        email: user.email,
+        email: user.email.toLowerCase(),
+        kyc: "pending",
         walletBalance: 0,
+        isVerified: false,
+        verificationToken: verificationCode,
+        tokenCreatedAt: new Date(),
         createdAt: new Date().toISOString(),
       });
 
-      // 3️⃣ Redirect
-      router.push("/dashboard");
+      // 4️⃣ Send verification email
+      const emailResponse = await fetch("/api/email-verification/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: user.email,
+          firstName: fullName.split(" ")[0], // Get first name
+          verificationCode: verificationCode,
+        }),
+      });
+
+      if (!emailResponse.ok) {
+        throw new Error("Failed to send verification email");
+      }
+
+      // 5️⃣ Log user out immediately
+      await logout();
+
+      // 6️⃣ Redirect to verification page with email
+      router.push(`/verify-account?email=${encodeURIComponent(user.email)}`);
     } catch (err) {
+      console.error("Signup error:", err);
       setMessage(`❌ ${err.message}`);
     } finally {
       setLoading(false);
@@ -60,24 +91,55 @@ export default function SignupPage() {
 
   const handleGoogleSignup = async () => {
     setMessage("");
+    setLoading(true);
+
     try {
       const userCredential = await loginWithGoogle();
       const user = userCredential.user;
+
+      // Generate verification code for Google users too
+      const verificationCode = generateVerificationCode();
 
       await setDoc(
         doc(firestore, "users", user.uid),
         {
           name: user.displayName || "Unnamed User",
-          email: user.email,
+          email: user.email.toLowerCase(),
+          kyc: "pending",
           walletBalance: 0,
+          isVerified: false,
+          verificationToken: verificationCode,
+          tokenCreatedAt: new Date(),
           createdAt: new Date().toISOString(),
         },
         { merge: true }
       );
 
-      router.push("/dashboard");
+      // Send verification email
+      const emailResponse = await fetch("/api/email-verification/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: user.email,
+          firstName: user.displayName?.split(" ")[0] || "User",
+          verificationCode: verificationCode,
+        }),
+      });
+
+      if (!emailResponse.ok) {
+        throw new Error("Failed to send verification email");
+      }
+
+      // Log user out
+      await logout();
+
+      // Redirect to verification page
+      router.push(`/verify-account?email=${encodeURIComponent(user.email)}`);
     } catch (err) {
+      console.error("Google signup error:", err);
       setMessage(`❌ ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -131,7 +193,7 @@ export default function SignupPage() {
               <div className="relative">
                 <Input
                   id="password"
-                  type={showPassword ? "text" : "password"} // 👈 toggle type
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -155,6 +217,7 @@ export default function SignupPage() {
               variant="outline"
               className="w-full flex items-center justify-center gap-2"
               onClick={handleGoogleSignup}
+              disabled={loading}
             >
               <Image
                 src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"

@@ -16,6 +16,7 @@ import {
   Tv,
   UtilityPole,
   School,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -39,6 +40,11 @@ const navItems = [
     href: "/dashboard/exam-cards",
     label: "Exam Scratch Cards",
     icon: School,
+  },
+  {
+    href: "/dashboard/kyc",
+    label: "KYC status",
+    icon: Shield,
   },
 ];
 
