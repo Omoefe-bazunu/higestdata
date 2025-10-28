@@ -94,7 +94,6 @@ const ImageGallery = ({ images, title = "Images" }) => {
         </Label>
       </div>
 
-      {/* Image Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {imageList.map((image, index) => (
           <div
@@ -117,7 +116,6 @@ const ImageGallery = ({ images, title = "Images" }) => {
         ))}
       </div>
 
-      {/* Quick View - First Image */}
       <div className="border rounded-lg p-4 bg-gray-50">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium">
@@ -136,7 +134,6 @@ const ImageGallery = ({ images, title = "Images" }) => {
         />
       </div>
 
-      {/* Image Modal */}
       <Dialog open={showImageModal} onOpenChange={setShowImageModal}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
           <DialogHeader>
@@ -232,7 +229,6 @@ export default function PendingRequestsTab() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const { toast } = useToast();
 
-  // Fetch gift card requests
   useEffect(() => {
     let isMounted = true;
 
@@ -251,12 +247,11 @@ export default function PendingRequestsTab() {
           return;
         }
 
-        // Fetch gift card requests
-        const giftCardSnapshot = await getDocs(
+        const snapshot = await getDocs(
           collection(firestore, "giftCardSubmissions")
         );
 
-        const giftCardData = giftCardSnapshot.docs
+        const data = snapshot.docs
           .map((doc) => ({
             id: doc.id,
             ...doc.data(),
@@ -266,10 +261,9 @@ export default function PendingRequestsTab() {
           );
 
         if (isMounted) {
-          setGiftCardRequests(giftCardData);
+          setGiftCardRequests(data);
         }
       } catch (err) {
-        console.error("Error fetching requests:", err);
         toast({
           title: "Error",
           description: `Failed to load requests: ${err.message}`,
@@ -289,7 +283,6 @@ export default function PendingRequestsTab() {
     };
   }, [toast]);
 
-  // Handle status update
   const handleStatusUpdate = async (requestId, newStatus) => {
     const auth = getAuth();
     const user = auth.currentUser;
@@ -306,8 +299,7 @@ export default function PendingRequestsTab() {
     if (newStatus === "invalid" && !invalidReasons[requestId]?.trim()) {
       toast({
         title: "Invalid Input",
-        description:
-          "Please provide a reason for marking the request as invalid.",
+        description: "Please provide a reason for rejection.",
         variant: "destructive",
       });
       return;
@@ -317,21 +309,14 @@ export default function PendingRequestsTab() {
       setUpdating((prev) => ({ ...prev, [requestId]: true }));
 
       const request = giftCardRequests.find((req) => req.id === requestId);
-      if (!request) {
-        throw new Error("Request not found");
-      }
+      if (!request) throw new Error("Request not found");
 
-      // Fetch user email from Firestore
       const userDocRef = doc(firestore, "users", request.userId);
       const userDoc = await getDoc(userDocRef);
-
       if (!userDoc.exists() || !userDoc.data().email) {
         throw new Error("User email not found");
       }
 
-      const userEmail = userDoc.data().email;
-
-      // Update submission status
       const docRef = doc(firestore, "giftCardSubmissions", requestId);
       const updateData = {
         status: newStatus === "accepted" ? "approved" : "rejected",
@@ -344,14 +329,12 @@ export default function PendingRequestsTab() {
 
       await updateDoc(docRef, updateData);
 
-      // Update related transaction status
       const transactionsQuery = query(
         collection(firestore, "users", request.userId, "transactions"),
         where("relatedSubmissionId", "==", requestId)
       );
 
       const transactionsSnapshot = await getDocs(transactionsQuery);
-
       if (!transactionsSnapshot.empty) {
         const transactionDoc = transactionsSnapshot.docs[0];
         const transactionUpdateData = {
@@ -366,7 +349,6 @@ export default function PendingRequestsTab() {
         await updateDoc(transactionDoc.ref, transactionUpdateData);
       }
 
-      // If approved, update user's wallet balance
       if (newStatus === "accepted") {
         await updateDoc(userDocRef, {
           walletBalance: increment(request.payoutNaira),
@@ -374,7 +356,6 @@ export default function PendingRequestsTab() {
         });
       }
 
-      // Send email notification
       await sendUserNotification(
         request.userId,
         newStatus === "accepted" ? "approved" : "rejected",
@@ -382,13 +363,11 @@ export default function PendingRequestsTab() {
         request.giftCardName,
         request.payoutNaira,
         invalidReasons[requestId],
-        null,
-        userEmail
+        request.currency,
+        userDoc.data().email
       );
 
-      // Remove from local state
       setGiftCardRequests((prev) => prev.filter((req) => req.id !== requestId));
-
       setInvalidReasons((prev) => {
         const newReasons = { ...prev };
         delete newReasons[requestId];
@@ -396,16 +375,15 @@ export default function PendingRequestsTab() {
       });
 
       toast({
-        title: "Status Updated",
+        title: "Success",
         description: `Request ${
           newStatus === "accepted" ? "approved" : "rejected"
-        } successfully.`,
+        }.`,
       });
     } catch (err) {
-      console.error("Error updating status:", err);
       toast({
         title: "Error",
-        description: `Failed to update request: ${err.message}`,
+        description: `Failed: ${err.message}`,
         variant: "destructive",
       });
     } finally {
@@ -413,7 +391,6 @@ export default function PendingRequestsTab() {
     }
   };
 
-  // Send user notification
   const sendUserNotification = async (
     userId,
     status,
@@ -421,15 +398,13 @@ export default function PendingRequestsTab() {
     itemName,
     amount,
     reason = null,
-    cryptoName = null,
+    currency = null,
     userEmail
   ) => {
     try {
-      const response = await fetch("/api/send-user-notification", {
+      await fetch("/api/send-user-notification", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId,
           status,
@@ -437,27 +412,19 @@ export default function PendingRequestsTab() {
           itemName,
           amount,
           reason,
-          cryptoName,
+          currency,
           userEmail,
         }),
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Failed to send user notification:", errorText);
-        throw new Error(`Email API failed: ${response.status}`);
-      }
     } catch (error) {
-      console.error("Error sending user notification:", error);
+      console.error("Notification failed:", error);
     }
   };
 
-  // Handle invalid reason input
   const handleInvalidReasonChange = (requestId, value) => {
     setInvalidReasons((prev) => ({ ...prev, [requestId]: value }));
   };
 
-  // Handle view details
   const handleViewDetails = (request) => {
     setSelectedRequest(request);
     setShowDetailsModal(true);
@@ -469,22 +436,22 @@ export default function PendingRequestsTab() {
         <CardHeader>
           <CardTitle>Gift Card Requests</CardTitle>
           <CardDescription>
-            Review and update the status of pending or flagged gift card
-            requests.
+            Review pending or flagged gift card submissions.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Gift Card</TableHead>
-                <TableHead>Face Value (USD)</TableHead>
+                <TableHead>Card</TableHead>
+                <TableHead>Value</TableHead>
                 <TableHead>Payout (NGN)</TableHead>
+                <TableHead>Rate</TableHead>
                 <TableHead>Images</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Submitted At</TableHead>
-                <TableHead>Invalid Reason</TableHead>
-                <TableHead>Full Details</TableHead>
+                <TableHead>Submitted</TableHead>
+                <TableHead>Reason</TableHead>
+                <TableHead>Details</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -496,7 +463,10 @@ export default function PendingRequestsTab() {
                       <Skeleton className="h-6 w-32" />
                     </TableCell>
                     <TableCell>
-                      <Skeleton className="h-6 w-20" />
+                      <Skeleton className="h-6 w-24" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-6 w-28" />
                     </TableCell>
                     <TableCell>
                       <Skeleton className="h-6 w-20" />
@@ -523,26 +493,26 @@ export default function PendingRequestsTab() {
                 ))
               ) : giftCardRequests.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    No pending gift card requests.
+                  <TableCell colSpan={10} className="text-center py-8">
+                    No pending requests.
                   </TableCell>
                 </TableRow>
               ) : (
                 giftCardRequests.map((req) => {
-                  const imageCount = req.imageUrls
-                    ? req.imageUrls.length
-                    : req.imageUrl
-                    ? 1
-                    : 0;
-
+                  const imageCount = req.imageUrls?.length || 0;
                   return (
                     <TableRow key={req.id}>
-                      <TableCell>{req.giftCardName}</TableCell>
-                      <TableCell>
-                        ${req.faceValue?.toFixed(2) || "N/A"}
+                      <TableCell className="font-medium">
+                        {req.giftCardName}
                       </TableCell>
                       <TableCell>
-                        ₦{req.payoutNaira?.toLocaleString() || "N/A"}
+                        {req.faceValue} {req.currency}
+                      </TableCell>
+                      <TableCell>
+                        ₦{req.payoutNaira?.toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        ₦{req.ratePerUnit?.toLocaleString()}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
@@ -552,15 +522,11 @@ export default function PendingRequestsTab() {
                       </TableCell>
                       <TableCell className="capitalize">{req.status}</TableCell>
                       <TableCell>
-                        {req.submittedAt || req.createdAt
-                          ? new Date(
-                              req.submittedAt || req.createdAt
-                            ).toLocaleString()
-                          : "N/A"}
+                        {new Date(req.submittedAt).toLocaleString()}
                       </TableCell>
                       <TableCell>
                         <Input
-                          placeholder="Reason for rejection"
+                          placeholder="Rejection reason"
                           value={invalidReasons[req.id] || ""}
                           onChange={(e) =>
                             handleInvalidReasonChange(req.id, e.target.value)
@@ -580,13 +546,11 @@ export default function PendingRequestsTab() {
                       </TableCell>
                       <TableCell className="text-right">
                         <Select
-                          onValueChange={(value) =>
-                            handleStatusUpdate(req.id, value)
-                          }
+                          onValueChange={(v) => handleStatusUpdate(req.id, v)}
                           disabled={updating[req.id]}
                         >
                           <SelectTrigger className="w-32 ml-auto">
-                            <SelectValue placeholder="Update status" />
+                            <SelectValue placeholder="Update" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="accepted">Accept</SelectItem>
@@ -603,38 +567,33 @@ export default function PendingRequestsTab() {
         </CardContent>
       </Card>
 
-      {/* Details Modal */}
       <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Gift Card Request Details</DialogTitle>
-            <DialogDescription>
-              Full details of the submitted request
-            </DialogDescription>
+            <DialogTitle>Request Details</DialogTitle>
+            <DialogDescription>Full submission info</DialogDescription>
           </DialogHeader>
 
           {selectedRequest && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="font-semibold">Gift Card Name</Label>
+                  <Label className="font-semibold">Gift Card</Label>
                   <p>{selectedRequest.giftCardName}</p>
                 </div>
                 <div>
-                  <Label className="font-semibold">Face Value (USD)</Label>
-                  <p>${selectedRequest.faceValue?.toFixed(2)}</p>
+                  <Label className="font-semibold">Face Value</Label>
+                  <p>
+                    {selectedRequest.faceValue} {selectedRequest.currency}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Payout (NGN)</Label>
                   <p>₦{selectedRequest.payoutNaira?.toLocaleString()}</p>
                 </div>
                 <div>
-                  <Label className="font-semibold">Exchange Rate</Label>
-                  <p>₦{selectedRequest.exchangeRate?.toFixed(2)}</p>
-                </div>
-                <div>
-                  <Label className="font-semibold">Rate Percentage</Label>
-                  <p>{selectedRequest.ratePercentage}%</p>
+                  <Label className="font-semibold">Rate (per unit)</Label>
+                  <p>₦{selectedRequest.ratePerUnit?.toLocaleString()}</p>
                 </div>
                 <div>
                   <Label className="font-semibold">Status</Label>
@@ -643,30 +602,24 @@ export default function PendingRequestsTab() {
                 <div>
                   <Label className="font-semibold">Card Code</Label>
                   <p className="font-mono text-sm bg-gray-100 p-2 rounded break-all">
-                    {selectedRequest.cardCode}
+                    {selectedRequest.cardCode || "—"}
                   </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Submitted At</Label>
                   <p>
-                    {new Date(
-                      selectedRequest.submittedAt || selectedRequest.createdAt
-                    ).toLocaleString()}
+                    {new Date(selectedRequest.submittedAt).toLocaleString()}
                   </p>
                 </div>
-                <div className="col-span-2">
+                <div>
                   <Label className="font-semibold">User ID</Label>
                   <p className="text-xs font-mono">{selectedRequest.userId}</p>
                 </div>
               </div>
 
-              {/* Card Images Section */}
               <div className="space-y-4">
                 <ImageGallery
-                  images={
-                    selectedRequest.imageUrls ||
-                    (selectedRequest.imageUrl ? [selectedRequest.imageUrl] : [])
-                  }
+                  images={selectedRequest.imageUrls || []}
                   title="Card Images"
                 />
               </div>

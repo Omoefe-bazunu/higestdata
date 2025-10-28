@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import {
   Card,
@@ -30,6 +32,29 @@ import { getAuth } from "firebase/auth";
 import { firestore } from "@/lib/firebaseConfig";
 import { Skeleton } from "@/components/ui/skeleton";
 
+const CURRENCIES = [
+  "USD",
+  "GBP",
+  "EUR",
+  "CAD",
+  "AUD",
+  "CHF",
+  "NZD",
+  "BRL",
+  "JPY",
+  "TWD",
+  "HKD",
+  "MXN",
+  "PLN",
+  "DKK",
+  "AED",
+  "SAR",
+  "NOK",
+  "SEK",
+  "ZAR",
+  "INR",
+];
+
 export default function GiftCardRatesTab() {
   const [rates, setRates] = useState([]);
   const [newCardName, setNewCardName] = useState("");
@@ -37,108 +62,102 @@ export default function GiftCardRatesTab() {
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
-  // Fetch gift card rates
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true);
-        const ratesSnapshot = await getDocs(
-          collection(firestore, "giftCardRates")
-        );
-        const ratesData = ratesSnapshot.docs.map((doc) => ({
+        const snapshot = await getDocs(collection(firestore, "giftCardRates"));
+        const data = snapshot.docs.map((doc) => ({
           id: doc.id,
-          ...doc.data(),
+          name: doc.data().name || doc.id,
+          currencies: doc.data().currencies || {},
+          min: doc.data().min || 10,
+          max: doc.data().max || 1000,
         }));
-        setRates(ratesData);
+        setRates(data);
       } catch (err) {
-        console.error("Error fetching data:", err);
         toast({
           title: "Error",
-          description: "Failed to load gift card rates.",
+          description: "Failed to load rates.",
           variant: "destructive",
         });
       } finally {
         setLoading(false);
       }
     }
-
     fetchData();
   }, [toast]);
 
-  // Update rate locally with validation
-  const handleRateChange = (id, newRate) => {
-    const parsedRate = parseInt(newRate);
-    if (isNaN(parsedRate) || parsedRate < 0) {
+  const updateCurrencyRate = (cardId, currency, value) => {
+    const num = parseFloat(value);
+    if (isNaN(num) || num < 0) {
       toast({
-        title: "Invalid Rate",
-        description: "Rate must be a non-negative number.",
+        title: "Invalid",
+        description: "Rate must be ≥ 0.",
         variant: "destructive",
       });
       return;
     }
     setRates((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, rate: parsedRate } : r))
+      prev.map((card) =>
+        card.id === cardId
+          ? {
+              ...card,
+              currencies: { ...card.currencies, [currency]: num },
+            }
+          : card
+      )
     );
   };
 
-  // Add a new card with duplicate ID check
-  const handleAddNewCard = () => {
+  const handleAddCard = () => {
     if (!newCardName.trim()) {
       toast({
-        title: "Invalid Input",
-        description: "Card name cannot be empty.",
+        title: "Error",
+        description: "Card name required.",
         variant: "destructive",
       });
       return;
     }
-    const newId = newCardName.toLowerCase().replace(/\s+/g, "-");
-    if (rates.some((r) => r.id === newId)) {
+    const id = newCardName.toLowerCase().replace(/\s+/g, "-");
+    if (rates.some((r) => r.id === id)) {
       toast({
-        title: "Duplicate Card",
-        description: "A card with this name already exists.",
+        title: "Duplicate",
+        description: "Card exists.",
         variant: "destructive",
       });
       return;
     }
-    const newCard = {
-      id: newId,
-      name: newCardName,
-      rate: 50,
-      min: 10,
-      max: 100,
-    };
-    setRates((prev) => [...prev, newCard]);
+    const currencies = {};
+    CURRENCIES.forEach((c) => (currencies[c] = 0));
+    setRates((prev) => [
+      ...prev,
+      { id, name: newCardName, currencies, min: 10, max: 1000 },
+    ]);
     setNewCardName("");
-    toast({
-      title: "Card Added",
-      description: `${newCardName} added locally. Save to confirm.`,
-    });
+    toast({ title: "Added", description: "Save to confirm." });
   };
 
-  // Remove card from Firestore and update local state
-  const handleRemoveCard = async (id) => {
+  const handleDelete = async (id) => {
     try {
       await deleteDoc(doc(firestore, "giftCardRates", id));
       setRates((prev) => prev.filter((r) => r.id !== id));
-      toast({ title: "Deleted", description: "Gift card removed." });
-    } catch (err) {
-      console.error("Error removing card:", err);
+      toast({ title: "Deleted" });
+    } catch {
       toast({
         title: "Error",
-        description: "Failed to remove gift card.",
+        description: "Delete failed.",
         variant: "destructive",
       });
     }
   };
 
-  // Save all changes to Firestore using batch
-  const handleSaveChanges = async () => {
-    const auth = getAuth();
-    const user = auth.currentUser;
+  const handleSave = async () => {
+    const user = getAuth().currentUser;
     if (!user) {
       toast({
-        title: "Authentication Error",
-        description: "You must be logged in to save changes.",
+        title: "Auth Error",
+        description: "Login required.",
         variant: "destructive",
       });
       return;
@@ -146,28 +165,21 @@ export default function GiftCardRatesTab() {
     try {
       setSaving(true);
       const batch = writeBatch(firestore);
-
-      // Save gift card rates
-      for (const card of rates) {
-        const docRef = doc(firestore, "giftCardRates", card.id);
-        batch.set(docRef, {
+      rates.forEach((card) => {
+        const ref = doc(firestore, "giftCardRates", card.id);
+        batch.set(ref, {
           name: card.name,
-          rate: card.rate,
+          currencies: card.currencies,
           min: card.min,
           max: card.max,
         });
-      }
-
-      await batch.commit();
-      toast({
-        title: "Changes Saved",
-        description: "Gift card rates updated.",
       });
-    } catch (err) {
-      console.error("Error saving changes:", err);
+      await batch.commit();
+      toast({ title: "Saved", description: "Rates updated." });
+    } catch {
       toast({
         title: "Error",
-        description: "Failed to save changes.",
+        description: "Save failed.",
         variant: "destructive",
       });
     } finally {
@@ -178,89 +190,74 @@ export default function GiftCardRatesTab() {
   return (
     <Card className="mt-4">
       <CardHeader>
-        <CardTitle>Gift Card Rate Settings</CardTitle>
+        <CardTitle>Gift Card Rates</CardTitle>
         <CardDescription>
-          Manage percentage rates for gift cards.
+          Set exchange rate per unit (NGN) for each currency.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Card Type</TableHead>
-                <TableHead className="w-48">Rate (%)</TableHead>
-                <TableHead className="w-32 text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading
-                ? Array.from({ length: 4 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell>
-                        <Skeleton className="h-6 w-32" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-6 w-20" />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Skeleton className="h-6 w-6 ml-auto" />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                : rates.map((card) => (
-                    <TableRow key={card.id}>
-                      <TableCell className="font-medium">{card.name}</TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={card.rate}
-                          onChange={(e) =>
-                            handleRateChange(card.id, e.target.value)
-                          }
-                          className="max-w-xs"
-                          min="0"
-                        />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveCard(card.id)}
-                          disabled={saving}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                          <span className="sr-only">Remove</span>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+        <div className="space-y-6">
+          {loading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-32 w-full" />
+              ))}
+            </div>
+          ) : (
+            rates.map((card) => (
+              <div key={card.id} className="border rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-lg">{card.name}</h3>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDelete(card.id)}
+                    disabled={saving}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                  {CURRENCIES.map((cur) => (
+                    <div key={cur} className="flex flex-col gap-1">
+                      <label className="text-xs font-medium">{cur}</label>
+                      <Input
+                        type="number"
+                        value={card.currencies[cur] || 0}
+                        onChange={(e) =>
+                          updateCurrencyRate(card.id, cur, e.target.value)
+                        }
+                        className="h-8 text-sm"
+                        min="0"
+                        step="0.01"
+                        disabled={saving}
+                      />
+                    </div>
                   ))}
-            </TableBody>
-          </Table>
+                </div>
+              </div>
+            ))
+          )}
 
           <div className="flex gap-2 pt-4 border-t">
             <Input
-              placeholder="New card name (e.g., eBay)"
+              placeholder="New card (e.g., Amazon)"
               value={newCardName}
               onChange={(e) => setNewCardName(e.target.value)}
               disabled={saving}
             />
-            <Button
-              variant="outline"
-              onClick={handleAddNewCard}
-              disabled={saving}
-            >
+            <Button variant="outline" onClick={handleAddCard} disabled={saving}>
               <PlusCircle className="mr-2 h-4 w-4" />
-              Add Card
+              Add
             </Button>
           </div>
-        </div>
 
-        <div className="mt-6 flex justify-end">
-          <Button onClick={handleSaveChanges} disabled={saving || loading}>
-            <Save className="mr-2 h-4 w-4" />
-            {saving ? "Saving..." : "Save All Changes"}
-          </Button>
+          <div className="flex justify-end">
+            <Button onClick={handleSave} disabled={saving || loading}>
+              <Save className="mr-2 h-4 w-4" />
+              {saving ? "Saving..." : "Save All"}
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -190,7 +190,8 @@
 //   return { success: data.code === "success", ...data };
 // }
 
-const PROXY_URL = process.env.PROXY_URL;
+const PROXY_URL =
+  process.env.PROXY_URL || "https://higestdata-proxy.onrender.com/";
 
 export async function getAccessToken() {
   const response = await fetch(`${PROXY_URL}/auth`, {
@@ -298,4 +299,3 @@ export async function buyTv({ customerId, provider, variationId, requestId }) {
   const data = await response.json();
   return { success: data.code === "success", ...data };
 }
-//

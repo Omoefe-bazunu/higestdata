@@ -215,7 +215,7 @@ export default function AdminPage() {
 
             {/* Desktop Tabs */}
             <div className="hidden md:block">
-              <TabsList className="flex flex-wrap justify-start gap-2 md:gap-4 p-1">
+              <TabsList className="flex flex-wrap justify-start h-fit gap-2 md:gap-4 p-1">
                 <TabsTrigger value="transactions">All Transactions</TabsTrigger>
                 {/* <TabsTrigger value="crypto">Crypto Rates</TabsTrigger> */}
                 <TabsTrigger value="gift-cards">Gift Card Rates</TabsTrigger>

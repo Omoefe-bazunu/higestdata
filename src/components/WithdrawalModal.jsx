@@ -53,6 +53,8 @@ export default function WithdrawalModal({ open, onOpenChange }) {
   const [recipientCode, setRecipientCode] = useState("");
 
   const WITHDRAWAL_FEE = 50;
+  const MIN_WITHDRAWAL = 100;
+  const MAX_WITHDRAWAL = 5000000;
 
   // Fetch wallet balance
   useEffect(() => {
@@ -80,15 +82,6 @@ export default function WithdrawalModal({ open, onOpenChange }) {
       const response = await fetch("/api/withdrawal/banks");
       const data = await response.json();
       if (data.banks) {
-        console.log("Banks data:", data.banks); // Debug log
-        // Check for duplicate codes
-        const codes = data.banks.map((bank) => bank.code);
-        const duplicates = codes.filter(
-          (code, index) => codes.indexOf(code) !== index
-        );
-        if (duplicates.length > 0) {
-          console.warn("Duplicate bank codes found:", duplicates);
-        }
         setBanks(data.banks);
       }
     } catch (error) {
@@ -116,13 +109,11 @@ export default function WithdrawalModal({ open, onOpenChange }) {
       const otp = generateOTP();
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-      // Store OTP in Firestore
       await updateDoc(userRef, {
         verificationToken: otp,
         verificationTokenExpiry: expiresAt.toISOString(),
       });
 
-      // Send OTP via email
       await fetch("/api/withdrawal/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -221,8 +212,15 @@ export default function WithdrawalModal({ open, onOpenChange }) {
   const handleProceedToPreview = async () => {
     const withdrawalAmount = parseFloat(amount);
 
-    if (!withdrawalAmount || withdrawalAmount < 100) {
-      toast.error("Minimum withdrawal is ₦100");
+    if (!withdrawalAmount || withdrawalAmount < MIN_WITHDRAWAL) {
+      toast.error(`Minimum withdrawal is ₦${MIN_WITHDRAWAL}`);
+      return;
+    }
+
+    if (withdrawalAmount > MAX_WITHDRAWAL) {
+      toast.error(
+        `Maximum withdrawal per transaction is ₦${MAX_WITHDRAWAL.toLocaleString()}`
+      );
       return;
     }
 
@@ -242,7 +240,7 @@ export default function WithdrawalModal({ open, onOpenChange }) {
     try {
       const response = await fetch("/api/withdrawal/create-recipient", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/authentication" },
         body: JSON.stringify({
           accountName,
           accountNumber,
@@ -277,7 +275,6 @@ export default function WithdrawalModal({ open, onOpenChange }) {
       const bankName =
         banks.find((b) => b.code === selectedBank)?.name || "Bank";
 
-      // Initiate Paystack transfer
       const response = await fetch("/api/withdrawal/initiate-transfer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -294,7 +291,6 @@ export default function WithdrawalModal({ open, onOpenChange }) {
         throw new Error(data.error || "Failed to process withdrawal");
       }
 
-      // Update Firestore: deduct balance and create transaction
       await updateDoc(userRef, {
         walletBalance: walletBalance - totalAmount,
       });
@@ -453,7 +449,8 @@ export default function WithdrawalModal({ open, onOpenChange }) {
                 disabled={loading}
               />
               <p className="text-xs text-muted-foreground">
-                Minimum: ₦100 | Fee: ₦{WITHDRAWAL_FEE}
+                Min: ₦{MIN_WITHDRAWAL} | Max: ₦{MAX_WITHDRAWAL.toLocaleString()}{" "}
+                | Fee: ₦{WITHDRAWAL_FEE}
               </p>
               {amount && (
                 <p className="text-sm font-medium">
