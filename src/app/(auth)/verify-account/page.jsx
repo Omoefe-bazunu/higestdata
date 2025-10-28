@@ -1,18 +1,8 @@
-// app/verify-account/page.tsx
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
-import { firestore } from "@/lib/firebaseConfig";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  updateDoc,
-  doc,
-} from "firebase/firestore";
 import {
   Card,
   CardContent,
@@ -35,59 +25,29 @@ export default function VerifyAccountPage() {
     setLoading(true);
 
     try {
-      const normalizedEmail = email.trim().toLowerCase();
-      const trimmedCode = code.trim();
-
-      const usersRef = collection(firestore, "users");
-      const q = query(
-        usersRef,
-        where("email", "==", normalizedEmail),
-        where("verificationToken", "==", trimmedCode)
-      );
-      const snapshot = await getDocs(q);
-
-      if (snapshot.empty) {
-        toast({
-          variant: "destructive",
-          title: "Invalid",
-          description: "Wrong email or code.",
-        });
-        setLoading(false);
-        return;
-      }
-
-      const userDoc = snapshot.docs[0];
-      const userData = userDoc.data();
-      const tokenDate =
-        userData.tokenCreatedAt?.toDate?.() ||
-        new Date(userData.tokenCreatedAt);
-
-      if (Date.now() - tokenDate.getTime() > 1000 * 60 * 30) {
-        toast({
-          variant: "destructive",
-          title: "Expired",
-          description: "Code expired. Resend new one.",
-        });
-        setLoading(false);
-        return;
-      }
-
-      await updateDoc(doc(firestore, "users", userDoc.id), {
-        isVerified: true,
-        verificationToken: null,
-        tokenCreatedAt: null,
+      const res = await fetch("/api/email-verification/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, token: code }),
       });
 
-      toast({
-        title: "Success",
-        description: "Email verified! Redirecting...",
-      });
-      setTimeout(() => router.push("/login"), 1000);
-    } catch (error) {
+      const data = await res.json();
+
+      if (res.ok) {
+        toast({ title: "Success", description: "Email verified!" });
+        setTimeout(() => router.push("/login"), 1000);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Failed",
+          description: data.message,
+        });
+      }
+    } catch {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Try again.",
+        description: "Network error",
       });
     } finally {
       setLoading(false);
@@ -95,8 +55,7 @@ export default function VerifyAccountPage() {
   };
 
   const handleResendCode = async () => {
-    if (!email)
-      return toast({ variant: "destructive", title: "Enter email first" });
+    if (!email) return toast({ variant: "destructive", title: "Enter email" });
 
     setLoading(true);
     try {
