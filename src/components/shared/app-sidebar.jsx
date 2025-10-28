@@ -17,11 +17,13 @@ import {
   UtilityPole,
   School,
   Shield,
+  Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import { useAuth } from "@/contexts/AuthContext";
+import { IoPersonCircle } from "react-icons/io5";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
@@ -45,6 +47,12 @@ const navItems = [
     href: "/dashboard/kyc",
     label: "KYC status",
     icon: Shield,
+  },
+
+  {
+    href: "/dashboard/profile",
+    label: "Your Profile",
+    icon: IoPersonCircle,
   },
 ];
 

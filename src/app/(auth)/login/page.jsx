@@ -83,7 +83,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-gray-100 mt-12">
+    <div className="relative min-h-screen flex items-center justify-center mt-12">
       {/* Background Image */}
       <Image
         src="https://images.unsplash.com/photo-1556742400-b5f0e1a6bfcf?ixlib=rb-4.0.3&auto=format&fit=crop&w=1950&q=80"
@@ -148,7 +148,7 @@ export default function LoginPage() {
             <Button
               type="button"
               variant="outline"
-              className="w-full flex items-center justify-center gap-2"
+              className="w-full hidden items-center justify-center gap-2"
               onClick={handleGoogleLogin}
               disabled={loading}
             >

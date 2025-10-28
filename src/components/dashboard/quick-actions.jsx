@@ -32,19 +32,19 @@ const actions = [
   // },
   {
     href: "/dashboard/betting",
-    label: "Fund Betting A/C",
+    label: "Fund Betting",
     icon: CreditCard,
     variant: "secondary",
   },
   {
     href: "/dashboard/cable-tv",
-    label: "Renew your Cable Tv",
+    label: "Cable Tv",
     icon: Tv,
     variant: "outline",
   },
   {
     href: "/dashboard/electricity-bill",
-    label: " Electricity Recharge",
+    label: " Electricity Bill",
     icon: UtilityPole,
     variant: "outline",
   },

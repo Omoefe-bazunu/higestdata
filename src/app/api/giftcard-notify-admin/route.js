@@ -77,9 +77,7 @@ export async function POST(request) {
         <p><strong>Order Details:</strong></p>
         <ul>
           <li><strong>Gift Card Name:</strong> ${giftCardName}</li>
-          <li><strong>Face Value:</strong> ${faceValue.toFixed(
-            2
-          )} ${currency}</li>
+          <li><strong>Amount:</strong> ${faceValue.toFixed(2)} ${currency}</li>
           <li><strong>Rate:</strong> ₦${ratePerUnit.toLocaleString()} per ${currency}</li>
           <li><strong>Expected Payout (NGN):</strong> ₦${payoutNaira.toLocaleString()}</li>
           ${
