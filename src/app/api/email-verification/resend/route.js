@@ -19,7 +19,6 @@ export async function POST(request) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Find user in Firestore
     const usersRef = collection(firestore, "users");
     const q = query(usersRef, where("email", "==", normalizedEmail));
     const querySnapshot = await getDocs(q);
@@ -34,7 +33,6 @@ export async function POST(request) {
     const userDoc = querySnapshot.docs[0];
     const userData = userDoc.data();
 
-    // Check if already verified
     if (userData.isVerified) {
       return NextResponse.json(
         { error: "This account is already verified" },
@@ -42,38 +40,31 @@ export async function POST(request) {
       );
     }
 
-    // Generate new verification code
     const newVerificationCode = Math.floor(
       100000 + Math.random() * 900000
     ).toString();
 
-    // Update user document with new code
     await updateDoc(userDoc.ref, {
       verificationToken: newVerificationCode,
       tokenCreatedAt: new Date(),
     });
 
-    // Send new verification email
-    const emailResponse = await fetch(
-      `${
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-      }/api/email-verification/send`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: normalizedEmail,
-          firstName: userData.name?.split(" ")[0] || "User",
-          verificationCode: newVerificationCode,
-        }),
-      }
-    );
+    // Use relative URL
+    const emailResponse = await fetch("/api/email-verification/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: normalizedEmail,
+        firstName: userData.name?.split(" ")[0] || "User",
+        verificationCode: newVerificationCode,
+      }),
+    });
 
     if (!emailResponse.ok) {
       throw new Error("Failed to send verification email");
     }
 
-    console.log("✅ Verification code resent to:", normalizedEmail);
+    console.log("Verification code resent to:", normalizedEmail);
 
     return NextResponse.json(
       {

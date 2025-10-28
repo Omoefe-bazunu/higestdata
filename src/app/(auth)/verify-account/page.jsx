@@ -1,7 +1,9 @@
+// app/verify-account/page.tsx (updated)
+
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
 import {
   Card,
@@ -19,15 +21,6 @@ export default function VerifyAccountPage() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const searchParams = useSearchParams();
-
-  // Pre-fill email from URL parameter
-  useEffect(() => {
-    const emailParam = searchParams.get("email");
-    if (emailParam) {
-      setEmail(decodeURIComponent(emailParam));
-    }
-  }, [searchParams]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,23 +37,21 @@ export default function VerifyAccountPage() {
 
       if (res.ok) {
         toast({
-          title: "✅ Verification Successful",
+          title: "Verification Successful",
           description: "Your email has been verified. You can now log in.",
         });
 
-        // Redirect to login after 1 second
         setTimeout(() => {
           router.push("/login");
         }, 1000);
       } else {
         toast({
           variant: "destructive",
-          title: "❌ Verification Failed",
+          title: "Verification Failed",
           description: data.message || "Invalid code or email.",
         });
       }
     } catch (error) {
-      console.error("Verification error:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -94,21 +85,21 @@ export default function VerifyAccountPage() {
 
       if (res.ok) {
         toast({
-          title: "✅ Code Resent",
+          title: "Code Resent",
           description: "A new verification code has been sent to your email.",
         });
       } else {
         toast({
           variant: "destructive",
           title: "Error",
-          description: data.error || "Failed to resend code. Please try again.",
+          description: data.error || "Failed to resend code.",
         });
       }
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to resend code. Please try again.",
+        description: "Failed to resend code.",
       });
     } finally {
       setLoading(false);
@@ -139,14 +130,8 @@ export default function VerifyAccountPage() {
                 placeholder="your.email@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={!!searchParams.get("email")} // Disable if pre-filled
                 className="w-full"
               />
-              {searchParams.get("email") && (
-                <p className="text-xs text-muted-foreground">
-                  This is the email you used to sign up
-                </p>
-              )}
             </div>
 
             <div className="space-y-2">

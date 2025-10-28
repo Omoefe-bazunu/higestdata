@@ -42,14 +42,11 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      // 1️⃣ Create user with Firebase Auth
       const userCredential = await signup(email, password);
       const user = userCredential.user;
 
-      // 2️⃣ Generate verification token
       const verificationCode = generateVerificationCode();
 
-      // 3️⃣ Create Firestore doc with verification data
       await setDoc(doc(firestore, "users", user.uid), {
         name: fullName,
         email: user.email.toLowerCase(),
@@ -61,26 +58,22 @@ export default function SignupPage() {
         createdAt: new Date().toISOString(),
       });
 
-      // 4️⃣ Send verification email
       const emailResponse = await fetch("/api/email-verification/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: user.email,
-          firstName: fullName.split(" ")[0], // Get first name
-          verificationCode: verificationCode,
+          firstName: fullName.split(" ")[0],
+          verificationCode,
         }),
       });
 
-      if (!emailResponse.ok) {
+      if (!emailResponse.ok)
         throw new Error("Failed to send verification email");
-      }
 
-      // 5️⃣ Log user out immediately
       await logout();
 
-      // 6️⃣ Redirect to verification page with email
-      router.push(`/verify-account?email=${encodeURIComponent(user.email)}`);
+      router.push("/verify-account"); // No email in URL
     } catch (err) {
       console.error("Signup error:", err);
       setMessage(`❌ ${err.message}`);
@@ -97,7 +90,6 @@ export default function SignupPage() {
       const userCredential = await loginWithGoogle();
       const user = userCredential.user;
 
-      // Generate verification code for Google users too
       const verificationCode = generateVerificationCode();
 
       await setDoc(
@@ -115,26 +107,22 @@ export default function SignupPage() {
         { merge: true }
       );
 
-      // Send verification email
       const emailResponse = await fetch("/api/email-verification/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: user.email,
           firstName: user.displayName?.split(" ")[0] || "User",
-          verificationCode: verificationCode,
+          verificationCode,
         }),
       });
 
-      if (!emailResponse.ok) {
+      if (!emailResponse.ok)
         throw new Error("Failed to send verification email");
-      }
 
-      // Log user out
       await logout();
 
-      // Redirect to verification page
-      router.push(`/verify-account?email=${encodeURIComponent(user.email)}`);
+      router.push("/verify-account"); // No email in URL
     } catch (err) {
       console.error("Google signup error:", err);
       setMessage(`❌ ${err.message}`);
