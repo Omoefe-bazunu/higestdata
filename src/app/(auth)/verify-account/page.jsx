@@ -1,10 +1,18 @@
-// app/verify-account/page.tsx (updated)
-
+// app/verify-account/page.tsx
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
+import { firestore } from "@/lib/firebaseConfig";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  updateDoc,
+  doc,
+} from "firebase/firestore";
 import {
   Card,
   CardContent,
@@ -27,35 +35,59 @@ export default function VerifyAccountPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/email-verification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, token: code }),
-      });
+      const normalizedEmail = email.trim().toLowerCase();
+      const trimmedCode = code.trim();
 
-      const data = await res.json();
+      const usersRef = collection(firestore, "users");
+      const q = query(
+        usersRef,
+        where("email", "==", normalizedEmail),
+        where("verificationToken", "==", trimmedCode)
+      );
+      const snapshot = await getDocs(q);
 
-      if (res.ok) {
-        toast({
-          title: "Verification Successful",
-          description: "Your email has been verified. You can now log in.",
-        });
-
-        setTimeout(() => {
-          router.push("/login");
-        }, 1000);
-      } else {
+      if (snapshot.empty) {
         toast({
           variant: "destructive",
-          title: "Verification Failed",
-          description: data.message || "Invalid code or email.",
+          title: "Invalid",
+          description: "Wrong email or code.",
         });
+        setLoading(false);
+        return;
       }
+
+      const userDoc = snapshot.docs[0];
+      const userData = userDoc.data();
+      const tokenDate =
+        userData.tokenCreatedAt?.toDate?.() ||
+        new Date(userData.tokenCreatedAt);
+
+      if (Date.now() - tokenDate.getTime() > 1000 * 60 * 30) {
+        toast({
+          variant: "destructive",
+          title: "Expired",
+          description: "Code expired. Resend new one.",
+        });
+        setLoading(false);
+        return;
+      }
+
+      await updateDoc(doc(firestore, "users", userDoc.id), {
+        isVerified: true,
+        verificationToken: null,
+        tokenCreatedAt: null,
+      });
+
+      toast({
+        title: "Success",
+        description: "Email verified! Redirecting...",
+      });
+      setTimeout(() => router.push("/login"), 1000);
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "An error occurred. Please try again.",
+        description: "Try again.",
       });
     } finally {
       setLoading(false);
@@ -63,44 +95,26 @@ export default function VerifyAccountPage() {
   };
 
   const handleResendCode = async () => {
-    if (!email) {
-      toast({
-        variant: "destructive",
-        title: "Email Required",
-        description: "Please enter your email address first.",
-      });
-      return;
-    }
+    if (!email)
+      return toast({ variant: "destructive", title: "Enter email first" });
 
     setLoading(true);
-
     try {
       const res = await fetch("/api/email-verification/resend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-
       const data = await res.json();
-
-      if (res.ok) {
-        toast({
-          title: "Code Resent",
-          description: "A new verification code has been sent to your email.",
-        });
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: data.error || "Failed to resend code.",
-        });
-      }
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to resend code.",
-      });
+      res.ok
+        ? toast({ title: "Code resent" })
+        : toast({
+            variant: "destructive",
+            title: "Failed",
+            description: data.error,
+          });
+    } catch {
+      toast({ variant: "destructive", title: "Network error" });
     } finally {
       setLoading(false);
     }
@@ -113,31 +127,23 @@ export default function VerifyAccountPage() {
           <CardTitle className="text-2xl font-semibold">
             Verify Your Email
           </CardTitle>
-          <CardDescription>
-            We've sent a 6-digit code to your email address. Please enter it
-            below to verify your account.
-          </CardDescription>
+          <CardDescription>Enter your email and 6-digit code</CardDescription>
         </CardHeader>
-
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
+              <Label>Email</Label>
               <Input
-                id="email"
                 type="email"
                 required
-                placeholder="your.email@example.com"
+                placeholder="your@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full"
               />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="code">Verification Code</Label>
+              <Label>Code</Label>
               <Input
-                id="code"
                 type="text"
                 required
                 placeholder="123456"
@@ -146,40 +152,26 @@ export default function VerifyAccountPage() {
                   setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
                 }
                 maxLength={6}
-                className="w-full text-center text-2xl font-mono tracking-widest"
+                className="text-center text-2xl font-mono tracking-widest"
               />
-              <p className="text-xs text-muted-foreground">
-                Enter the 6-digit code sent to your email
-              </p>
             </div>
-
             <Button
               type="submit"
               disabled={loading || code.length !== 6}
               className="w-full"
             >
-              {loading ? "Verifying..." : "Verify Account"}
+              {loading ? "Verifying..." : "Verify"}
             </Button>
-
             <div className="text-center">
               <button
                 type="button"
                 onClick={handleResendCode}
                 className="text-sm text-primary hover:underline"
               >
-                Didn't receive a code? Resend
+                Resend code
               </button>
             </div>
           </form>
-
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>
-              Code expires in 30 minutes. If you need help,{" "}
-              <a href="/contact" className="text-primary hover:underline">
-                contact support
-              </a>
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>
