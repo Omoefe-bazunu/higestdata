@@ -6,6 +6,7 @@ import { firestore, storage } from "@/lib/firebaseConfig";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox"; // Added Checkbox import
 import {
   Select,
   SelectContent,
@@ -30,6 +31,8 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const [manualProcessingAccepted, setManualProcessingAccepted] =
+    useState(false); // Added state for checkbox
   const formRef = useRef(null);
   const fileInputRef = useRef(null);
   const { toast } = useToast();
@@ -41,6 +44,7 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
   const [isValid, setIsValid] = useState(false);
 
   const MAX_IMAGES = 10;
+  const MANUAL_PROCESSING_THRESHOLD = 5000000; // 5 million Naira
 
   // Check authentication status
   useEffect(() => {
@@ -66,9 +70,16 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
       selectedCard &&
       faceValue &&
       parseFloat(faceValue) > 0 &&
-      cardImages.length > 0;
+      cardImages.length > 0 &&
+      (payoutNaira <= MANUAL_PROCESSING_THRESHOLD || manualProcessingAccepted); // Added checkbox validation
     setIsValid(valid);
-  }, [selectedCard, faceValue, cardImages]);
+  }, [
+    selectedCard,
+    faceValue,
+    cardImages,
+    payoutNaira,
+    manualProcessingAccepted,
+  ]);
 
   // Handle multiple image selection
   const handleImageChange = (event) => {
@@ -156,6 +167,7 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
         setCardCode("");
         setCardImages([]);
         setImagePreviews([]);
+        setManualProcessingAccepted(false); // Reset checkbox
         formRef.current?.reset();
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
@@ -249,7 +261,7 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
       toast({
         title: "Invalid Input",
         description:
-          "Please fill all required fields correctly and upload at least one card image.",
+          "Please fill all required fields correctly, upload at least one card image, and accept manual processing if applicable.",
         variant: "destructive",
       });
       return;
@@ -264,6 +276,13 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
         errors.cardValue = ["Valid card value in USD is required"];
       if (cardImages.length === 0)
         errors.cardImages = ["At least one card image is required"];
+      if (
+        payoutNaira > MANUAL_PROCESSING_THRESHOLD &&
+        !manualProcessingAccepted
+      )
+        errors.manualProcessing = [
+          "You must accept manual processing for transactions above ₦5,000,000",
+        ];
 
       if (Object.keys(errors).length > 0) {
         setFormState({ message: "Validation failed.", errors });
@@ -289,9 +308,12 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
         giftCardId: selectedCard,
         giftCardName: selectedCardData.name,
         faceValue: parseFloat(faceValue),
-        cardCode: cardCode || null, // Card code is optional
+        cardCode: cardCode || null,
         payoutNaira,
-        status: "pending",
+        status:
+          payoutNaira > MANUAL_PROCESSING_THRESHOLD
+            ? "pending_manual"
+            : "pending", // Updated status
         submittedAt: new Date().toISOString(),
         imageUrls: [],
         imageCount: cardImages.length,
@@ -454,6 +476,32 @@ export default function FraudCheckForm({ giftCards, exchangeRate }) {
             of ${faceValue} at {rate}% rate)
           </p>
         </div>
+      )}
+
+      {payoutNaira > MANUAL_PROCESSING_THRESHOLD && (
+        <Alert variant="warning">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Manual Processing Required</AlertTitle>
+          <AlertDescription>
+            Transactions above ₦5,000,000 will be processed manually.
+            <div className="flex items-center space-x-2 mt-2">
+              <Checkbox
+                id="manualProcessing"
+                checked={manualProcessingAccepted}
+                onCheckedChange={setManualProcessingAccepted}
+                disabled={!isAuthenticated}
+              />
+              <Label htmlFor="manualProcessing">
+                I understand and accept manual processing
+              </Label>
+            </div>
+            {formState.errors?.manualProcessing && (
+              <p className="text-sm text-destructive mt-2">
+                {formState.errors.manualProcessing[0]}
+              </p>
+            )}
+          </AlertDescription>
+        </Alert>
       )}
 
       <div className="space-y-2">

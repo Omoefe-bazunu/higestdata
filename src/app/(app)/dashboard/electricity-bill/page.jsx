@@ -1,5 +1,5 @@
 import ElectricityPage from "@/components/ElectricityForm";
 
-export default function Betting() {
+export default function Electricity() {
   return <ElectricityPage />;
 }

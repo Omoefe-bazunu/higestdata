@@ -53,12 +53,9 @@ export default function Footer() {
         </div>
 
         {/* Services */}
-        <div>
+        {/* <div>
           <h3 className="text-lg font-semibold mb-4">Services</h3>
           <ul className="space-y-2">
-            {/* <li className="text-gray-300 hover:text-orange-400 transition cursor-pointer">
-              <Link href="/dashboard/crypto">Crypto Trading</Link>
-            </li> */}
             <li className="text-gray-300 hover:text-orange-400 transition cursor-pointer">
               <Link href="/dashboard/gift-cards">Gift Card Exchange</Link>
             </li>
@@ -66,10 +63,19 @@ export default function Footer() {
               <Link href="/dashboard/buy-airtime">Airtime & Data</Link>
             </li>
             <li className="text-gray-300 hover:text-orange-400 transition cursor-pointer">
-              <Link href="/dashboard/buy-airtime">Betting Wallet Funding</Link>
+              <Link href="/dashboard/cable-tv">Cable Tv</Link>
+            </li>
+            <li className="text-gray-300 hover:text-orange-400 transition cursor-pointer">
+              <Link href="/dashboard/electricity-bill">Electricity Bill</Link>
+            </li>
+            <li className="text-gray-300 hover:text-orange-400 transition cursor-pointer">
+              <Link href="/dashboard/exam-cards">Exam Cards</Link>
+            </li>
+            <li className="text-gray-300 hover:text-orange-400 transition cursor-pointer">
+              <Link href="/dashboard/betting">Betting Wallet Funding</Link>
             </li>
           </ul>
-        </div>
+        </div> */}
 
         {/* Contact Info */}
         <div>
