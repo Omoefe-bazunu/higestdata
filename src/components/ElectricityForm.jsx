@@ -116,14 +116,13 @@ function ElectricityForm({ user, router }) {
     if (!provider || !meterNumber || !meterType) return;
     setIsVerifying(true);
     try {
-      const response = await fetch("/api/electricity/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          service_id: provider,
-          customer_id: meterNumber,
-          variation_id: meterType,
-        }),
+      const params = new URLSearchParams({
+        service_id: provider,
+        customer_id: meterNumber,
+        variation_id: meterType,
+      });
+      const response = await fetch(`/api/electricity/verify?${params}`, {
+        method: "GET",
       });
       const result = await response.json();
       if (result.success && result.data) {
@@ -131,32 +130,22 @@ function ElectricityForm({ user, router }) {
         setCustomerDetails(result.data);
         toast({
           title: "Meter Verified",
-          description: (
-            <div>
-              <p>
-                <strong>Name:</strong> {result.data.customer_name}
-              </p>
-              <p>
-                <strong>Address:</strong> {result.data.customer_address}
-              </p>
-            </div>
-          ),
+          description: `Name: ${result.data.customer_name}`,
         });
       } else {
         setMeterVerified(false);
         setCustomerDetails(null);
         toast({
           title: "Verification Failed",
-          description: result.message || "Invalid meter number or type.",
+          description: result.message,
           variant: "destructive",
         });
       }
     } catch (error) {
       setMeterVerified(false);
-      setCustomerDetails(null);
       toast({
         title: "Verification Error",
-        description: "Unable to verify meter number. Please try again.",
+        description: "Try again.",
         variant: "destructive",
       });
     } finally {
@@ -276,7 +265,7 @@ function ElectricityForm({ user, router }) {
       };
 
       const response = await fetch("/api/electricity/purchase", {
-        method: "GET",
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${await currentUser.getIdToken(true)}`,
