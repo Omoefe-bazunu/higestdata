@@ -288,7 +288,13 @@ export default function WithdrawalModal({ open, onOpenChange }) {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to process withdrawal");
+        const errorMsg = data.error || "Failed to process withdrawal";
+        toast.error(`Withdrawal failed: ${errorMsg}`, {
+          description:
+            "Please check your details or try again later. If the issue persists, contact support.",
+          duration: 7000,
+        });
+        throw new Error(errorMsg);
       }
 
       await updateDoc(userRef, {
@@ -316,14 +322,22 @@ export default function WithdrawalModal({ open, onOpenChange }) {
         },
       });
 
-      toast.success(
-        "Withdrawal initiated successfully! Pending Admin approval within 15mins"
-      );
+      toast.success("Withdrawal initiated successfully!", {
+        description: "Pending Admin approval within 15 minutes.",
+        duration: 6000,
+      });
+
       resetModal();
       onOpenChange(false);
     } catch (error) {
-      console.error("Withdrawal error:", error);
-      toast.error(error.message);
+      const errMsg =
+        error?.message ||
+        "An unexpected error occurred while processing your withdrawal.";
+
+      toast.error("Error processing withdrawal", {
+        description: errMsg,
+        duration: 7000,
+      });
     } finally {
       setLoading(false);
     }
