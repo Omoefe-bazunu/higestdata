@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 export default function Hero() {
   return (
@@ -40,16 +41,18 @@ export default function Hero() {
           </motion.p>
 
           {/* Button */}
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.6 }}
-            className="px-5 py-2 mx-auto bg-orange-500 hover:bg-orange-600 text-white text-lg font-medium rounded-full shadow-md transition"
-          >
-            Get Started
-          </motion.button>
+          <Link href="/dashboard" className="mx-auto text-center">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.6 }}
+              className="px-5 py-2 mx-auto bg-orange-500 hover:bg-orange-600 text-white text-lg font-medium rounded-full shadow-md transition"
+            >
+              Get Started
+            </motion.button>
+          </Link>
         </div>
       </div>
     </section>
