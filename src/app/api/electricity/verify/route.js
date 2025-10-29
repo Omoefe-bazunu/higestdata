@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { verifyCustomer } from "@/lib/ebills";
 
-export async function POST(request) {
+export async function GET(request) {
   try {
-    const body = await request.json();
-    const { service_id, customer_id, variation_id } = body;
+    const { searchParams } = new URL(request.url);
+    const service_id = searchParams.get("service_id");
+    const customer_id = searchParams.get("customer_id");
+    const variation_id = searchParams.get("variation_id");
 
     if (!service_id || !customer_id || !variation_id) {
       return NextResponse.json(

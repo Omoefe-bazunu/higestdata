@@ -300,15 +300,43 @@ export async function buyTv({ customerId, provider, variationId, requestId }) {
 }
 
 // NEW: Verify customer through proxy
+// export async function verifyCustomer(
+//   serviceId,
+//   customerId,
+//   variationId = null
+// ) {
+//   let url = `${PROXY_URL}/verify-customer?service_id=${serviceId}&customer_id=${customerId}`;
+//   if (variationId) url += `&variation_id=${variationId}`;
+
+//   const response = await fetch(url);
+
+//   if (!response.ok) {
+//     const error = await response.json();
+//     throw new Error(
+//       `Customer verification failed: ${response.status} - ${
+//         error.message || "Unknown error"
+//       }`
+//     );
+//   }
+
+//   const data = await response.json();
+//   return data.code === "success" ? data.data : null;
+// }
+
 export async function verifyCustomer(
   serviceId,
   customerId,
   variationId = null
 ) {
-  let url = `${PROXY_URL}/verify-customer?service_id=${serviceId}&customer_id=${customerId}`;
-  if (variationId) url += `&variation_id=${variationId}`;
-
-  const response = await fetch(url);
+  const response = await fetch(`${PROXY_URL}/verify-customer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      service_id: serviceId,
+      customer_id: customerId,
+      ...(variationId && { variation_id: variationId }),
+    }),
+  });
 
   if (!response.ok) {
     const error = await response.json();

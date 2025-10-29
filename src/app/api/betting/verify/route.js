@@ -31,7 +31,7 @@ export async function GET(request) {
       { status: 400 }
     );
   } catch (error) {
-    console.error("Customer verification error:", error);
+    console.error("Betting customer verification error:", error);
     return NextResponse.json(
       {
         success: false,
