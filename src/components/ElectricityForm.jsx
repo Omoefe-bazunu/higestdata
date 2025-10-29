@@ -276,7 +276,7 @@ function ElectricityForm({ user, router }) {
       };
 
       const response = await fetch("/api/electricity/purchase", {
-        method: "POST",
+        method: "GET",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${await currentUser.getIdToken(true)}`,
