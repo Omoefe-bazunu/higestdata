@@ -34,13 +34,13 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 
-// eBills rates configuration (no SME plans, no TV discounts/service fees)
+// eBills rates configuration
 const EBILLS_RATES = {
   airtime: {
-    mtn: { name: "MTN VTU Airtime", discount: 2.5 },
-    glo: { name: "Glo VTU Airtime", discount: 3.0 },
-    airtel: { name: "Airtel VTU Airtime", discount: 3.0 },
-    "9mobile": { name: "9mobile VTU Airtime", discount: 3.0 },
+    mtn: { name: "MTN VTU Airtime" },
+    glo: { name: "Glo VTU Airtime" },
+    airtel: { name: "Airtel VTU Airtime" },
+    "9mobile": { name: "9mobile VTU Airtime" },
   },
   data: {
     mtn: { name: "MTN Data" },
@@ -81,14 +81,13 @@ export default function AdminRatesDashboard() {
       if (airtimeDoc.exists()) {
         setAirtimeRates(airtimeDoc.data().rates || {});
       } else {
+        // Default airtime rates with 2% profit margin
         const defaultAirtimeRates = Object.keys(EBILLS_RATES.airtime).reduce(
           (acc, network) => ({
             ...acc,
             [network]: {
               name: EBILLS_RATES.airtime[network].name,
-              basePrice: 100,
-              profit: 2,
-              finalPrice: 102,
+              discountPercentage: 2,
             },
           }),
           {}
@@ -155,28 +154,24 @@ export default function AdminRatesDashboard() {
 
       const token = await user.getIdToken();
 
-      // For airtime, use static rates from EBILLS_RATES
+      // For airtime, just set default percentage rates
       if (serviceType === "airtime") {
-        const ratesConfig = EBILLS_RATES.airtime;
-        const newRates = Object.keys(ratesConfig).reduce((acc, provider) => {
-          const discount = ratesConfig[provider].discount / 100;
-          const basePrice = 100; // Base price per ₦100
-          const discountedPrice = basePrice * (1 - discount);
-          const profit = basePrice * 0.02; // Default 2% profit margin
-          return {
-            ...acc,
-            [provider]: {
-              name: ratesConfig[provider].name,
-              basePrice: discountedPrice,
-              profit,
-              finalPrice: discountedPrice + profit,
-            },
-          };
-        }, {});
+        const newRates = Object.keys(EBILLS_RATES.airtime).reduce(
+          (acc, provider) => {
+            return {
+              ...acc,
+              [provider]: {
+                name: EBILLS_RATES.airtime[provider].name,
+                discountPercentage: 2, // Default 2% discount
+              },
+            };
+          },
+          {}
+        );
         setAirtimeRates(newRates);
         toast({
           title: "Success",
-          description: "Airtime rates fetched from eBills",
+          description: "Airtime rates initialized with 2% discount",
         });
         return;
       }
@@ -261,18 +256,12 @@ export default function AdminRatesDashboard() {
     }
   };
 
-  const updateAirtimeRate = (network, field, value) => {
+  const updateAirtimeRate = (network, value) => {
     setAirtimeRates((prev) => ({
       ...prev,
       [network]: {
         ...prev[network],
-        [field]: field === "name" ? value : parseFloat(value) || 0,
-        finalPrice:
-          field === "basePrice"
-            ? (parseFloat(value) || 0) + (prev[network]?.profit || 0)
-            : field === "profit"
-            ? (prev[network]?.basePrice || 0) + (parseFloat(value) || 0)
-            : prev[network]?.finalPrice || 0,
+        discountPercentage: parseFloat(value) || 0,
       },
     }));
   };
@@ -470,7 +459,8 @@ export default function AdminRatesDashboard() {
                 <div>
                   <CardTitle>Airtime Rates</CardTitle>
                   <CardDescription>
-                    Set airtime prices and profit margins
+                    Set discount percentage for each network. Users pay less
+                    than the airtime value they receive.
                   </CardDescription>
                 </div>
                 <Button
@@ -482,12 +472,12 @@ export default function AdminRatesDashboard() {
                   {isFetchingRates ? (
                     <>
                       <Loader className="mr-2 h-4 w-4 animate-spin" />
-                      Fetching...
+                      Initializing...
                     </>
                   ) : (
                     <>
                       <Download className="mr-2 h-4 w-4" />
-                      Fetch eBills
+                      Initialize Rates
                     </>
                   )}
                 </Button>
@@ -498,64 +488,54 @@ export default function AdminRatesDashboard() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Network</TableHead>
-                    <TableHead>Base Price (₦)</TableHead>
-                    <TableHead>Profit (₦)</TableHead>
-                    <TableHead>Final Price (₦)</TableHead>
-                    <TableHead>Margin %</TableHead>
+                    <TableHead>Discount Percentage (%)</TableHead>
+                    <TableHead>Example: ₦1000 Airtime</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {Object.keys(airtimeRates).map((network) => (
-                    <TableRow key={network}>
-                      <TableCell className="font-medium">
-                        {airtimeRates[network]?.name || network}
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={airtimeRates[network]?.basePrice || 0}
-                          onChange={(e) =>
-                            updateAirtimeRate(
-                              network,
-                              "basePrice",
-                              e.target.value
-                            )
-                          }
-                          className="w-24"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={airtimeRates[network]?.profit || 0}
-                          onChange={(e) =>
-                            updateAirtimeRate(network, "profit", e.target.value)
-                          }
-                          className="w-24"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          ₦
-                          {(
-                            airtimeRates[network]?.finalPrice || 0
-                          ).toLocaleString()}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {airtimeRates[network]?.basePrice > 0
-                            ? (
-                                ((airtimeRates[network]?.profit || 0) /
-                                  airtimeRates[network]?.basePrice) *
-                                100
-                              ).toFixed(1)
-                            : 0}
-                          %
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {Object.keys(airtimeRates).map((network) => {
+                    const discountPercentage =
+                      airtimeRates[network]?.discountPercentage || 0;
+                    const exampleAmount = 1000;
+                    const exampleCharge =
+                      exampleAmount * (1 - discountPercentage / 100);
+
+                    return (
+                      <TableRow key={network}>
+                        <TableCell className="font-medium">
+                          {airtimeRates[network]?.name || network}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              step="0.1"
+                              value={discountPercentage}
+                              onChange={(e) =>
+                                updateAirtimeRate(network, e.target.value)
+                              }
+                              className="w-24"
+                            />
+                            <span className="text-sm text-muted-foreground">
+                              %
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <Badge variant="secondary">
+                              User Pays: ₦{exampleCharge.toLocaleString()}
+                            </Badge>
+                            <p className="text-xs text-muted-foreground">
+                              Airtime Received: ₦
+                              {exampleAmount.toLocaleString()} | Discount: ₦
+                              {(exampleAmount - exampleCharge).toFixed(2)}
+                            </p>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
@@ -920,7 +900,7 @@ export default function AdminRatesDashboard() {
                   <div key={index} className="flex justify-between text-xs">
                     <span>{rate.name}</span>
                     <span className="font-medium">
-                      ₦{rate.finalPrice.toLocaleString()}
+                      {rate.discountPercentage}% discount
                     </span>
                   </div>
                 ))}

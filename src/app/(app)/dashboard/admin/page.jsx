@@ -33,6 +33,7 @@ import AirtimeDataRatesTab from "@/components/admin/airtime-data-rates-tab";
 import PendingRequestsTab from "@/components/admin/pending-requests-tab";
 import BettingRatesTab from "@/components/admin/betting-rates-tab";
 import ExamCardRatesPage from "@/components/admin/exam-rates-tab";
+import AdminUsersManagement from "@/components/admin/UsersData";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("transactions");
@@ -197,6 +198,7 @@ export default function AdminPage() {
                   <SelectValue placeholder="Select a tab" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="users">Users Data</SelectItem>
                   <SelectItem value="transactions">All Transactions</SelectItem>
                   {/* <SelectItem value="crypto">Crypto Rates</SelectItem> */}
                   <SelectItem value="gift-cards">Gift Card Rates</SelectItem>
@@ -216,6 +218,7 @@ export default function AdminPage() {
             {/* Desktop Tabs */}
             <div className="hidden md:block">
               <TabsList className="flex flex-wrap justify-start h-fit gap-2 md:gap-4 p-1">
+                <TabsTrigger value="users">Users Data</TabsTrigger>
                 <TabsTrigger value="transactions">All Transactions</TabsTrigger>
                 {/* <TabsTrigger value="crypto">Crypto Rates</TabsTrigger> */}
                 <TabsTrigger value="gift-cards">Gift Card Rates</TabsTrigger>
@@ -231,6 +234,9 @@ export default function AdminPage() {
               </TabsList>
             </div>
 
+            <TabsContent value="users" className="mt-8">
+              <AdminUsersManagement />
+            </TabsContent>
             <TabsContent value="transactions" className="mt-8">
               <AllTransactionsTab />
             </TabsContent>

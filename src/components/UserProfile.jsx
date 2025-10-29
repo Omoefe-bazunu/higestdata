@@ -26,6 +26,7 @@ export default function UserProfile() {
   const { user } = useAuth();
   const [userData, setUserData] = useState(null);
   const [name, setName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -41,6 +42,7 @@ export default function UserProfile() {
           const data = userDoc.data();
           setUserData(data);
           setName(data.name || "");
+          setPhoneNumber(data.phoneNumber || "");
         }
       } catch (error) {
         console.error("Error fetching user data:", error);
@@ -67,6 +69,32 @@ export default function UserProfile() {
         variant: "destructive",
         title: "Error",
         description: "Failed to update name",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdatePhoneNumber = async (e) => {
+    e.preventDefault();
+    if (!user || !phoneNumber.trim()) return;
+
+    setLoading(true);
+    try {
+      const userRef = doc(firestore, "users", user.uid);
+      await updateDoc(userRef, { phoneNumber: phoneNumber.trim() });
+
+      setUserData({ ...userData, phoneNumber: phoneNumber.trim() });
+      toast({
+        title: "Success",
+        description: "Phone number updated successfully",
+      });
+    } catch (error) {
+      console.error("Error updating phone number:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update phone number",
       });
     } finally {
       setLoading(false);
@@ -189,6 +217,27 @@ export default function UserProfile() {
               required
             />
             <Button type="submit" disabled={loading || name === userData.name}>
+              {loading ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </form>
+
+        {/* Phone Number */}
+        <form onSubmit={handleUpdatePhoneNumber} className="space-y-2">
+          <Label htmlFor="phoneNumber">Phone Number</Label>
+          <div className="flex gap-2">
+            <Input
+              id="phoneNumber"
+              type="tel"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              placeholder="+234 800 000 0000"
+              required
+            />
+            <Button
+              type="submit"
+              disabled={loading || phoneNumber === userData.phoneNumber}
+            >
               {loading ? "Saving..." : "Save"}
             </Button>
           </div>

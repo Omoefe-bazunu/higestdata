@@ -155,11 +155,24 @@ function PurchaseForm({ type, user, router }) {
     }
   };
 
-  const getTransactionAmount = () => {
+  // Calculate the amount to be deducted from user's wallet
+  const getWalletDeductionAmount = () => {
     if (type === "Airtime") {
-      const rate = airtimeRates[network]?.finalPrice || 100;
-      const vendAmount = parseFloat(amount || "0");
-      return vendAmount * (rate / 100);
+      const airtimeValue = parseFloat(amount || "0");
+      const discountPercentage = airtimeRates[network]?.discountPercentage || 0;
+      // User pays less than the airtime value (discounted price)
+      return airtimeValue * (1 - discountPercentage / 100);
+    } else if (type === "Data") {
+      const selectedPlan = dataPlans.find((plan) => plan.id === dataPlan);
+      return selectedPlan ? selectedPlan.price : 0;
+    }
+    return 0;
+  };
+
+  // Get the actual airtime value to be sent to eBills (for airtime only)
+  const getEBillsAmount = () => {
+    if (type === "Airtime") {
+      return parseFloat(amount || "0");
     } else if (type === "Data") {
       const selectedPlan = dataPlans.find((plan) => plan.id === dataPlan);
       return selectedPlan ? selectedPlan.price : 0;
@@ -168,14 +181,14 @@ function PurchaseForm({ type, user, router }) {
   };
 
   const isSubmitDisabled = () => {
-    const amount = getTransactionAmount();
+    const deductionAmount = getWalletDeductionAmount();
     return (
       !isAuthenticated ||
       !network ||
       !phone ||
-      (type === "Airtime" && (!amount || amount <= 0)) ||
+      (type === "Airtime" && (!amount || parseFloat(amount) <= 0)) ||
       (type === "Data" && !dataPlan) ||
-      walletBalance < amount ||
+      walletBalance < deductionAmount ||
       isSubmitting ||
       isFetchingPlans
     );
@@ -192,9 +205,10 @@ function PurchaseForm({ type, user, router }) {
       return;
     }
 
-    const chargeAmount = getTransactionAmount();
+    const walletDeduction = getWalletDeductionAmount();
+    const eBillsAmount = getEBillsAmount();
 
-    if (!chargeAmount || chargeAmount <= 0) {
+    if (!walletDeduction || walletDeduction <= 0) {
       toast({
         title: "Invalid Amount",
         description: "Please enter a valid amount or select a plan.",
@@ -203,7 +217,7 @@ function PurchaseForm({ type, user, router }) {
       return;
     }
 
-    if (walletBalance < chargeAmount) {
+    if (walletBalance < walletDeduction) {
       setShowInsufficientModal(true);
       return;
     }
@@ -219,19 +233,16 @@ function PurchaseForm({ type, user, router }) {
       }
 
       const token = await currentUser.getIdToken(true);
-      const finalPrice =
-        type === "Airtime"
-          ? airtimeRates[network]?.finalPrice || 100
-          : chargeAmount;
 
+      // Build transaction data
       const transactionData = {
         userId: currentUser.uid,
         serviceType: type.toLowerCase(),
-        amount: chargeAmount,
+        amount: type === "Airtime" ? eBillsAmount : walletDeduction,
+        finalPrice: walletDeduction,
         phone,
         network,
         variationId: dataPlan || undefined,
-        finalPrice,
       };
 
       const response = await fetch("/api/vtu/transaction", {
@@ -270,6 +281,7 @@ function PurchaseForm({ type, user, router }) {
             ),
             {
               ...result.transactionData,
+              walletDeduction,
               createdAt: serverTimestamp(),
             }
           );
@@ -277,8 +289,9 @@ function PurchaseForm({ type, user, router }) {
         throw new Error(result.error || "Transaction failed");
       }
 
+      // Deduct the discounted amount from wallet
       await updateDoc(doc(firestore, "users", currentUser.uid), {
-        walletBalance: walletBalance - result.transactionData.amount,
+        walletBalance: walletBalance - walletDeduction,
       });
 
       if (result.transactionData) {
@@ -292,6 +305,7 @@ function PurchaseForm({ type, user, router }) {
           ),
           {
             ...result.transactionData,
+            walletDeduction,
             createdAt: serverTimestamp(),
           }
         );
@@ -329,19 +343,21 @@ function PurchaseForm({ type, user, router }) {
         <p className="text-2xl font-bold">₦{walletBalance.toLocaleString()}</p>
       </div>
 
-      {getTransactionAmount() > walletBalance && getTransactionAmount() > 0 && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Insufficient Balance</AlertTitle>
-          <AlertDescription>
-            Your wallet balance (₦{walletBalance.toLocaleString()}) is less than
-            the required amount (₦{getTransactionAmount().toLocaleString()}).
-            Please fund your wallet to proceed.
-          </AlertDescription>
-        </Alert>
-      )}
+      {getWalletDeductionAmount() > walletBalance &&
+        getWalletDeductionAmount() > 0 && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Insufficient Balance</AlertTitle>
+            <AlertDescription>
+              Your wallet balance (₦{walletBalance.toLocaleString()}) is less
+              than the required amount (₦
+              {getWalletDeductionAmount().toLocaleString()}). Please fund your
+              wallet to proceed.
+            </AlertDescription>
+          </Alert>
+        )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <div onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-2">
           <Label htmlFor="network">Network Provider *</Label>
           <Select value={network} onValueChange={setNetwork} required>
@@ -390,18 +406,27 @@ function PurchaseForm({ type, user, router }) {
 
         <div className="space-y-2">
           <Label htmlFor="amount">
-            {type === "Airtime" ? "Amount (₦)" : "Data Plan"} *
+            {type === "Airtime" ? "Airtime Value (₦)" : "Data Plan"} *
           </Label>
           {type === "Airtime" && (
-            <Input
-              id="amount"
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="e.g., 1000"
-              min="50"
-              required
-            />
+            <>
+              <Input
+                id="amount"
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="e.g., 1000"
+                min="50"
+                required
+              />
+              {network && amount && parseFloat(amount) > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  You'll receive ₦{parseFloat(amount).toLocaleString()} airtime
+                  with a {airtimeRates[network]?.discountPercentage || 0}%
+                  discount
+                </p>
+              )}
+            </>
           )}
           {type === "Data" && (
             <Select value={dataPlan} onValueChange={setDataPlan} required>
@@ -429,19 +454,40 @@ function PurchaseForm({ type, user, router }) {
           )}
         </div>
 
-        {getTransactionAmount() > 0 && (
-          <div className="bg-muted p-3 rounded-lg">
-            <p className="text-sm">
+        {getWalletDeductionAmount() > 0 && (
+          <div className="bg-muted p-3 rounded-lg space-y-2">
+            {type === "Airtime" && (
+              <>
+                <p className="text-sm">
+                  <span className="font-medium">Airtime Value:</span> ₦
+                  {getEBillsAmount().toLocaleString()}
+                </p>
+                <p className="text-sm">
+                  <span className="font-medium">
+                    Discount ({airtimeRates[network]?.discountPercentage || 0}
+                    %):
+                  </span>{" "}
+                  -₦
+                  {(getEBillsAmount() - getWalletDeductionAmount()).toFixed(2)}
+                </p>
+              </>
+            )}
+            <p className="text-sm font-semibold">
               <span className="font-medium">Amount to be charged:</span> ₦
-              {getTransactionAmount().toLocaleString()}
+              {getWalletDeductionAmount().toLocaleString()}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground">
               This will be deducted from your wallet balance.
             </p>
           </div>
         )}
 
-        <Button type="submit" className="w-full" disabled={isSubmitDisabled()}>
+        <Button
+          type="button"
+          onClick={handleSubmit}
+          className="w-full"
+          disabled={isSubmitDisabled()}
+        >
           {isSubmitting ? (
             <>
               <Loader className="mr-2 h-4 w-4 animate-spin" /> Processing...
@@ -450,7 +496,7 @@ function PurchaseForm({ type, user, router }) {
             `Purchase ${type}`
           )}
         </Button>
-      </form>
+      </div>
 
       <Dialog
         open={showInsufficientModal}
@@ -470,7 +516,7 @@ function PurchaseForm({ type, user, router }) {
             <div className="bg-muted p-4 rounded-lg">
               <p className="text-sm">
                 <span className="font-medium">Required Amount:</span> ₦
-                {getTransactionAmount().toLocaleString()}
+                {getWalletDeductionAmount().toLocaleString()}
               </p>
               <p className="text-sm">
                 <span className="font-medium">Current Balance:</span> ₦
@@ -478,7 +524,7 @@ function PurchaseForm({ type, user, router }) {
               </p>
               <p className="text-sm text-red-600">
                 <span className="font-medium">Shortfall:</span> ₦
-                {(getTransactionAmount() - walletBalance).toLocaleString()}
+                {(getWalletDeductionAmount() - walletBalance).toLocaleString()}
               </p>
             </div>
             <div className="flex gap-2">

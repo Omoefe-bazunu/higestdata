@@ -271,12 +271,7 @@ export async function POST(request) {
     await getAccessToken();
     const eBillsBalance = await getBalance();
 
-    // For airtime: calculate actual amount to send to eBills
-    // For data/cable: amount is what goes to eBills
-    const ebillsAmount =
-      serviceType === "airtime"
-        ? Math.round((amount * 100) / finalPrice)
-        : amount;
+    const ebillsAmount = amount;
 
     if (eBillsBalance < ebillsAmount) {
       console.error("Insufficient eBills balance:", {
