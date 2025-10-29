@@ -205,16 +205,16 @@ function ElectricityForm({ user, router }) {
     if (!electricityAmount || electricityAmount <= 0) {
       toast({
         title: "Invalid Amount",
-        description: "Please enter a valid amount (₦1000–₦100,000).",
+        description: "Please enter a valid amount (₦500–₦100,000).",
         variant: "destructive",
       });
       return;
     }
 
-    if (electricityAmount < 1000) {
+    if (electricityAmount < 500) {
       toast({
         title: "Minimum Amount Required",
-        description: "Minimum purchase amount is ₦1000.",
+        description: "Minimum purchase amount is ₦500.",
         variant: "destructive",
       });
       return;
@@ -428,7 +428,7 @@ function ElectricityForm({ user, router }) {
             required
           />
           <p className="text-xs text-muted-foreground">
-            Minimum: ₦1000, Maximum: ₦100,000
+            Minimum: ₦500, Maximum: ₦100,000
           </p>
         </div>
 
