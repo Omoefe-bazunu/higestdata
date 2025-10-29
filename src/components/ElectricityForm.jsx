@@ -179,7 +179,7 @@ function ElectricityForm({ user, router }) {
       !meterType ||
       !meterVerified ||
       !electricityAmount ||
-      electricityAmount < 1000 ||
+      electricityAmount < 500 ||
       electricityAmount > 100000 ||
       walletBalance < totalAmount ||
       isSubmitting ||
