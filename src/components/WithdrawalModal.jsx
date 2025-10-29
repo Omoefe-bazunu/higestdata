@@ -316,7 +316,9 @@ export default function WithdrawalModal({ open, onOpenChange }) {
         },
       });
 
-      toast.success("Withdrawal initiated successfully!");
+      toast.success(
+        "Withdrawal initiated successfully! Pending Admin approval within 15mins"
+      );
       resetModal();
       onOpenChange(false);
     } catch (error) {

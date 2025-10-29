@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAccessToken } from "@/lib/ebills";
+import { verifyCustomer } from "@/lib/ebills";
 
 export async function GET(request) {
   try {
@@ -14,46 +14,19 @@ export async function GET(request) {
       );
     }
 
-    const token = await getAccessToken();
-    const response = await fetch(
-      `https://ebills.africa/wp-json/api/v2/verify-customer?service_id=${provider}&customer_id=${customerId}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const data = await verifyCustomer(provider, customerId);
 
-    const responseText = await response.text();
-    console.log(
-      `Verify customer response: ${response.status} - ${responseText}`
-    );
-
-    if (!response.ok) {
-      const error = JSON.parse(responseText);
-      return NextResponse.json(
-        {
-          success: false,
-          message: error.message || "Customer verification failed",
-        },
-        { status: response.status }
-      );
-    }
-
-    const data = JSON.parse(responseText);
-    if (data.code === "success") {
+    if (data) {
       return NextResponse.json({
         success: true,
-        data: data.data,
+        data: data,
       });
     }
 
     return NextResponse.json(
       {
         success: false,
-        message: data.message || "Customer verification failed",
+        message: "Customer verification failed",
       },
       { status: 400 }
     );

@@ -190,8 +190,7 @@
 //   return { success: data.code === "success", ...data };
 // }
 
-const PROXY_URL =
-  process.env.PROXY_URL || "https://higestdata-proxy.onrender.com/";
+const PROXY_URL = process.env.PROXY_URL;
 
 export async function getAccessToken() {
   const response = await fetch(`${PROXY_URL}/auth`, {
@@ -298,4 +297,120 @@ export async function buyTv({ customerId, provider, variationId, requestId }) {
 
   const data = await response.json();
   return { success: data.code === "success", ...data };
+}
+
+// NEW: Verify customer through proxy
+export async function verifyCustomer(
+  serviceId,
+  customerId,
+  variationId = null
+) {
+  let url = `${PROXY_URL}/verify-customer?service_id=${serviceId}&customer_id=${customerId}`;
+  if (variationId) url += `&variation_id=${variationId}`;
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(
+      `Customer verification failed: ${response.status} - ${
+        error.message || "Unknown error"
+      }`
+    );
+  }
+
+  const data = await response.json();
+  return data.code === "success" ? data.data : null;
+}
+
+// NEW: Purchase electricity through proxy
+export async function purchaseElectricity(
+  requestId,
+  customerId,
+  serviceId,
+  variationId,
+  amount
+) {
+  const response = await fetch(`${PROXY_URL}/electricity`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      request_id: requestId,
+      customer_id: customerId,
+      service_id: serviceId,
+      variation_id: variationId,
+      amount: Number(amount),
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+
+    if (response.status === 400 && error.code === "missing_fields")
+      throw new Error("Missing required fields");
+    if (response.status === 400 && error.code === "invalid_service_id")
+      throw new Error("Invalid electricity provider");
+    if (response.status === 400 && error.code === "invalid_variation_id")
+      throw new Error("Invalid meter type");
+    if (response.status === 400 && error.code === "below_minimum_amount")
+      throw new Error("Amount below minimum");
+    if (response.status === 400 && error.code === "below_customer_arrears")
+      throw new Error("Amount below outstanding arrears");
+    if (response.status === 402 && error.code === "insufficient_funds")
+      throw new Error("Insufficient eBills wallet balance");
+    if (response.status === 409 && error.code === "duplicate_request_id")
+      throw new Error("Duplicate request ID");
+    if (response.status === 409 && error.code === "duplicate_order")
+      throw new Error("Duplicate order within 3 minutes");
+    if (response.status === 403 && error.code === "rest_forbidden")
+      throw new Error("Unauthorized access");
+
+    throw new Error(`Error purchasing electricity: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// NEW: Fund betting account through proxy
+export async function fundBettingAccount(
+  requestId,
+  customerId,
+  serviceId,
+  amount
+) {
+  const response = await fetch(`${PROXY_URL}/betting`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      request_id: requestId,
+      customer_id: customerId,
+      service_id: serviceId,
+      amount: amount,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+
+    if (response.status === 400 && error.code === "missing_fields")
+      throw new Error("Missing required fields");
+    if (response.status === 400 && error.code === "invalid_service_id")
+      throw new Error("Invalid betting provider");
+    if (response.status === 400 && error.code === "below_minimum_amount")
+      throw new Error("Amount below minimum (₦100)");
+    if (response.status === 400 && error.code === "above_maximum_amount")
+      throw new Error("Amount above maximum (₦100,000)");
+    if (response.status === 402 && error.code === "insufficient_funds")
+      throw new Error("Insufficient eBills wallet balance");
+    if (response.status === 409 && error.code === "duplicate_request_id")
+      throw new Error("Duplicate request ID");
+    if (response.status === 409 && error.code === "duplicate_order")
+      throw new Error("Duplicate order within 3 minutes");
+    if (response.status === 403 && error.code === "rest_forbidden")
+      throw new Error("Unauthorized access");
+
+    throw new Error(`eBills betting API failed: ${response.status}`);
+  }
+
+  return response.json();
 }

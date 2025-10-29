@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAccessToken } from "@/lib/ebills";
+import { verifyCustomer } from "@/lib/ebills";
 
 export async function POST(request) {
   try {
@@ -16,51 +16,19 @@ export async function POST(request) {
       );
     }
 
-    const token = await getAccessToken();
-    const response = await fetch(
-      "https://ebills.africa/wp-json/api/v2/verify-customer",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          service_id,
-          customer_id,
-          variation_id,
-        }),
-      }
-    );
+    const data = await verifyCustomer(service_id, customer_id, variation_id);
 
-    const responseText = await response.text();
-    console.log(
-      `Verify electricity customer response: ${response.status} - ${responseText}`
-    );
-
-    if (!response.ok) {
-      const error = JSON.parse(responseText);
-      return NextResponse.json(
-        {
-          success: false,
-          message: error.message || "Customer verification failed",
-        },
-        { status: response.status }
-      );
-    }
-
-    const data = JSON.parse(responseText);
-    if (data.code === "success") {
+    if (data) {
       return NextResponse.json({
         success: true,
-        data: data.data,
+        data: data,
       });
     }
 
     return NextResponse.json(
       {
         success: false,
-        message: data.message || "Customer verification failed",
+        message: "Customer verification failed",
       },
       { status: 400 }
     );

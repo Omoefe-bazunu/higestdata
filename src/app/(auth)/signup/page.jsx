@@ -21,11 +21,12 @@ import Image from "next/image";
 import { Eye, EyeOff } from "lucide-react";
 
 export default function SignupPage() {
-  const { signup, loginWithGoogle } = useAuth();
+  const { signup } = useAuth();
   const router = useRouter();
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -50,6 +51,7 @@ export default function SignupPage() {
       await setDoc(doc(firestore, "users", user.uid), {
         name: fullName,
         email: user.email.toLowerCase(),
+        phoneNumber: phoneNumber,
         kyc: "pending",
         walletBalance: 0,
         isVerified: false,
@@ -75,54 +77,6 @@ export default function SignupPage() {
       router.push("/verify-account");
     } catch (err) {
       console.error("Signup error:", err);
-      setMessage(`❌ ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleSignup = async () => {
-    setMessage("");
-    setLoading(true);
-
-    try {
-      const userCredential = await loginWithGoogle();
-      const user = userCredential.user;
-
-      const verificationCode = generateVerificationCode();
-
-      await setDoc(
-        doc(firestore, "users", user.uid),
-        {
-          name: user.displayName || "Unnamed User",
-          email: user.email.toLowerCase(),
-          kyc: "pending",
-          walletBalance: 0,
-          isVerified: false,
-          verificationToken: verificationCode,
-          tokenCreatedAt: new Date(),
-          createdAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
-
-      const emailResponse = await fetch("/api/email-verification/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: user.email,
-          firstName: user.displayName?.split(" ")[0] || "User",
-          verificationCode,
-        }),
-      });
-
-      if (!emailResponse.ok)
-        throw new Error("Failed to send verification email");
-
-      // User stays logged in - redirect to verify page
-      router.push("/verify-account");
-    } catch (err) {
-      console.error("Google signup error:", err);
       setMessage(`❌ ${err.message}`);
     } finally {
       setLoading(false);
@@ -173,6 +127,18 @@ export default function SignupPage() {
               />
             </div>
 
+            <div className="grid gap-2">
+              <Label htmlFor="phone-number">Phone number</Label>
+              <Input
+                id="phone-number"
+                type="tel"
+                placeholder="+234 800 000 0000"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                required
+              />
+            </div>
+
             {/* Password with toggle */}
             <div className="grid gap-2">
               <Label htmlFor="password">Password</Label>
@@ -196,23 +162,6 @@ export default function SignupPage() {
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Creating account..." : "Create an account"}
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full hidden items-center justify-center gap-2"
-              onClick={handleGoogleSignup}
-              disabled={loading}
-            >
-              <Image
-                src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-                alt="Google logo"
-                width={20}
-                height={20}
-                className="w-5 h-5"
-              />
-              Sign up with Google
             </Button>
           </form>
 

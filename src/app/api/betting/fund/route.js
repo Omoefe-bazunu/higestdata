@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import {
   doc,
   getDoc,
-  updateDoc,
   addDoc,
   collection,
   serverTimestamp,
@@ -12,9 +11,13 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
-import { getAccessToken, getBalance } from "@/lib/ebills";
+import {
+  getAccessToken,
+  getBalance,
+  verifyCustomer,
+  fundBettingAccount,
+} from "@/lib/ebills";
 
-// Valid betting providers
 const VALID_BETTING_PROVIDERS = [
   "1xBet",
   "BangBet",
@@ -31,104 +34,6 @@ const VALID_BETTING_PROVIDERS = [
   "SupaBet",
 ];
 
-// Verify customer ID via eBills API
-async function verifyCustomer(token, customerId, serviceId) {
-  try {
-    const response = await fetch(
-      `https://ebills.africa/wp-json/api/v2/verify-customer?service_id=${serviceId}&customer_id=${customerId}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    const responseText = await response.text();
-    console.log(
-      `Verify customer response: ${response.status} - ${responseText}`
-    );
-
-    if (!response.ok) {
-      const error = JSON.parse(responseText);
-      throw new Error(
-        `Customer verification failed: ${response.status} - ${
-          error.message || responseText
-        }`
-      );
-    }
-
-    const data = JSON.parse(responseText);
-    return data.code === "success" ? data.data : null;
-  } catch (error) {
-    console.error("Error verifying customer:", error);
-    throw error;
-  }
-}
-
-// Fund betting account via eBills API
-async function fundBettingAccount(
-  token,
-  requestId,
-  customerId,
-  serviceId,
-  amount
-) {
-  try {
-    const payload = {
-      request_id: requestId,
-      customer_id: customerId,
-      service_id: serviceId,
-      amount: amount,
-    };
-
-    const response = await fetch(
-      "https://ebills.africa/wp-json/api/v2/betting",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      }
-    );
-
-    const responseText = await response.text();
-    console.log(
-      `Betting funding response: ${response.status} - ${responseText}`
-    );
-
-    if (!response.ok) {
-      const error = JSON.parse(responseText);
-      if (response.status === 400 && error.code === "missing_fields")
-        throw new Error("Missing required fields");
-      if (response.status === 400 && error.code === "invalid_service_id")
-        throw new Error("Invalid betting provider");
-      if (response.status === 400 && error.code === "below_minimum_amount")
-        throw new Error("Amount below minimum (₦100)");
-      if (response.status === 400 && error.code === "above_maximum_amount")
-        throw new Error("Amount above maximum (₦100,000)");
-      if (response.status === 402 && error.code === "insufficient_funds")
-        throw new Error("Insufficient eBills wallet balance");
-      if (response.status === 409 && error.code === "duplicate_request_id")
-        throw new Error("Duplicate request ID");
-      if (response.status === 409 && error.code === "duplicate_order")
-        throw new Error("Duplicate order within 3 minutes");
-      if (response.status === 403 && error.code === "rest_forbidden")
-        throw new Error("Unauthorized access");
-      throw new Error(`eBills betting API failed: ${response.status}`);
-    }
-
-    return JSON.parse(responseText);
-  } catch (error) {
-    console.error("Error funding betting account:", error);
-    throw error;
-  }
-}
-
-// Generate unique request ID
 function generateRequestId(userId, serviceType = "betting") {
   const timestamp = Date.now();
   const random = Math.floor(Math.random() * 1000);
@@ -140,7 +45,6 @@ export async function POST(request) {
     const body = await request.json();
     const { userId, serviceType, amount, provider, customerId } = body;
 
-    // Validate required fields
     if (!userId || !serviceType || !amount || !provider || !customerId) {
       return NextResponse.json(
         { success: false, message: "Missing required fields" },
@@ -148,7 +52,6 @@ export async function POST(request) {
       );
     }
 
-    // Validate service type
     if (serviceType !== "betting") {
       return NextResponse.json(
         { success: false, message: "Invalid service type" },
@@ -156,7 +59,6 @@ export async function POST(request) {
       );
     }
 
-    // Validate provider
     if (!VALID_BETTING_PROVIDERS.includes(provider)) {
       return NextResponse.json(
         { success: false, message: "Invalid betting provider" },
@@ -164,7 +66,6 @@ export async function POST(request) {
       );
     }
 
-    // Validate amount
     const bettingAmount = parseFloat(amount);
     if (isNaN(bettingAmount) || bettingAmount <= 0) {
       return NextResponse.json(
@@ -173,7 +74,6 @@ export async function POST(request) {
       );
     }
 
-    // Minimum amount validation
     if (bettingAmount < 100) {
       return NextResponse.json(
         { success: false, message: "Minimum funding amount is ₦100" },
@@ -181,7 +81,6 @@ export async function POST(request) {
       );
     }
 
-    // Maximum amount validation
     if (bettingAmount > 100000) {
       return NextResponse.json(
         { success: false, message: "Maximum funding amount is ₦100,000" },
@@ -189,13 +88,11 @@ export async function POST(request) {
       );
     }
 
-    // Fetch betting rates from Firestore
     const ratesDoc = await getDoc(doc(firestore, "settings", "bettingRates"));
     const bettingRates = ratesDoc.exists()
       ? ratesDoc.data()
       : { serviceCharge: 10, chargeType: "percentage" };
 
-    // Calculate service charge
     const serviceCharge =
       bettingRates.chargeType === "percentage"
         ? (bettingAmount * bettingRates.serviceCharge) / 100
@@ -203,9 +100,7 @@ export async function POST(request) {
 
     const totalAmount = bettingAmount + serviceCharge;
 
-    // Run transaction to ensure atomic operations
     const result = await runTransaction(firestore, async (transaction) => {
-      // Get user document
       const userDocRef = doc(firestore, "users", userId);
       const userDoc = await transaction.get(userDocRef);
 
@@ -216,30 +111,23 @@ export async function POST(request) {
       const userData = userDoc.data();
       const currentBalance = userData.walletBalance || 0;
 
-      // Check if user has sufficient balance
       if (currentBalance < totalAmount) {
         throw new Error("Insufficient wallet balance");
       }
 
-      // Get eBills token
-      const token = await getAccessToken();
-
-      // Check eBills wallet balance
+      await getAccessToken();
       const ebillsBalance = await getBalance();
       if (ebillsBalance < bettingAmount) {
         throw new Error("Insufficient eBills wallet balance");
       }
 
-      // Verify customer ID
-      const customerData = await verifyCustomer(token, customerId, provider);
+      const customerData = await verifyCustomer(provider, customerId);
       if (!customerData) {
         throw new Error("Invalid customer ID");
       }
 
-      // Generate unique request ID
       const requestId = generateRequestId(userId, "betting");
 
-      // Create transaction record (pending status)
       const transactionData = {
         userId,
         requestId,
@@ -259,18 +147,15 @@ export async function POST(request) {
         transactionData
       );
 
-      // Call eBills API to fund betting account
       let ebillsResponse;
       try {
         ebillsResponse = await fundBettingAccount(
-          token,
           requestId,
           customerId,
           provider,
           bettingAmount
         );
       } catch (ebillsError) {
-        // Update transaction as failed
         transaction.update(transactionRef, {
           status: "failed",
           errorMessage: ebillsError.message,
@@ -279,12 +164,10 @@ export async function POST(request) {
         throw ebillsError;
       }
 
-      // Check eBills response
       if (!ebillsResponse || ebillsResponse.code !== "success") {
         const errorMessage =
           ebillsResponse?.message || "eBills API call failed";
 
-        // Update transaction as failed
         transaction.update(transactionRef, {
           status: "failed",
           errorMessage,
@@ -295,14 +178,12 @@ export async function POST(request) {
         throw new Error(errorMessage);
       }
 
-      // Deduct total amount from user's wallet
       const newBalance = currentBalance - totalAmount;
       transaction.update(userDocRef, {
         walletBalance: newBalance,
         updatedAt: serverTimestamp(),
       });
 
-      // Update transaction as successful
       transaction.update(transactionRef, {
         status: "successful",
         ebillsResponse,
@@ -410,24 +291,28 @@ export async function GET(request) {
       const transactionDoc = querySnapshot.docs[0];
       const transactionData = transactionDoc.data();
 
-      return NextResponse.json({
-        success: true,
-        data: {
-          id: transactionDoc.id,
-          ...transactionData,
-        },
-      });
+      return NextResponse.json(
+        { success: true, data: { id: transactionDoc.id, ...transactionData } },
+        { status: 200 }
+      );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Betting API is operational",
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error("Betting API GET error:", error);
+    // No requestId provided — return all recent transactions (limit handled client-side or adjust as needed)
+    const allTransactionsRef = collection(firestore, "transactions");
+    const allSnapshot = await getDocs(allTransactionsRef);
+    const transactions = allSnapshot.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+    }));
+
     return NextResponse.json(
-      { success: false, message: "Internal server error" },
+      { success: true, data: transactions },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("Error fetching transactions:", error);
+    return NextResponse.json(
+      { success: false, message: "Failed to fetch transactions" },
       { status: 500 }
     );
   }

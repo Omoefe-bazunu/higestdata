@@ -42,6 +42,7 @@ const CURRENCIES = [
   "EUR(Germany)",
   "EUR(Spain)",
   "EUR(Finland)",
+  "Singapore",
   "CAD",
   "AUD",
   "CHF",

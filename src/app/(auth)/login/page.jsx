@@ -21,10 +21,10 @@ import Image from "next/image";
 import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
-  const { login, loginWithGoogle } = useAuth();
+  const { login } = useAuth();
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
+  const [emailOrPhone, setEmailOrPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -37,7 +37,7 @@ export default function LoginPage() {
 
     try {
       // Login user
-      await login(email, password);
+      await login(emailOrPhone, password);
 
       toast({
         title: "✅ Login Successful",
@@ -49,7 +49,7 @@ export default function LoginPage() {
 
       // Handle specific Firebase errors
       if (err.code === "auth/user-not-found") {
-        setMessage("❌ No account found with this email.");
+        setMessage("❌ No account found with this email or phone number.");
       } else if (err.code === "auth/wrong-password") {
         setMessage("❌ Incorrect password.");
       } else if (err.code === "auth/too-many-requests") {
@@ -57,26 +57,6 @@ export default function LoginPage() {
       } else {
         setMessage(`❌ ${err.message}`);
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setMessage("");
-    setLoading(true);
-
-    try {
-      await loginWithGoogle();
-
-      toast({
-        title: "✅ Login Successful",
-        description: "Welcome back!",
-      });
-      router.push("/dashboard");
-    } catch (err) {
-      console.error("Google login error:", err);
-      setMessage(`❌ ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -104,13 +84,13 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="emailOrPhone">Email or Phone Number</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="your.email@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="emailOrPhone"
+                type="text"
+                placeholder="your.email@example.com or +234 800 000 0000"
+                value={emailOrPhone}
+                onChange={(e) => setEmailOrPhone(e.target.value)}
                 required
               />
             </div>
@@ -143,23 +123,6 @@ export default function LoginPage() {
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Logging in..." : "Login"}
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full hidden items-center justify-center gap-2"
-              onClick={handleGoogleLogin}
-              disabled={loading}
-            >
-              <Image
-                src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-                alt="Google logo"
-                width={20}
-                height={20}
-                className="w-5 h-5"
-              />
-              Login with Google
             </Button>
           </form>
 
