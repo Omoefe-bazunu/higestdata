@@ -1,3 +1,5 @@
+//app/api/withdrawal/create-recipient/route.js
+
 import { NextResponse } from "next/server";
 
 export async function POST(request) {
@@ -11,34 +13,27 @@ export async function POST(request) {
       );
     }
 
-    const response = await fetch("https://api.paystack.co/transferrecipient", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        type: "nuban",
-        name: accountName,
-        account_number: accountNumber,
-        bank_code: bankCode,
-        currency: "NGN",
-      }),
-    });
+    const response = await fetch(
+      `${process.env.PROXY_URL}/withdrawal/create-recipient`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ accountName, accountNumber, bankCode }),
+      }
+    );
 
     const data = await response.json();
 
     if (!response.ok) {
       return NextResponse.json(
-        { error: data.message || "Failed to create recipient" },
+        { error: data.error || "Failed to create recipient" },
         { status: response.status }
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      recipientCode: data.data.recipient_code,
-    });
+    return NextResponse.json(data);
   } catch (error) {
     console.error("Create recipient error:", error);
     return NextResponse.json(

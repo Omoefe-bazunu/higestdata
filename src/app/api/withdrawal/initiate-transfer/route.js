@@ -1,3 +1,5 @@
+//app/api/withdrawal/initiate-transfer/route.js
+
 import { NextResponse } from "next/server";
 
 export async function POST(request) {
@@ -11,37 +13,27 @@ export async function POST(request) {
       );
     }
 
-    // Initiate Paystack transfer
-    const response = await fetch("https://api.paystack.co/transfer", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        source: "balance",
-        amount: amount * 100, // Convert to kobo
-        recipient: recipientCode,
-        reason: "Wallet Withdrawal",
-        reference,
-      }),
-    });
+    const response = await fetch(
+      `${process.env.PROXY_URL}/withdrawal/initiate-transfer`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ amount, recipientCode, reference }),
+      }
+    );
 
     const data = await response.json();
 
     if (!response.ok) {
       return NextResponse.json(
-        { error: data.message || "Failed to initiate transfer" },
+        { error: data.error || "Failed to initiate transfer" },
         { status: response.status }
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Withdrawal initiated successfully",
-      reference,
-      transferCode: data.data.transfer_code,
-    });
+    return NextResponse.json(data);
   } catch (error) {
     console.error("Initiate transfer error:", error);
     return NextResponse.json(

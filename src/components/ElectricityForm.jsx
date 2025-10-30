@@ -3,7 +3,14 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
+  runTransaction,
+} from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import {
   Card,
@@ -253,41 +260,95 @@ function ElectricityForm({ user, router }) {
         throw new Error("User not authenticated");
       }
 
-      const transactionData = {
+      const transactionPayload = {
         userId: currentUser.uid,
         serviceType: "electricity",
         amount: electricityAmount,
         serviceCharge: getServiceCharge(),
-        totalAmount,
+        totalAmount: totalAmount,
         provider,
         customerId: meterNumber,
         variationId: meterType,
       };
 
+      // Call API first
       const response = await fetch("/api/electricity/purchase", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${await currentUser.getIdToken(true)}`,
         },
-        body: JSON.stringify(transactionData),
+        body: JSON.stringify(transactionPayload),
       });
 
       const result = await response.json();
 
-      if (result.success) {
+      if (result.success && result.transactionData) {
+        // Use Firestore transaction to update wallet and save transaction atomically
+        await runTransaction(firestore, async (transaction) => {
+          const userDocRef = doc(firestore, "users", currentUser.uid);
+          const userDoc = await transaction.get(userDocRef);
+
+          if (!userDoc.exists()) {
+            throw new Error("User document not found");
+          }
+
+          const currentBalance = userDoc.data().walletBalance || 0;
+          const newBalance = currentBalance - totalAmount;
+
+          // Update wallet balance
+          transaction.update(userDocRef, {
+            walletBalance: newBalance,
+            updatedAt: serverTimestamp(),
+          });
+
+          // Save transaction
+          const transactionRef = doc(
+            firestore,
+            "users",
+            currentUser.uid,
+            "transactions",
+            result.transactionId
+          );
+
+          transaction.set(transactionRef, {
+            ...result.transactionData,
+            createdAt: serverTimestamp(),
+          });
+        });
+
         toast({
           title: "Purchase Successful",
           description: `₦${electricityAmount.toLocaleString()} electricity units credited to your meter.`,
         });
+
+        // Reset form
         setProvider("");
         setMeterNumber("");
         setMeterType("");
         setAmount("");
         setMeterVerified(false);
         setCustomerDetails(null);
-        fetchWalletBalance();
+
+        // Refresh wallet balance
+        await fetchWalletBalance();
       } else {
+        // Handle failed transaction - just save it without deducting wallet
+        if (result.transactionData) {
+          const transactionRef = doc(
+            firestore,
+            "users",
+            currentUser.uid,
+            "transactions",
+            result.transactionId
+          );
+
+          await setDoc(transactionRef, {
+            ...result.transactionData,
+            createdAt: serverTimestamp(),
+          });
+        }
+
         toast({
           title: "Transaction Failed",
           description: result.message || "Please try again.",
@@ -298,7 +359,7 @@ function ElectricityForm({ user, router }) {
       console.error("Transaction error:", error);
       toast({
         title: "Transaction Failed",
-        description: "Network error. Please try again.",
+        description: error.message || "Network error. Please try again.",
         variant: "destructive",
       });
     } finally {

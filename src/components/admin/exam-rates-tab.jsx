@@ -195,7 +195,7 @@ export default function ExamCardRatesPage() {
             Configure pricing for exam scratch cards
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col md:flex-row gap-2">
           <Button
             onClick={fetchFromNRP}
             disabled={isFetching}

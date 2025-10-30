@@ -552,7 +552,7 @@ export default function AdminRatesDashboard() {
                     Manage data plans and pricing for each provider
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center flex-col md:flex-row gap-2">
                   <Select
                     value={selectedProvider}
                     onValueChange={setSelectedProvider}
@@ -722,7 +722,7 @@ export default function AdminRatesDashboard() {
                     Manage TV plans and pricing for each provider
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center flex-col md:flex-row gap-2">
                   <Select
                     value={selectedProvider}
                     onValueChange={setSelectedProvider}
