@@ -176,10 +176,20 @@ export async function POST(request) {
         updatedAt: serverTimestamp(),
       };
 
-      const transactionRef = await addDoc(
-        collection(firestore, "transactions"),
-        transactionData
+      // const transactionRef = await addDoc(
+      //   collection(firestore, "transactions"),
+      //   transactionData
+      // );
+
+      const transactionRef = doc(
+        firestore,
+        "users",
+        userId,
+        "transactions",
+        `txn_${Date.now()}_${Math.random().toString(36).slice(2)}`
       );
+
+      transaction.set(transactionRef, transactionData);
 
       let ebillsResponse;
       try {
@@ -191,11 +201,21 @@ export async function POST(request) {
           electricityAmount
         );
       } catch (ebillsError) {
-        transaction.update(transactionRef, {
-          status: "failed",
-          errorMessage: ebillsError.message,
-          updatedAt: serverTimestamp(),
-        });
+        // transaction.update(transactionRef, {
+        //   status: "failed",
+        //   errorMessage: ebillsError.message,
+        //   updatedAt: serverTimestamp(),
+        // });
+        transaction.set(
+          transactionRef,
+          {
+            ...transactionData,
+            status: "failed",
+            errorMessage: ebillsError.message,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
         throw ebillsError;
       }
 
