@@ -8,17 +8,9 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Save, PlusCircle, Trash2 } from "lucide-react";
+import { Save, PlusCircle, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   collection,
@@ -27,49 +19,49 @@ import {
   deleteDoc,
   doc,
   writeBatch,
+  getDoc,
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { firestore } from "@/lib/firebaseConfig";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const CURRENCIES = [
-  "USD",
-  "GBP",
-  "EUR",
-  "EUR(Ger)",
-  "EUR(Spain)",
-  "EUR(Fin)",
-  "Singapore",
-  "CAD",
-  "AUD",
-  "CHF",
-  "NZD",
-  "BRL",
-  "JPY",
-  "TWD",
-  "HKD",
-  "MXN",
-  "PLN",
-  "DKK",
-  "AED",
-  "SAR",
-  "NOK",
-  "SEK",
-  "ZAR",
-  "INR",
-];
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 export default function GiftCardRatesTab() {
   const [rates, setRates] = useState([]);
+  const [currencies, setCurrencies] = useState([]);
   const [newCardName, setNewCardName] = useState("");
+  const [newCurrency, setNewCurrency] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showCurrencyDialog, setShowCurrencyDialog] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true);
+
+        // Fetch currencies configuration
+        const currenciesDoc = await getDoc(
+          doc(firestore, "config", "currencies")
+        );
+        if (currenciesDoc.exists()) {
+          const currenciesList =
+            currenciesDoc.data().list || DEFAULT_CURRENCIES;
+          setCurrencies(currenciesList);
+        } else {
+          // Initialize with default currencies if not exists
+          setCurrencies(DEFAULT_CURRENCIES);
+        }
+
+        // Fetch gift card rates
         const snapshot = await getDocs(collection(firestore, "giftCardRates"));
         const data = snapshot.docs.map((doc) => ({
           id: doc.id,
@@ -132,11 +124,11 @@ export default function GiftCardRatesTab() {
       });
       return;
     }
-    const currencies = {};
-    CURRENCIES.forEach((c) => (currencies[c] = 0));
+    const currencyRates = {};
+    currencies.forEach((c) => (currencyRates[c] = 0));
     setRates((prev) => [
       ...prev,
-      { id, name: newCardName, currencies, min: 10, max: 1000 },
+      { id, name: newCardName, currencies: currencyRates, min: 10, max: 1000 },
     ]);
     setNewCardName("");
     toast({ title: "Added", description: "Save to confirm." });
@@ -156,6 +148,75 @@ export default function GiftCardRatesTab() {
     }
   };
 
+  const handleAddCurrency = () => {
+    const trimmed = newCurrency.trim().toUpperCase();
+    if (!trimmed) {
+      toast({
+        title: "Error",
+        description: "Currency name required.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (currencies.includes(trimmed)) {
+      toast({
+        title: "Duplicate",
+        description: "Currency already exists.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Add currency to list
+    setCurrencies((prev) => [...prev, trimmed]);
+
+    // Add currency with 0 rate to all existing cards
+    setRates((prev) =>
+      prev.map((card) => ({
+        ...card,
+        currencies: { ...card.currencies, [trimmed]: 0 },
+      }))
+    );
+
+    setNewCurrency("");
+    toast({
+      title: "Currency Added",
+      description: "Remember to save changes.",
+    });
+  };
+
+  const handleRemoveCurrency = (currencyToRemove) => {
+    if (currencies.length <= 1) {
+      toast({
+        title: "Error",
+        description: "Must have at least one currency.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Remove from currencies list
+    setCurrencies((prev) => prev.filter((c) => c !== currencyToRemove));
+
+    // Remove from all cards (but don't delete the data, just hide it)
+    // This preserves data in case currency is re-added
+    setRates((prev) =>
+      prev.map((card) => {
+        const updatedCurrencies = { ...card.currencies };
+        delete updatedCurrencies[currencyToRemove];
+        return {
+          ...card,
+          currencies: updatedCurrencies,
+        };
+      })
+    );
+
+    toast({
+      title: "Currency Removed",
+      description: "Remember to save changes.",
+    });
+  };
+
   const handleSave = async () => {
     const user = getAuth().currentUser;
     if (!user) {
@@ -168,22 +229,46 @@ export default function GiftCardRatesTab() {
     }
     try {
       setSaving(true);
+
+      // Save currencies configuration separately first
+      try {
+        const currenciesRef = doc(firestore, "config", "currencies");
+        await setDoc(currenciesRef, { list: currencies });
+      } catch (err) {
+        console.error("Error saving currencies:", err);
+        toast({
+          title: "Warning",
+          description: "Failed to save currencies config.",
+          variant: "destructive",
+        });
+      }
+
+      // Save gift card rates in batch
       const batch = writeBatch(firestore);
       rates.forEach((card) => {
         const ref = doc(firestore, "giftCardRates", card.id);
+        // Ensure all values are valid numbers
+        const cleanCurrencies = {};
+        Object.keys(card.currencies).forEach((curr) => {
+          const val = parseFloat(card.currencies[curr]);
+          cleanCurrencies[curr] = isNaN(val) ? 0 : val;
+        });
+
         batch.set(ref, {
           name: card.name,
-          currencies: card.currencies,
-          min: card.min,
-          max: card.max,
+          currencies: cleanCurrencies,
+          min: typeof card.min === "number" ? card.min : 10,
+          max: typeof card.max === "number" ? card.max : 1000,
         });
       });
+
       await batch.commit();
-      toast({ title: "Saved", description: "Rates updated." });
-    } catch {
+      toast({ title: "Saved", description: "Rates and currencies updated." });
+    } catch (err) {
+      console.error("Save error:", err);
       toast({
         title: "Error",
-        description: "Save failed.",
+        description: err.message || "Save failed.",
         variant: "destructive",
       });
     } finally {
@@ -201,6 +286,66 @@ export default function GiftCardRatesTab() {
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
+          <div className="flex justify-end">
+            <Dialog
+              open={showCurrencyDialog}
+              onOpenChange={setShowCurrencyDialog}
+            >
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  Manage Currencies
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Manage Currencies</DialogTitle>
+                  <DialogDescription>
+                    Add or remove currencies. Changes apply to all gift cards.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="New currency (e.g., KRW)"
+                      value={newCurrency}
+                      onChange={(e) => setNewCurrency(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter") {
+                          handleAddCurrency();
+                        }
+                      }}
+                    />
+                    <Button onClick={handleAddCurrency}>
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Add
+                    </Button>
+                  </div>
+
+                  <div className="border rounded-lg p-4 max-h-96 overflow-y-auto">
+                    <div className="grid grid-cols-2 gap-2">
+                      {currencies.map((cur) => (
+                        <div
+                          key={cur}
+                          className="flex items-center justify-between bg-secondary/50 rounded px-3 py-2"
+                        >
+                          <span className="font-medium text-sm">{cur}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => handleRemoveCurrency(cur)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
           {loading ? (
             <div className="space-y-4">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -222,7 +367,7 @@ export default function GiftCardRatesTab() {
                   </Button>
                 </div>
                 <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
-                  {CURRENCIES.map((cur) => (
+                  {currencies.map((cur) => (
                     <div key={cur} className="flex flex-col gap-1">
                       <label className="text-xs font-medium">{cur}</label>
                       <Input

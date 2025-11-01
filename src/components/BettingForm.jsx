@@ -3,7 +3,14 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
+  runTransaction,
+} from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import {
   Card,
@@ -34,31 +41,25 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
-  DialogClose,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 
-// Betting providers supported by eBills
 const BETTING_PROVIDERS = [
-  { id: "1xBet", name: "1xBet", logo: "/betting/1xbet.png" },
-  { id: "BangBet", name: "BangBet", logo: "/betting/bangbet.png" },
-  { id: "Bet9ja", name: "Bet9ja", logo: "/betting/bet9ja.png" },
-  { id: "BetKing", name: "BetKing", logo: "/betting/betking.png" },
-  { id: "BetLand", name: "BetLand", logo: "/betting/betland.png" },
-  { id: "BetLion", name: "BetLion", logo: "/betting/betlion.png" },
-  { id: "BetWay", name: "BetWay", logo: "/betting/betway.png" },
-  { id: "CloudBet", name: "CloudBet", logo: "/betting/cloudbet.png" },
-  {
-    id: "LiveScoreBet",
-    name: "LiveScoreBet",
-    logo: "/betting/livescorebet.png",
-  },
-  { id: "MerryBet", name: "MerryBet", logo: "/betting/merrybet.png" },
-  { id: "NaijaBet", name: "NaijaBet", logo: "/betting/naijabet.png" },
-  { id: "NairaBet", name: "NairaBet", logo: "/betting/nairabet.png" },
-  { id: "SupaBet", name: "SupaBet", logo: "/betting/supabet.png" },
+  { id: "1xBet", name: "1xBet" },
+  { id: "BangBet", name: "BangBet" },
+  { id: "Bet9ja", name: "Bet9ja" },
+  { id: "BetKing", name: "BetKing" },
+  { id: "BetLand", name: "BetLand" },
+  { id: "BetLion", name: "BetLion" },
+  { id: "BetWay", name: "BetWay" },
+  { id: "CloudBet", name: "CloudBet" },
+  { id: "LiveScoreBet", name: "LiveScoreBet" },
+  { id: "MerryBet", name: "MerryBet" },
+  { id: "NaijaBet", name: "NaijaBet" },
+  { id: "NairaBet", name: "NairaBet" },
+  { id: "SupaBet", name: "SupaBet" },
 ];
 
 function BettingForm({ user, router }) {
@@ -71,14 +72,13 @@ function BettingForm({ user, router }) {
   const [walletBalance, setWalletBalance] = useState(0);
   const [showInsufficientModal, setShowInsufficientModal] = useState(false);
   const [bettingRates, setBettingRates] = useState({
-    serviceCharge: 10,
+    serviceCharge: 0,
     chargeType: "percentage",
   });
   const { toast } = useToast();
 
   const isAuthenticated = !!user;
 
-  // Fetch user wallet balance and betting rates
   useEffect(() => {
     if (user) {
       fetchWalletBalance();
@@ -94,6 +94,11 @@ function BettingForm({ user, router }) {
       }
     } catch (error) {
       console.error("Error fetching wallet balance:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load wallet balance",
+        variant: "destructive",
+      });
     }
   };
 
@@ -104,7 +109,7 @@ function BettingForm({ user, router }) {
         const data = ratesDoc.data();
         setBettingRates({
           serviceCharge: data.serviceCharge || 0,
-          chargeType: data.chargeType || "fixed",
+          chargeType: data.chargeType || "percentage",
         });
       }
     } catch (error) {
@@ -112,18 +117,17 @@ function BettingForm({ user, router }) {
     }
   };
 
-  // Verify customer ID
   const verifyCustomerId = async () => {
     if (!provider || !customerId) return;
     setIsVerifying(true);
     try {
-      const response = await fetch(
-        `/api/betting/verify?provider=${provider}&customerId=${customerId}`,
-        {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      const params = new URLSearchParams({
+        provider,
+        customerId,
+      });
+      const response = await fetch(`/api/betting/verify?${params}`, {
+        method: "GET",
+      });
       const result = await response.json();
       if (result.success && result.data) {
         setCustomerVerified(true);
@@ -135,7 +139,7 @@ function BettingForm({ user, router }) {
         setCustomerVerified(false);
         toast({
           title: "Verification Failed",
-          description: result.message || "Invalid customer ID.",
+          description: result.message,
           variant: "destructive",
         });
       }
@@ -143,7 +147,7 @@ function BettingForm({ user, router }) {
       setCustomerVerified(false);
       toast({
         title: "Verification Error",
-        description: "Unable to verify customer ID. Please try again.",
+        description: "Try again.",
         variant: "destructive",
       });
     } finally {
@@ -151,29 +155,22 @@ function BettingForm({ user, router }) {
     }
   };
 
-  // Get betting amount (what goes to betting account)
   const getBettingAmount = () => {
     return parseFloat(amount || 0);
   };
 
-  // Get service charge
   const getServiceCharge = () => {
     const bettingAmount = getBettingAmount();
     const serviceCharge = parseFloat(bettingRates.serviceCharge) || 0;
-
-    if (bettingRates.chargeType === "percentage") {
-      return (bettingAmount * serviceCharge) / 100;
-    } else {
-      return serviceCharge;
-    }
+    return bettingRates.chargeType === "percentage"
+      ? (bettingAmount * serviceCharge) / 100
+      : serviceCharge;
   };
 
-  // Get total amount to be charged (betting amount + service charge)
   const getTotalAmount = () => {
     return getBettingAmount() + getServiceCharge();
   };
 
-  // Check if submit button should be disabled
   const isSubmitDisabled = () => {
     const bettingAmount = getBettingAmount();
     const totalAmount = getTotalAmount();
@@ -206,7 +203,6 @@ function BettingForm({ user, router }) {
     const bettingAmount = getBettingAmount();
     const totalAmount = getTotalAmount();
 
-    // Validate betting amount
     if (!bettingAmount || bettingAmount <= 0) {
       toast({
         title: "Invalid Amount",
@@ -216,7 +212,6 @@ function BettingForm({ user, router }) {
       return;
     }
 
-    // Minimum and maximum amount validation
     if (bettingAmount < 100) {
       toast({
         title: "Minimum Amount Required",
@@ -235,13 +230,11 @@ function BettingForm({ user, router }) {
       return;
     }
 
-    // Check wallet balance
     if (walletBalance < totalAmount) {
       setShowInsufficientModal(true);
       return;
     }
 
-    // Check customer verification
     if (!customerVerified) {
       toast({
         title: "Customer Not Verified",
@@ -254,29 +247,69 @@ function BettingForm({ user, router }) {
     setIsSubmitting(true);
 
     try {
-      // Prepare transaction data
-      const transactionData = {
-        userId: user.uid,
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        throw new Error("User not authenticated");
+      }
+
+      const transactionPayload = {
+        userId: currentUser.uid,
         serviceType: "betting",
-        bettingAmount,
+        amount: bettingAmount,
         serviceCharge: getServiceCharge(),
-        totalAmount,
+        totalAmount: totalAmount,
         provider,
         customerId,
       };
 
-      // Call betting transaction API
+      // Call API first
       const response = await fetch("/api/betting/fund", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${await currentUser.getIdToken(true)}`,
         },
-        body: JSON.stringify(transactionData),
+        body: JSON.stringify(transactionPayload),
       });
 
       const result = await response.json();
 
-      if (result.success) {
+      if (result.success && result.transactionData) {
+        // Use Firestore transaction to update wallet and save transaction atomically
+        await runTransaction(firestore, async (transaction) => {
+          const userDocRef = doc(firestore, "users", currentUser.uid);
+          const userDoc = await transaction.get(userDocRef);
+
+          if (!userDoc.exists()) {
+            throw new Error("User document not found");
+          }
+
+          const currentBalance = userDoc.data().walletBalance || 0;
+          const newBalance = currentBalance - totalAmount;
+
+          // Update wallet balance
+          transaction.update(userDocRef, {
+            walletBalance: newBalance,
+            updatedAt: serverTimestamp(),
+          });
+
+          // Save transaction
+          const transactionRef = doc(
+            firestore,
+            "users",
+            currentUser.uid,
+            "transactions",
+            result.transactionId
+          );
+
+          transaction.set(transactionRef, {
+            ...result.transactionData,
+            createdAt: serverTimestamp(),
+          });
+        });
+
         toast({
           title: "Funding Successful",
           description: `₦${bettingAmount.toLocaleString()} has been credited to your ${provider} account.`,
@@ -289,8 +322,24 @@ function BettingForm({ user, router }) {
         setCustomerVerified(false);
 
         // Refresh wallet balance
-        fetchWalletBalance();
+        await fetchWalletBalance();
       } else {
+        // Handle failed transaction - just save it without deducting wallet
+        if (result.transactionData) {
+          const transactionRef = doc(
+            firestore,
+            "users",
+            currentUser.uid,
+            "transactions",
+            result.transactionId
+          );
+
+          await setDoc(transactionRef, {
+            ...result.transactionData,
+            createdAt: serverTimestamp(),
+          });
+        }
+
         toast({
           title: "Transaction Failed",
           description: result.message || "Please try again.",
@@ -301,7 +350,7 @@ function BettingForm({ user, router }) {
       console.error("Transaction error:", error);
       toast({
         title: "Transaction Failed",
-        description: "Network error. Please try again.",
+        description: error.message || "Network error. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -311,7 +360,6 @@ function BettingForm({ user, router }) {
 
   return (
     <>
-      {/* Wallet Balance Display */}
       <div className="bg-primary/5 p-4 rounded-lg mb-6">
         <div className="flex items-center gap-2 mb-2">
           <Wallet className="h-4 w-4" />
@@ -320,7 +368,6 @@ function BettingForm({ user, router }) {
         <p className="text-2xl font-bold">₦{walletBalance.toLocaleString()}</p>
       </div>
 
-      {/* Insufficient Balance Warning */}
       {getTotalAmount() > walletBalance && getBettingAmount() > 0 && (
         <Alert variant="destructive" className="mb-6">
           <AlertTriangle className="h-4 w-4" />
@@ -343,9 +390,7 @@ function BettingForm({ user, router }) {
             <SelectContent>
               {BETTING_PROVIDERS.map((betting) => (
                 <SelectItem key={betting.id} value={betting.id}>
-                  <div className="flex items-center gap-2">
-                    <span>{betting.name}</span>
-                  </div>
+                  {betting.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -407,7 +452,6 @@ function BettingForm({ user, router }) {
           </p>
         </div>
 
-        {/* Amount Preview */}
         {getBettingAmount() > 0 && (
           <div className="bg-muted p-4 rounded-lg space-y-3">
             <div className="flex justify-between text-sm">
@@ -416,7 +460,6 @@ function BettingForm({ user, router }) {
                 ₦{getBettingAmount().toLocaleString()}
               </span>
             </div>
-
             {getServiceCharge() > 0 && (
               <div className="flex justify-between text-sm">
                 <span>Service Charge:</span>
@@ -425,7 +468,6 @@ function BettingForm({ user, router }) {
                 </span>
               </div>
             )}
-
             <div className="border-t pt-2">
               <div className="flex justify-between">
                 <span className="font-semibold">Total to be charged:</span>
@@ -434,12 +476,11 @@ function BettingForm({ user, router }) {
                 </span>
               </div>
             </div>
-
             <p className="text-xs text-muted-foreground">
               ₦{getBettingAmount().toLocaleString()} will be credited to your
-              betting account.
+              betting account.{" "}
               {getServiceCharge() > 0 &&
-                " Service charge will be deducted from your wallet."}
+                "Service charge will be deducted from your wallet."}
             </p>
           </div>
         )}
@@ -451,12 +492,11 @@ function BettingForm({ user, router }) {
               Processing...
             </>
           ) : (
-            `Fund Betting Account`
+            "Fund Betting Account"
           )}
         </Button>
       </form>
 
-      {/* Insufficient Balance Modal */}
       <Dialog
         open={showInsufficientModal}
         onOpenChange={setShowInsufficientModal}

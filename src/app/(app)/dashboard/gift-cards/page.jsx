@@ -35,40 +35,14 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CheckCircle, AlertTriangle } from "lucide-react";
 
-const CURRENCIES = [
-  "USD",
-  "GBP",
-  "EUR",
-  "EUR(Germany)",
-  "EUR(Spain)",
-  "EUR(Finland)",
-  "Singapore",
-  "CAD",
-  "AUD",
-  "CHF",
-  "NZD",
-  "BRL",
-  "JPY",
-  "TWD",
-  "HKD",
-  "MXN",
-  "PLN",
-  "DKK",
-  "AED",
-  "SAR",
-  "NOK",
-  "SEK",
-  "ZAR",
-  "INR",
-];
-
 export default function GiftCardsPage() {
   const [giftCards, setGiftCards] = useState([]);
+  const [currencies, setCurrencies] = useState([]);
   const [authChecked, setAuthChecked] = useState(false);
   const [user, setUser] = useState(null);
   const [selectedCard, setSelectedCard] = useState("");
   const [faceValue, setFaceValue] = useState("");
-  const [currency, setCurrency] = useState("USD");
+  const [currency, setCurrency] = useState("");
   const [cardCode, setCardCode] = useState("");
   const [cardImages, setCardImages] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
@@ -94,12 +68,26 @@ export default function GiftCardsPage() {
     return () => unsub();
   }, [router]);
 
-  // Fetch gift card rates
+  // Fetch gift card rates and currencies
   useEffect(() => {
     if (!authChecked || !user) return;
 
-    async function fetchRates() {
+    async function fetchData() {
       try {
+        // Fetch currencies from config
+        const currenciesDoc = await getDoc(
+          doc(firestore, "config", "currencies")
+        );
+        if (currenciesDoc.exists()) {
+          const currenciesList = currenciesDoc.data().list || [];
+          setCurrencies(currenciesList);
+          // Set default currency to first one if available
+          if (currenciesList.length > 0 && !currency) {
+            setCurrency(currenciesList[0]);
+          }
+        }
+
+        // Fetch gift card rates
         const snapshot = await getDocs(collection(firestore, "giftCardRates"));
         const data = snapshot.docs.map((doc) => ({
           id: doc.id,
@@ -117,7 +105,7 @@ export default function GiftCardsPage() {
         });
       }
     }
-    fetchRates();
+    fetchData();
   }, [authChecked, user, toast]);
 
   const selectedCardData = giftCards.find((c) => c.id === selectedCard);
@@ -129,7 +117,8 @@ export default function GiftCardsPage() {
     selectedCard &&
     faceValue &&
     parseFloat(faceValue) > 0 &&
-    cardImages.length > 0;
+    cardImages.length > 0 &&
+    currency;
 
   // Image handling
   const handleImageChange = (e) => {
@@ -270,7 +259,7 @@ export default function GiftCardsPage() {
       setFormState({ message: "Submitted for verification (15–30 mins)." });
       setSelectedCard("");
       setFaceValue("");
-      setCurrency("USD");
+      setCurrency(currencies.length > 0 ? currencies[0] : "");
       setCardCode("");
       setCardImages([]);
       setImagePreviews([]);
@@ -348,13 +337,13 @@ export default function GiftCardsPage() {
                 <Select
                   value={currency}
                   onValueChange={setCurrency}
-                  disabled={!selectedCard}
+                  disabled={!selectedCard || currencies.length === 0}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select currency" />
                   </SelectTrigger>
                   <SelectContent>
-                    {CURRENCIES.map((c) => (
+                    {currencies.map((c) => (
                       <SelectItem key={c} value={c}>
                         {c}
                       </SelectItem>

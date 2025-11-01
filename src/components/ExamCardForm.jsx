@@ -1,12 +1,16 @@
-// USER: Buy Exam Cards - app/dashboard/exam-cards/page.jsx
-// ============================================================================
-
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
+  runTransaction,
+} from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import {
   Card,
@@ -63,6 +67,11 @@ function ExamCardForm({ user, router }) {
       }
     } catch (error) {
       console.error("Error fetching wallet balance:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load wallet balance",
+        variant: "destructive",
+      });
     }
   };
 
@@ -87,6 +96,20 @@ function ExamCardForm({ user, router }) {
     const card = getSelectedCard();
     const qty = parseInt(quantity) || 0;
     return card ? card.finalPrice * qty : 0;
+  };
+
+  const isSubmitDisabled = () => {
+    const totalAmount = getTotalAmount();
+    const qty = parseInt(quantity) || 0;
+    return (
+      !isAuthenticated ||
+      !cardType ||
+      !qty ||
+      qty < 1 ||
+      qty > 100 ||
+      walletBalance < totalAmount ||
+      isSubmitting
+    );
   };
 
   const handleSubmit = async (e) => {
@@ -127,41 +150,100 @@ function ExamCardForm({ user, router }) {
         throw new Error("User not authenticated");
       }
 
-      const token = await currentUser.getIdToken(true);
+      const transactionPayload = {
+        userId: currentUser.uid,
+        cardTypeId: cardType,
+        quantity: qty,
+      };
 
+      // Call API first
       const response = await fetch("/api/exam-cards/purchase", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${await currentUser.getIdToken(true)}`,
         },
-        body: JSON.stringify({
-          userId: currentUser.uid,
-          cardTypeId: cardType,
-          quantity: qty,
-        }),
+        body: JSON.stringify(transactionPayload),
       });
 
       const result = await response.json();
 
-      if (!response.ok) {
-        throw new Error(result.error || "Transaction failed");
+      if (result.success && result.transactionData) {
+        // Use Firestore transaction to update wallet and save transaction atomically
+        await runTransaction(firestore, async (transaction) => {
+          const userDocRef = doc(firestore, "users", currentUser.uid);
+          const userDoc = await transaction.get(userDocRef);
+
+          if (!userDoc.exists()) {
+            throw new Error("User document not found");
+          }
+
+          const currentBalance = userDoc.data().walletBalance || 0;
+          const newBalance = currentBalance - totalAmount;
+
+          // Update wallet balance
+          transaction.update(userDocRef, {
+            walletBalance: newBalance,
+            updatedAt: serverTimestamp(),
+          });
+
+          // Save transaction
+          const transactionRef = doc(
+            firestore,
+            "users",
+            currentUser.uid,
+            "transactions",
+            result.transactionId
+          );
+
+          transaction.set(transactionRef, {
+            ...result.transactionData,
+            createdAt: serverTimestamp(),
+          });
+        });
+
+        // Show purchased cards
+        setPurchasedCards(result.data.cards);
+
+        toast({
+          title: "Purchase Successful",
+          description: `${qty} exam card(s) purchased successfully`,
+        });
+
+        // Reset form
+        setCardType("");
+        setQuantity("");
+
+        // Refresh wallet balance
+        await fetchWalletBalance();
+      } else {
+        // Handle failed transaction - just save it without deducting wallet
+        if (result.transactionData) {
+          const transactionRef = doc(
+            firestore,
+            "users",
+            currentUser.uid,
+            "transactions",
+            result.transactionId
+          );
+
+          await setDoc(transactionRef, {
+            ...result.transactionData,
+            createdAt: serverTimestamp(),
+          });
+        }
+
+        toast({
+          title: "Transaction Failed",
+          description: result.message || "Please try again.",
+          variant: "destructive",
+        });
       }
-
-      setPurchasedCards(result.data.cards);
-      toast({
-        title: "Purchase Successful",
-        description: `${qty} exam card(s) purchased successfully`,
-      });
-
-      setCardType("");
-      setQuantity("");
-      fetchWalletBalance();
     } catch (error) {
       console.error("Transaction error:", error);
       toast({
         title: "Transaction Failed",
-        description: error.message || "Please try again.",
+        description: error.message || "Network error. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -185,7 +267,8 @@ function ExamCardForm({ user, router }) {
           <AlertTitle>Insufficient Balance</AlertTitle>
           <AlertDescription>
             Your wallet balance (₦{walletBalance.toLocaleString()}) is less than
-            the required amount (₦{getTotalAmount().toLocaleString()}).
+            the required amount (₦{getTotalAmount().toLocaleString()}). Please
+            fund your wallet to proceed.
           </AlertDescription>
         </Alert>
       )}
@@ -194,7 +277,7 @@ function ExamCardForm({ user, router }) {
         <div className="space-y-2">
           <Label htmlFor="cardType">Exam Card Type *</Label>
           <Select value={cardType} onValueChange={setCardType} required>
-            <SelectTrigger id="cardType" className="text-foreground">
+            <SelectTrigger id="cardType">
               <SelectValue placeholder="Select exam card type" />
             </SelectTrigger>
             <SelectContent>
@@ -254,17 +337,7 @@ function ExamCardForm({ user, router }) {
           </div>
         )}
 
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={
-            isSubmitting ||
-            !isAuthenticated ||
-            !cardType ||
-            !quantity ||
-            getTotalAmount() > walletBalance
-          }
-        >
+        <Button type="submit" className="w-full" disabled={isSubmitDisabled()}>
           {isSubmitting ? (
             <>
               <Loader className="mr-2 h-4 w-4 animate-spin" />
