@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { doc, collection, runTransaction } from "firebase/firestore";
+import { firestore } from "@/lib/firebaseConfig";
 import {
   Dialog,
   DialogContent,
@@ -19,60 +21,182 @@ export default function FundingModal({ open, onOpenChange }) {
   const { user } = useAuth();
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const processedRefs = useRef(new Set()); // Track processed references
+
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src =
+      "https://korablobstorage.blob.core.windows.net/modal-bucket/korapay-collections.min.js";
+    script.async = true;
+    script.onload = () => setScriptLoaded(true);
+    document.body.appendChild(script);
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  const updateWalletBalance = async (amountPaid, reference) => {
+    if (processedRefs.current.has(reference)) {
+      console.log("Duplicate prevented:", reference);
+      return;
+    }
+    processedRefs.current.add(reference);
+
+    try {
+      const userRef = doc(firestore, "users", user.uid);
+      const txRef = doc(
+        collection(firestore, "users", user.uid, "transactions")
+      );
+
+      await runTransaction(firestore, async (tx) => {
+        const userSnap = await tx.get(userRef);
+        const current = userSnap.data()?.walletBalance || 0;
+        const newBalance = current + amountPaid;
+
+        tx.update(userRef, { walletBalance: newBalance });
+        tx.set(txRef, {
+          userId: user.uid,
+          reference,
+          description: "Wallet funding via Kora",
+          amount: amountPaid,
+          type: "credit",
+          status: "success",
+          date: new Date().toLocaleDateString(),
+          createdAt: new Date().toISOString(),
+        });
+      });
+
+      toast({
+        title: "Success",
+        description: `₦${amountPaid.toLocaleString()} added.`,
+      });
+      onOpenChange(false);
+      setAmount("");
+    } catch (error) {
+      console.error("Update error:", error);
+      toast({
+        title: "Failed",
+        description: "Contact support.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const verifyPayment = async (reference) => {
+    try {
+      const response = await fetch("/api/kora/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reference }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.status === "success") {
+        await updateWalletBalance(data.amount, reference);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Verify error:", error);
+      return false;
+    }
+  };
 
   const handleFundWallet = async (e) => {
     e.preventDefault();
 
     if (!user) {
       toast({
-        title: "Authentication Required",
-        description: "Please sign in to fund your wallet.",
+        title: "Error",
+        description: "Sign in required.",
         variant: "destructive",
       });
       return;
     }
 
     const fundAmount = parseFloat(amount);
-    if (!fundAmount || fundAmount < 100) {
+    if (isNaN(fundAmount) || fundAmount < 100) {
       toast({
-        title: "Invalid Amount",
-        description: "Please enter an amount of at least ₦100.",
+        title: "Invalid",
+        description: "Min ₦100.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!scriptLoaded || !window.Korapay) {
+      toast({
+        title: "Loading...",
+        description: "Please wait.",
         variant: "destructive",
       });
       return;
     }
 
     setLoading(true);
+    processedRefs.current.clear(); // Reset for new payment
 
     try {
-      const response = await fetch("/api/paystack/initialize", {
+      const initRes = await fetch("/api/kora/initialize", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: user.email,
           amount: fundAmount,
           userId: user.uid,
+          name: user.displayName || user.email.split("@")[0],
         }),
       });
 
-      const data = await response.json();
+      const initData = await initRes.json();
+      if (!initRes.ok) throw new Error(initData.error || "Init failed");
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to initialize payment");
-      }
-
-      // Redirect to Paystack payment page
-      window.location.href = data.authorization_url;
+      window.Korapay.initialize({
+        key: initData.publicKey,
+        reference: initData.reference,
+        amount: fundAmount,
+        currency: "NGN",
+        customer: {
+          name: user.displayName || user.email.split("@")[0],
+          email: user.email,
+        },
+        onSuccess: async (data) => {
+          setLoading(false);
+          if (processedRefs.current.has(data.reference)) return;
+          const verified = await verifyPayment(data.reference);
+          if (!verified) {
+            toast({
+              title: "Verify Failed",
+              description: `Ref: ${data.reference}`,
+              variant: "destructive",
+            });
+          }
+        },
+        onFailed: () => {
+          setLoading(false);
+          toast({
+            title: "Failed",
+            description: "Try again.",
+            variant: "destructive",
+          });
+        },
+        onClose: () => setLoading(false),
+        onPending: () => {
+          toast({ title: "Pending", description: "Processing..." });
+        },
+      });
     } catch (error) {
-      console.error("Funding error:", error);
+      setLoading(false);
       toast({
-        title: "Payment Error",
-        description: error.message || "Failed to initialize payment",
+        title: "Error",
+        description: error.message,
         variant: "destructive",
       });
-      setLoading(false);
     }
   };
 
@@ -81,39 +205,39 @@ export default function FundingModal({ open, onOpenChange }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Fund Wallet</DialogTitle>
-          <DialogDescription>
-            Enter the amount you want to add to your wallet
-          </DialogDescription>
+          <DialogDescription>Enter amount</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleFundWallet} className="space-y-4">
+        <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="amount">Amount (₦)</Label>
             <Input
               id="amount"
               type="number"
-              placeholder="Enter amount"
+              placeholder="100"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               min="100"
-              step="0.01"
-              required
               disabled={loading}
             />
-            <p className="text-sm text-muted-foreground">
-              Minimum amount: ₦100
-            </p>
+            <p className="text-sm text-muted-foreground">Min: ₦100</p>
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button
+            onClick={handleFundWallet}
+            className="w-full"
+            disabled={loading || !scriptLoaded || !amount}
+          >
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Processing...
               </>
+            ) : !scriptLoaded ? (
+              "Loading..."
             ) : (
-              "Proceed to Payment"
+              "Pay Now"
             )}
           </Button>
-        </form>
+        </div>
       </DialogContent>
     </Dialog>
   );

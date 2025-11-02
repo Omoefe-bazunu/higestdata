@@ -118,7 +118,6 @@ export default function WalletSummary() {
                 size="lg"
                 className="bg-accent hover:bg-accent/80 text-accent-foreground w-full"
                 onClick={() => setFundingDialogOpen(true)}
-                disabled
               >
                 <ArrowUpRight className="mr-2 h-5 w-5" />
                 Fund Wallet
@@ -130,7 +129,6 @@ export default function WalletSummary() {
                 variant="outline"
                 className="w-full"
                 onClick={() => setWithdrawalDialogOpen(true)}
-                disabled
               >
                 <ArrowDownLeft className="mr-2 h-5 w-5" />
                 Withdraw

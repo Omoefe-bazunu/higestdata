@@ -34,316 +34,220 @@ import { v4 as uuidv4 } from "uuid";
 
 export default function WithdrawalModal({ open, onOpenChange }) {
   const { user } = useAuth();
-  const [step, setStep] = useState(1); // 1: OTP, 2: Details, 3: Preview
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
 
-  // OTP Step
+  // OTP
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
-  const [otpExpiry, setOtpExpiry] = useState(null);
 
-  // Details Step
+  // Details
   const [amount, setAmount] = useState("");
   const [banks, setBanks] = useState([]);
   const [selectedBank, setSelectedBank] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountName, setAccountName] = useState("");
   const [accountResolved, setAccountResolved] = useState(false);
-  const [recipientCode, setRecipientCode] = useState("");
 
-  const WITHDRAWAL_FEE = 50;
-  const MIN_WITHDRAWAL = 100;
-  const MAX_WITHDRAWAL = 5000000;
+  const FEE = 50;
+  const MIN = 100;
+  const MAX = 5000000;
 
-  // Fetch wallet balance
   useEffect(() => {
     if (!user || !open) return;
-
-    const userRef = doc(db, "users", user.uid);
-    const unsubscribe = onSnapshot(userRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setWalletBalance(docSnap.data().walletBalance || 0);
-      }
+    const unsub = onSnapshot(doc(db, "users", user.uid), (doc) => {
+      setWalletBalance(doc.data()?.walletBalance || 0);
     });
-
-    return () => unsubscribe();
+    return () => unsub();
   }, [user, open]);
 
-  // Fetch banks
   useEffect(() => {
-    if (step === 2 && banks.length === 0) {
-      fetchBanks();
-    }
+    if (step === 2 && banks.length === 0) fetchBanks();
   }, [step]);
 
   const fetchBanks = async () => {
     try {
-      const response = await fetch("/api/withdrawal/banks");
-      const data = await response.json();
-      if (data.banks) {
-        setBanks(data.banks);
-      }
-    } catch (error) {
-      console.error("Failed to fetch banks:", error);
+      const res = await fetch("/api/kora/banks");
+      const data = await res.json();
+      if (data.banks) setBanks(data.banks);
+    } catch (err) {
       toast.error("Failed to load banks");
     }
   };
 
-  const generateOTP = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-  };
-
   const handleSendOTP = async () => {
-    if (!user) return;
-
     setLoading(true);
     try {
-      const userRef = doc(db, "users", user.uid);
-      const userDoc = await getDoc(userRef);
-      if (!userDoc.exists()) {
-        throw new Error("User not found");
-      }
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      const email = userDoc.data().email;
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-      const userData = userDoc.data();
-      const otp = generateOTP();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-      await updateDoc(userRef, {
+      await updateDoc(doc(db, "users", user.uid), {
         verificationToken: otp,
-        verificationTokenExpiry: expiresAt.toISOString(),
+        verificationTokenExpiry: new Date(
+          Date.now() + 10 * 60 * 1000
+        ).toISOString(),
       });
 
       await fetch("/api/withdrawal/send-otp", {
         method: "POST",
+        body: JSON.stringify({ email, otp }),
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: userData.email, otp }),
       });
 
       setOtpSent(true);
-      setOtpExpiry(expiresAt);
-      toast.success("OTP sent to your email");
-    } catch (error) {
-      console.error("Send OTP error:", error);
-      toast.error(error.message || "Failed to send OTP");
+      toast.success("OTP sent");
+    } catch (err) {
+      toast.error("Failed to send OTP");
     } finally {
       setLoading(false);
     }
   };
 
   const handleVerifyOTP = async () => {
-    if (!user || !otp) {
-      toast.error("Please enter the OTP");
-      return;
-    }
-
     setLoading(true);
     try {
-      const userRef = doc(db, "users", user.uid);
-      const userDoc = await getDoc(userRef);
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      const { verificationToken, verificationTokenExpiry } = userDoc.data();
 
-      if (!userDoc.exists()) {
-        throw new Error("User not found");
-      }
+      if (new Date() > new Date(verificationTokenExpiry))
+        throw new Error("OTP expired");
+      if (verificationToken !== otp) throw new Error("Invalid OTP");
 
-      const userData = userDoc.data();
-      const storedOTP = userData.verificationToken;
-      const expiryTime = userData.verificationTokenExpiry;
-
-      if (!storedOTP || !expiryTime) {
-        throw new Error("No OTP found. Please request a new one.");
-      }
-
-      if (new Date() > new Date(expiryTime)) {
-        throw new Error("OTP has expired. Please request a new one.");
-      }
-
-      if (storedOTP !== otp) {
-        throw new Error("Invalid OTP");
-      }
-
-      toast.success("OTP verified successfully");
+      toast.success("OTP verified");
       setStep(2);
-    } catch (error) {
-      console.error("Verify OTP error:", error);
-      toast.error(error.message);
+    } catch (err) {
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleResolveAccount = async () => {
-    if (!accountNumber || !selectedBank) {
-      toast.error("Please enter account number and select bank");
-      return;
-    }
-
+    if (!accountNumber || !selectedBank) return;
     setLoading(true);
-    setAccountResolved(false);
-    setAccountName("");
-
     try {
-      const response = await fetch("/api/withdrawal/resolve-account", {
+      const res = await fetch("/api/kora/resolve-account", {
         method: "POST",
+        body: JSON.stringify({ account: accountNumber, bank: selectedBank }),
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountNumber,
-          bankCode: selectedBank,
-        }),
       });
 
-      const data = await response.json();
+      const data = await res.json();
+      console.log("Resolve response:", data); // Debug
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to resolve account");
-      }
+      if (!res.ok) throw new Error(data.error || "Failed to verify account");
 
-      setAccountName(data.accountName);
+      setAccountName(data.account_name);
       setAccountResolved(true);
-      toast.success("Account resolved successfully");
-    } catch (error) {
-      console.error("Resolve account error:", error);
-      toast.error(error.message);
+      toast.success("Account verified");
+    } catch (err) {
+      console.error("Resolution error:", err);
+      toast.error(err.message || "Failed to verify account");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleProceedToPreview = async () => {
-    const withdrawalAmount = parseFloat(amount);
+  const handleInitiateWithdrawal = async () => {
+    const amt = parseFloat(amount);
+    const total = amt + FEE;
 
-    if (!withdrawalAmount || withdrawalAmount < MIN_WITHDRAWAL) {
-      toast.error(`Minimum withdrawal is ₦${MIN_WITHDRAWAL}`);
-      return;
-    }
-
-    if (withdrawalAmount > MAX_WITHDRAWAL) {
+    if (amt < MIN || amt > MAX) {
       toast.error(
-        `Maximum withdrawal per transaction is ₦${MAX_WITHDRAWAL.toLocaleString()}`
+        `Amount must be between ₦${MIN} and ₦${MAX.toLocaleString()}`
       );
       return;
     }
 
-    const totalAmount = withdrawalAmount + WITHDRAWAL_FEE;
-
-    if (totalAmount > walletBalance) {
-      toast.error("Insufficient wallet balance");
+    if (total > walletBalance) {
+      toast.error("Insufficient balance");
       return;
     }
 
     if (!accountResolved) {
-      toast.error("Please resolve account first");
+      toast.error("Please verify account first");
       return;
     }
 
     setLoading(true);
+    const reference = `WDR_${user.uid}_${Date.now()}`;
+    const bankName = banks.find((b) => b.code === selectedBank)?.name;
+
     try {
-      const response = await fetch("/api/withdrawal/create-recipient", {
-        method: "POST",
-        headers: { "Content-Type": "application/authentication" },
-        body: JSON.stringify({
-          accountName,
-          accountNumber,
-          bankCode: selectedBank,
-        }),
+      console.log("Sending withdrawal request:", {
+        reference,
+        amount: amt,
+        bank: selectedBank,
+        account: accountNumber,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to create recipient");
-      }
-
-      setRecipientCode(data.recipientCode);
-      setStep(3);
-    } catch (error) {
-      console.error("Create recipient error:", error);
-      toast.error(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleConfirmWithdrawal = async () => {
-    if (!user) return;
-
-    setLoading(true);
-    try {
-      const userRef = doc(db, "users", user.uid);
-      const totalAmount = parseFloat(amount) + WITHDRAWAL_FEE;
-      const reference = `WDR_${uuidv4().replace(/-/g, "_").substring(0, 40)}`;
-      const bankName =
-        banks.find((b) => b.code === selectedBank)?.name || "Bank";
-
-      const response = await fetch("/api/withdrawal/initiate-transfer", {
+      const res = await fetch("/api/kora/disburse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: parseFloat(amount),
-          recipientCode,
-          reference,
+          reference: reference,
+          amount: amt,
+          currency: "NGN",
+          destination: {
+            type: "bank_account",
+            narration: "Wallet withdrawal",
+            bank_account: {
+              bank: selectedBank,
+              account: accountNumber,
+            },
+            customer: {
+              name: accountName,
+              email: user.email,
+            },
+          },
         }),
       });
 
-      const data = await response.json();
+      const data = await res.json();
+      console.log("Withdrawal response:", data);
 
-      if (!response.ok) {
-        const errorMsg = data.error || "Failed to process withdrawal";
-        toast.error(`Withdrawal failed: ${errorMsg}`, {
-          description:
-            "Please check your details or try again later. If the issue persists, contact support.",
-          duration: 7000,
-        });
-        throw new Error(errorMsg);
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || data.message || "Payout failed");
       }
 
-      await updateDoc(userRef, {
-        walletBalance: walletBalance - totalAmount,
+      // Deduct from wallet
+      await updateDoc(doc(db, "users", user.uid), {
+        walletBalance: walletBalance - total,
       });
 
-      const transactionsRef = collection(db, "users", user.uid, "transactions");
-      await addDoc(transactionsRef, {
+      // Save transaction
+      await addDoc(collection(db, "users", user.uid, "transactions"), {
         userId: user.uid,
-        description: `Withdrawal to ${bankName} - ${accountNumber}`,
-        amount: totalAmount,
-        fee: WITHDRAWAL_FEE,
+        reference: reference,
+        description: `Withdrawal to ${bankName}`,
+        amount: -total, // Negative for debit
+        fee: FEE,
         type: "debit",
-        status: "Pending",
-        date: new Date().toLocaleDateString(),
-        createdAt: new Date().toISOString(),
-        paystackReference: reference,
-        transferCode: data.transferCode,
-        paymentMethod: "bank_transfer",
+        status: data.data?.status || "processing",
+        date: new Date(),
+        createdAt: new Date(),
         metadata: {
-          recipientCode,
           bankName,
           accountNumber,
           accountName,
+          koraReference: data.data?.reference,
+          koraStatus: data.data?.status,
         },
       });
 
-      toast.success("Withdrawal initiated successfully!", {
-        description: "Pending Admin approval within 15 minutes.",
-        duration: 6000,
-      });
-
-      resetModal();
-      onOpenChange(false);
-    } catch (error) {
-      const errMsg =
-        error?.message ||
-        "An unexpected error occurred while processing your withdrawal.";
-
-      toast.error("Error processing withdrawal", {
-        description: errMsg,
-        duration: 7000,
-      });
+      toast.success("Withdrawal initiated! Processing...");
+      resetAndClose();
+    } catch (err) {
+      console.error("Withdrawal error:", err);
+      toast.error(err.message || "Failed to process withdrawal");
     } finally {
       setLoading(false);
     }
   };
 
-  const resetModal = () => {
+  const resetAndClose = () => {
     setStep(1);
     setOtp("");
     setOtpSent(false);
@@ -352,86 +256,57 @@ export default function WithdrawalModal({ open, onOpenChange }) {
     setAccountNumber("");
     setAccountName("");
     setAccountResolved(false);
-    setRecipientCode("");
-  };
-
-  const handleClose = () => {
-    resetModal();
     onOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px] hidden">
+    <Dialog open={open} onOpenChange={resetAndClose}>
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Withdraw Funds</DialogTitle>
           <DialogDescription>
-            {step === 1 && "Verify your identity with OTP"}
-            {step === 2 && "Enter withdrawal details"}
-            {step === 3 && "Review and confirm withdrawal"}
+            {step === 1 && "Verify with OTP"}
+            {step === 2 && "Enter details"}
           </DialogDescription>
         </DialogHeader>
 
-        {/* Step 1: OTP Verification */}
+        {/* Step 1: OTP */}
         {step === 1 && (
           <div className="space-y-4">
             {!otpSent ? (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  We'll send a One-Time Password to your registered email
-                  address for security verification.
-                </p>
-                <Button
-                  onClick={handleSendOTP}
-                  disabled={loading}
-                  className="w-full"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Sending OTP...
-                    </>
-                  ) : (
-                    "Send OTP"
-                  )}
-                </Button>
-              </>
+              <Button
+                onClick={handleSendOTP}
+                disabled={loading}
+                className="w-full"
+              >
+                {loading ? (
+                  <Loader2 className="mr-2 animate-spin" />
+                ) : (
+                  "Send OTP"
+                )}
+              </Button>
             ) : (
               <>
-                <div className="space-y-2">
-                  <Label htmlFor="otp">Enter OTP</Label>
-                  <Input
-                    id="otp"
-                    type="text"
-                    placeholder="Enter 6-digit code"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    maxLength={6}
-                    disabled={loading}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Check your email for the OTP code
-                  </p>
-                </div>
+                <Input
+                  placeholder="Enter OTP"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value)}
+                  maxLength={6}
+                />
                 <div className="flex gap-2">
                   <Button
-                    onClick={handleSendOTP}
                     variant="outline"
+                    onClick={handleSendOTP}
                     disabled={loading}
-                    className="flex-1"
                   >
-                    Resend OTP
+                    Resend
                   </Button>
                   <Button
                     onClick={handleVerifyOTP}
                     disabled={loading || otp.length !== 6}
-                    className="flex-1"
                   >
                     {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Verifying...
-                      </>
+                      <Loader2 className="mr-2 animate-spin" />
                     ) : (
                       "Verify"
                     )}
@@ -442,85 +317,64 @@ export default function WithdrawalModal({ open, onOpenChange }) {
           </div>
         )}
 
-        {/* Step 2: Withdrawal Details */}
+        {/* Step 2: Details */}
         {step === 2 && (
           <div className="space-y-4">
             <div className="p-3 bg-muted rounded-lg">
-              <p className="text-sm text-muted-foreground">Available Balance</p>
-              <p className="text-2xl font-bold">
+              <p className="text-sm text-muted-foreground">Balance</p>
+              <p className="text-xl font-bold">
                 ₦{walletBalance.toLocaleString()}
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="amount">Withdrawal Amount</Label>
+            <div>
+              <Label>Amount</Label>
               <Input
-                id="amount"
                 type="number"
-                placeholder="Enter amount"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 min="100"
-                step="0.01"
-                disabled={loading}
               />
-              <p className="text-xs text-muted-foreground">
-                Min: ₦{MIN_WITHDRAWAL} | Max: ₦{MAX_WITHDRAWAL.toLocaleString()}{" "}
-                | Fee: ₦{WITHDRAWAL_FEE}
+              <p className="text-xs text-muted-foreground mt-1">
+                Fee: ₦{FEE} | Total: ₦
+                {(parseFloat(amount || 0) + FEE).toFixed(2)}
               </p>
-              {amount && (
-                <p className="text-sm font-medium">
-                  Total Deduction: ₦
-                  {(parseFloat(amount) + WITHDRAWAL_FEE).toFixed(2)}
-                </p>
-              )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="bank">Select Bank</Label>
+            <div>
+              <Label>Bank</Label>
               <Select value={selectedBank} onValueChange={setSelectedBank}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Choose your bank" />
+                  <SelectValue placeholder="Select bank" />
                 </SelectTrigger>
                 <SelectContent>
-                  {banks.map((bank, index) => (
-                    <SelectItem key={`${bank.code}-${index}`} value={bank.code}>
-                      {bank.name}
+                  {banks.map((b) => (
+                    <SelectItem key={b.code} value={b.code}>
+                      {b.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="accountNumber">Account Number</Label>
+            <div>
+              <Label>Account Number</Label>
               <div className="flex gap-2">
                 <Input
-                  id="accountNumber"
-                  type="text"
-                  placeholder="Enter account number"
                   value={accountNumber}
                   onChange={(e) => {
                     setAccountNumber(e.target.value);
                     setAccountResolved(false);
-                    setAccountName("");
                   }}
                   maxLength={10}
-                  disabled={loading}
                   className="flex-1"
                 />
                 <Button
                   onClick={handleResolveAccount}
-                  disabled={
-                    loading ||
-                    !accountNumber ||
-                    !selectedBank ||
-                    accountNumber.length !== 10
-                  }
-                  variant="outline"
+                  disabled={loading || !accountNumber || !selectedBank}
                 >
                   {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 animate-spin" />
                   ) : (
                     "Verify"
                   )}
@@ -529,22 +383,18 @@ export default function WithdrawalModal({ open, onOpenChange }) {
             </div>
 
             {accountResolved && (
-              <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
-                <div>
-                  <p className="font-medium text-green-900">{accountName}</p>
-                  <p className="text-sm text-green-700">{accountNumber}</p>
-                </div>
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="font-medium text-green-800">{accountName}</p>
+                <p className="text-sm text-green-700">{accountNumber}</p>
               </div>
             )}
 
             <Button
-              onClick={handleProceedToPreview}
+              onClick={handleInitiateWithdrawal}
               disabled={
                 loading ||
-                !amount ||
                 !accountResolved ||
-                parseFloat(amount) + WITHDRAWAL_FEE > walletBalance
+                parseFloat(amount || 0) + FEE > walletBalance
               }
               className="w-full"
             >
@@ -555,82 +405,10 @@ export default function WithdrawalModal({ open, onOpenChange }) {
                 </>
               ) : (
                 <>
-                  Continue
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  Confirm Withdrawal <ArrowRight className="ml-2 h-4 w-4" />
                 </>
               )}
             </Button>
-          </div>
-        )}
-
-        {/* Step 3: Preview & Confirm */}
-        {step === 3 && (
-          <div className="space-y-4">
-            <div className="p-4 bg-muted rounded-lg space-y-3">
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Amount</span>
-                <span className="font-medium">
-                  ₦{parseFloat(amount).toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Fee</span>
-                <span className="font-medium">
-                  ₦{WITHDRAWAL_FEE.toFixed(2)}
-                </span>
-              </div>
-              <div className="border-t pt-3 flex justify-between">
-                <span className="font-medium">Total Deduction</span>
-                <span className="font-bold text-lg">
-                  ₦{(parseFloat(amount) + WITHDRAWAL_FEE).toFixed(2)}
-                </span>
-              </div>
-            </div>
-
-            <div className="p-4 border rounded-lg space-y-2">
-              <h4 className="font-medium">Recipient Details</h4>
-              <div className="space-y-1">
-                <p className="text-sm">
-                  <span className="text-muted-foreground">Account Name:</span>{" "}
-                  <span className="font-medium">{accountName}</span>
-                </p>
-                <p className="text-sm">
-                  <span className="text-muted-foreground">Account Number:</span>{" "}
-                  <span className="font-medium">{accountNumber}</span>
-                </p>
-                <p className="text-sm">
-                  <span className="text-muted-foreground">Bank:</span>{" "}
-                  <span className="font-medium">
-                    {banks.find((b) => b.code === selectedBank)?.name}
-                  </span>
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                onClick={() => setStep(2)}
-                variant="outline"
-                disabled={loading}
-                className="flex-1"
-              >
-                Back
-              </Button>
-              <Button
-                onClick={handleConfirmWithdrawal}
-                disabled={loading}
-                className="flex-1"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  "Confirm Withdrawal"
-                )}
-              </Button>
-            </div>
           </div>
         )}
       </DialogContent>
