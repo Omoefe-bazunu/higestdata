@@ -6,10 +6,10 @@ import { firestore as db } from "@/lib/firebaseConfig";
 import {
   doc,
   onSnapshot,
+  updateDoc,
   addDoc,
   collection,
   getDoc,
-  updateDoc,
 } from "firebase/firestore";
 import {
   Dialog,
@@ -21,26 +21,38 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, ArrowRight, CheckCircle, XCircle } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Loader2, ArrowRight, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { v4 as uuidv4 } from "uuid";
 
 export default function WithdrawalModal({ open, onOpenChange }) {
   const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
-  const [result, setResult] = useState(null); // 'success' | 'error' | null
 
+  // OTP
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
 
+  // Details
   const [amount, setAmount] = useState("");
-  const [bankName, setBankName] = useState("");
+  const [banks, setBanks] = useState([]);
+  const [selectedBank, setSelectedBank] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountName, setAccountName] = useState("");
+  const [accountResolved, setAccountResolved] = useState(false);
 
   const FEE = 50;
   const MIN = 100;
+  const MAX = 5000000;
 
   useEffect(() => {
     if (!user || !open) return;
@@ -49,6 +61,20 @@ export default function WithdrawalModal({ open, onOpenChange }) {
     });
     return () => unsub();
   }, [user, open]);
+
+  useEffect(() => {
+    if (step === 2 && banks.length === 0) fetchBanks();
+  }, [step]);
+
+  const fetchBanks = async () => {
+    try {
+      const res = await fetch("/api/kora/banks");
+      const data = await res.json();
+      if (data.banks) setBanks(data.banks);
+    } catch (err) {
+      toast.error("Failed to load banks");
+    }
+  };
 
   const handleSendOTP = async () => {
     setLoading(true);
@@ -98,84 +124,124 @@ export default function WithdrawalModal({ open, onOpenChange }) {
     }
   };
 
-  const handleSubmitWithdrawal = async () => {
+  const handleResolveAccount = async () => {
+    if (!accountNumber || !selectedBank) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/kora/resolve-account", {
+        method: "POST",
+        body: JSON.stringify({ account: accountNumber, bank: selectedBank }),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await res.json();
+      console.log("Resolve response:", data); // Debug
+
+      if (!res.ok) throw new Error(data.error || "Failed to verify account");
+
+      setAccountName(data.account_name);
+      setAccountResolved(true);
+      toast.success("Account verified");
+    } catch (err) {
+      console.error("Resolution error:", err);
+      toast.error(err.message || "Failed to verify account");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInitiateWithdrawal = async () => {
     const amt = parseFloat(amount);
     const total = amt + FEE;
 
-    if (amt < MIN) {
-      toast.error(`Minimum withdrawal is ₦${MIN}`);
+    if (amt < MIN || amt > MAX) {
+      toast.error(
+        `Amount must be between ₦${MIN} and ₦${MAX.toLocaleString()}`
+      );
       return;
     }
 
     if (total > walletBalance) {
-      toast.error("Insufficient balance (including ₦50 fee)");
+      toast.error("Insufficient balance");
       return;
     }
 
-    if (!accountNumber || !bankName || !accountName) {
-      toast.error("Please fill all bank details");
+    if (!accountResolved) {
+      toast.error("Please verify account first");
       return;
     }
 
     setLoading(true);
     const reference = `WDR_${user.uid}_${Date.now()}`;
+    const bankName = banks.find((b) => b.code === selectedBank)?.name;
 
     try {
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      const userData = userDoc.data();
-
-      await addDoc(collection(db, "withdrawalRequests"), {
-        userId: user.uid,
-        userName: userData.name || userData.email,
-        userEmail: userData.email,
-        userPhone: userData.phoneNumber || "N/A",
+      console.log("Sending withdrawal request:", {
         reference,
         amount: amt,
-        fee: FEE,
-        totalAmount: total,
-        walletBalance,
-        bankName,
-        accountNumber,
-        accountName,
-        status: "pending",
-        createdAt: new Date(),
+        bank: selectedBank,
+        account: accountNumber,
       });
 
+      const res = await fetch("/api/kora/disburse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reference: reference,
+          amount: amt,
+          currency: "NGN",
+          destination: {
+            type: "bank_account",
+            narration: "Wallet withdrawal",
+            bank_account: {
+              bank: selectedBank,
+              account: accountNumber,
+            },
+            customer: {
+              name: accountName,
+              email: user.email,
+            },
+          },
+        }),
+      });
+
+      const data = await res.json();
+      console.log("Withdrawal response:", data);
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || data.message || "Payout failed");
+      }
+
+      // Deduct from wallet
+      await updateDoc(doc(db, "users", user.uid), {
+        walletBalance: walletBalance - total,
+      });
+
+      // Save transaction
       await addDoc(collection(db, "users", user.uid, "transactions"), {
         userId: user.uid,
-        reference,
+        reference: reference,
         description: `Withdrawal to ${bankName}`,
-        amount: -total,
+        amount: -total, // Negative for debit
         fee: FEE,
         type: "debit",
-        status: "pending",
-        date: new Date().toLocaleDateString("en-GB"),
+        status: data.data?.status || "processing",
+        date: new Date(),
         createdAt: new Date(),
         metadata: {
           bankName,
           accountNumber,
           accountName,
+          koraReference: data.data?.reference,
+          koraStatus: data.data?.status,
         },
       });
 
-      await fetch("/api/withdrawal/notify-admin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userName: userData.fullName || userData.email,
-          userEmail: userData.email,
-          amount: amt,
-          bankName,
-          accountNumber,
-          accountName,
-          reference,
-        }),
-      });
-
-      setResult("success");
+      toast.success("Withdrawal initiated! Processing...");
+      resetAndClose();
     } catch (err) {
       console.error("Withdrawal error:", err);
-      setResult("error");
+      toast.error(err.message || "Failed to process withdrawal");
     } finally {
       setLoading(false);
     }
@@ -186,10 +252,10 @@ export default function WithdrawalModal({ open, onOpenChange }) {
     setOtp("");
     setOtpSent(false);
     setAmount("");
-    setBankName("");
+    setSelectedBank("");
     setAccountNumber("");
     setAccountName("");
-    setResult(null);
+    setAccountResolved(false);
     onOpenChange(false);
   };
 
@@ -200,14 +266,12 @@ export default function WithdrawalModal({ open, onOpenChange }) {
           <DialogTitle>Withdraw Funds</DialogTitle>
           <DialogDescription>
             {step === 1 && "Verify with OTP"}
-            {step === 2 && !result && "Enter withdrawal details"}
-            {result === "success" && "Request Submitted"}
-            {result === "error" && "Submission Failed"}
+            {step === 2 && "Enter details"}
           </DialogDescription>
         </DialogHeader>
 
-        {/* OTP Step */}
-        {step === 1 && !result && (
+        {/* Step 1: OTP */}
+        {step === 1 && (
           <div className="space-y-4">
             {!otpSent ? (
               <Button
@@ -253,11 +317,11 @@ export default function WithdrawalModal({ open, onOpenChange }) {
           </div>
         )}
 
-        {/* Withdrawal Form */}
-        {step === 2 && !result && (
+        {/* Step 2: Details */}
+        {step === 2 && (
           <div className="space-y-4">
             <div className="p-3 bg-muted rounded-lg">
-              <p className="text-sm text-muted-foreground">Available Balance</p>
+              <p className="text-sm text-muted-foreground">Balance</p>
               <p className="text-xl font-bold">
                 ₦{walletBalance.toLocaleString()}
               </p>
@@ -269,8 +333,7 @@ export default function WithdrawalModal({ open, onOpenChange }) {
                 type="number"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                min={MIN}
-                placeholder={`Min: ₦${MIN}`}
+                min="100"
               />
               <p className="text-xs text-muted-foreground mt-1">
                 Fee: ₦{FEE} | Total: ₦
@@ -279,42 +342,58 @@ export default function WithdrawalModal({ open, onOpenChange }) {
             </div>
 
             <div>
-              <Label>Bank Name</Label>
-              <Input
-                type="text"
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
-                placeholder="Enter bank name"
-              />
+              <Label>Bank</Label>
+              <Select value={selectedBank} onValueChange={setSelectedBank}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select bank" />
+                </SelectTrigger>
+                <SelectContent>
+                  {banks.map((b) => (
+                    <SelectItem key={b.code} value={b.code}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
               <Label>Account Number</Label>
-              <Input
-                value={accountNumber}
-                onChange={(e) => setAccountNumber(e.target.value)}
-                maxLength={10}
-                placeholder="10-digit account number"
-              />
+              <div className="flex gap-2">
+                <Input
+                  value={accountNumber}
+                  onChange={(e) => {
+                    setAccountNumber(e.target.value);
+                    setAccountResolved(false);
+                  }}
+                  maxLength={10}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleResolveAccount}
+                  disabled={loading || !accountNumber || !selectedBank}
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 animate-spin" />
+                  ) : (
+                    "Verify"
+                  )}
+                </Button>
+              </div>
             </div>
 
-            <div>
-              <Label>Account Name</Label>
-              <Input
-                value={accountName}
-                onChange={(e) => setAccountName(e.target.value)}
-                placeholder="Account holder name"
-              />
-            </div>
+            {accountResolved && (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="font-medium text-green-800">{accountName}</p>
+                <p className="text-sm text-green-700">{accountNumber}</p>
+              </div>
+            )}
 
             <Button
-              onClick={handleSubmitWithdrawal}
+              onClick={handleInitiateWithdrawal}
               disabled={
                 loading ||
-                !amount ||
-                !bankName ||
-                !accountNumber ||
-                !accountName ||
+                !accountResolved ||
                 parseFloat(amount || 0) + FEE > walletBalance
               }
               className="w-full"
@@ -322,45 +401,13 @@ export default function WithdrawalModal({ open, onOpenChange }) {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Submitting...
+                  Processing...
                 </>
               ) : (
                 <>
-                  Submit Request <ArrowRight className="ml-2 h-4 w-4" />
+                  Confirm Withdrawal <ArrowRight className="ml-2 h-4 w-4" />
                 </>
               )}
-            </Button>
-          </div>
-        )}
-
-        {/* Success Modal */}
-        {result === "success" && (
-          <div className="flex flex-col items-center space-y-4 py-6">
-            <CheckCircle className="h-16 w-16 text-green-600" />
-            <div className="text-center">
-              <p className="text-lg font-semibold">Request Submitted!</p>
-              <p className="text-sm text-muted-foreground">
-                Your withdrawal is being processed.
-              </p>
-            </div>
-            <Button onClick={resetAndClose} className="w-full">
-              Done
-            </Button>
-          </div>
-        )}
-
-        {/* Error Modal */}
-        {result === "error" && (
-          <div className="flex flex-col items-center space-y-4 py-6">
-            <XCircle className="h-16 w-16 text-red-600" />
-            <div className="text-center">
-              <p className="text-lg font-semibold">Submission Failed</p>
-              <p className="text-sm text-muted-foreground">
-                Please try again later.
-              </p>
-            </div>
-            <Button onClick={resetAndClose} className="w-full">
-              Try Again
             </Button>
           </div>
         )}

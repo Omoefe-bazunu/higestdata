@@ -27,14 +27,25 @@ export async function getTransactions(userId) {
 
   const q = query(
     collection(firestore, "users", userId, "transactions"),
-    orderBy("date", "desc")
+    orderBy("createdAt", "desc")
   );
   const snapshot = await getDocs(q);
 
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  return snapshot.docs.map((doc) => {
+    const data = doc.data();
+    const timestamp = data.createdAt || data.date;
+    const dateStr = timestamp?.toDate?.()
+      ? timestamp.toDate().toLocaleDateString()
+      : timestamp?.seconds
+      ? new Date(timestamp.seconds * 1000).toLocaleDateString()
+      : data.date || "N/A";
+
+    return {
+      id: doc.id,
+      ...data,
+      date: dateStr,
+    };
+  });
 }
 
 // Get Crypto Rates (from Firestore document "settings/cryptoConfig")
@@ -86,15 +97,26 @@ export async function getNotifications(userId) {
 export async function getAllTransactions() {
   const q = query(
     collectionGroup(firestore, "transactions"),
-    orderBy("date", "desc")
+    orderBy("createdAt", "desc")
   );
 
   const snapshot = await getDocs(q);
 
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  return snapshot.docs.map((doc) => {
+    const data = doc.data();
+    const timestamp = data.createdAt;
+    const dateStr = timestamp?.toDate?.()
+      ? timestamp.toDate().toLocaleDateString()
+      : timestamp?.seconds
+      ? new Date(timestamp.seconds * 1000).toLocaleDateString()
+      : data.date || "N/A";
+
+    return {
+      id: doc.id,
+      ...data,
+      date: dateStr,
+    };
+  });
 }
 
 // Get Flagged Transactions (for admins)

@@ -22,7 +22,7 @@ export default function FundingModal({ open, onOpenChange }) {
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [scriptLoaded, setScriptLoaded] = useState(false);
-  const processedRefs = useRef(new Set()); // Track processed references
+  const processedRefs = useRef(new Set());
 
   useEffect(() => {
     const script = document.createElement("script");
@@ -46,6 +46,9 @@ export default function FundingModal({ open, onOpenChange }) {
     }
     processedRefs.current.add(reference);
 
+    const now = new Date();
+    const dateStr = now.toLocaleDateString("en-GB"); // e.g., 04/11/2025
+
     try {
       const userRef = doc(firestore, "users", user.uid);
       const txRef = doc(
@@ -65,8 +68,8 @@ export default function FundingModal({ open, onOpenChange }) {
           amount: amountPaid,
           type: "credit",
           status: "success",
-          date: new Date().toLocaleDateString(),
-          createdAt: new Date().toISOString(),
+          date: dateStr,
+          createdAt: now,
         });
       });
 
@@ -139,7 +142,7 @@ export default function FundingModal({ open, onOpenChange }) {
     }
 
     setLoading(true);
-    processedRefs.current.clear(); // Reset for new payment
+    processedRefs.current.clear();
 
     try {
       const initRes = await fetch("/api/kora/initialize", {

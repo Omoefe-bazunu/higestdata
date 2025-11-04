@@ -34,6 +34,7 @@ import PendingRequestsTab from "@/components/admin/pending-requests-tab";
 import BettingRatesTab from "@/components/admin/betting-rates-tab";
 import ExamCardRatesPage from "@/components/admin/exam-rates-tab";
 import AdminUsersManagement from "@/components/admin/UsersData";
+import AdminWithdrawals from "@/components/admin/withdrawal-requests-tab";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("transactions");
@@ -211,6 +212,9 @@ export default function AdminPage() {
                   <SelectItem value="pending-requests">
                     Pending Requests
                   </SelectItem>
+                  <SelectItem value="withdrawal-requests">
+                    Withdrawal Requests
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -230,6 +234,9 @@ export default function AdminPage() {
                 <TabsTrigger value="exam-cards">Exam Card Rates</TabsTrigger>
                 <TabsTrigger value="pending-requests">
                   Pending Requests
+                </TabsTrigger>
+                <TabsTrigger value="withdrawal-requests">
+                  Withdrawal Requests
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -260,6 +267,9 @@ export default function AdminPage() {
             </TabsContent>
             <TabsContent value="pending-requests" className="mt-8">
               <PendingRequestsTab />
+            </TabsContent>
+            <TabsContent value="withdrawal-requests" className="mt-8">
+              <AdminWithdrawals />
             </TabsContent>
           </Tabs>
         </div>

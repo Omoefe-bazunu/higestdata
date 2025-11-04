@@ -25,7 +25,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { Download, Eye, FileText } from "lucide-react";
+import { Download, FileText } from "lucide-react";
 
 function getStatusBadgeVariant(status) {
   switch (status) {
@@ -58,19 +58,18 @@ function formatStatus(status) {
   return statusMap[status.toLowerCase()] || status;
 }
 
-function TransactionDetailsModal({ transaction }) {
-  const formatDate = (date) => {
-    if (!date) return "N/A";
-    try {
-      if (date.toDate) {
-        return date.toDate().toLocaleString();
-      }
-      return new Date(date).toLocaleString();
-    } catch {
-      return date.toString();
-    }
-  };
+function formatDate(date) {
+  if (!date) return "N/A";
+  try {
+    if (date.toDate) return date.toDate().toLocaleDateString();
+    if (date.seconds) return new Date(date.seconds * 1000).toLocaleDateString();
+    return new Date(date).toLocaleDateString();
+  } catch {
+    return String(date);
+  }
+}
 
+function TransactionDetailsModal({ transaction }) {
   const DetailRow = ({ label, value, className = "" }) => (
     <div className="flex justify-between py-2 border-b last:border-0">
       <span className="text-sm font-medium text-muted-foreground">{label}</span>
@@ -127,7 +126,10 @@ function TransactionDetailsModal({ transaction }) {
                 label="Status"
                 value={formatStatus(transaction.status)}
               />
-              <DetailRow label="Date" value={formatDate(transaction.date)} />
+              <DetailRow
+                label="Date"
+                value={formatDate(transaction.createdAt || transaction.date)}
+              />
               {transaction.createdAt && (
                 <DetailRow
                   label="Created At"
@@ -339,17 +341,21 @@ export default function TransactionsPage() {
         ...doc.data(),
       }));
 
-      // Sort again client-side to handle any transactions without createdAt
+      // Client-side sort fallback
       transactionsData.sort((a, b) => {
-        const aTime = a.createdAt?.toDate?.() || new Date(a.date || 0);
-        const bTime = b.createdAt?.toDate?.() || new Date(b.date || 0);
-        return bTime - aTime; // Descending order (newest first)
+        const getTime = (obj) => {
+          const ts = obj.createdAt || obj.date;
+          if (!ts) return 0;
+          if (ts.toDate) return ts.toDate().getTime();
+          if (ts.seconds) return ts.seconds * 1000;
+          return new Date(ts).getTime() || 0;
+        };
+        return getTime(b) - getTime(a);
       });
 
       setTransactions(transactionsData);
     } catch (error) {
       console.error("Error fetching transactions:", error);
-      // If Firestore query fails (e.g., missing index), fetch without ordering
       try {
         const snapshot = await getDocs(
           collection(firestore, "users", userId, "transactions")
@@ -359,11 +365,15 @@ export default function TransactionsPage() {
           ...doc.data(),
         }));
 
-        // Sort client-side
         transactionsData.sort((a, b) => {
-          const aTime = a.createdAt?.toDate?.() || new Date(a.date || 0);
-          const bTime = b.createdAt?.toDate?.() || new Date(b.date || 0);
-          return bTime - aTime;
+          const getTime = (obj) => {
+            const ts = obj.createdAt || obj.date;
+            if (!ts) return 0;
+            if (ts.toDate) return ts.toDate().getTime();
+            if (ts.seconds) return ts.seconds * 1000;
+            return new Date(ts).getTime() || 0;
+          };
+          return getTime(b) - getTime(a);
         });
 
         setTransactions(transactionsData);
@@ -429,7 +439,21 @@ export default function TransactionsPage() {
                       {tx.description}
                     </TableCell>
                     <TableCell>
-                      {tx.date ? new Date(tx.date).toLocaleDateString() : "N/A"}
+                      {(() => {
+                        const date = tx.createdAt || tx.date;
+                        if (!date) return "N/A";
+                        try {
+                          if (date.toDate)
+                            return date.toDate().toLocaleDateString();
+                          if (date.seconds)
+                            return new Date(
+                              date.seconds * 1000
+                            ).toLocaleDateString();
+                          return new Date(date).toLocaleDateString();
+                        } catch {
+                          return String(date);
+                        }
+                      })()}
                     </TableCell>
                     <TableCell>
                       <span

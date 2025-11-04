@@ -41,7 +41,21 @@ export default function RecentTransactions() {
     async function fetchData() {
       try {
         const txs = await getTransactions(user.uid);
-        setTransactions(txs.slice(0, 5));
+
+        // Sort by createdAt (Timestamp) or date — newest first
+        const sorted = txs
+          .map((tx) => ({
+            ...tx,
+            sortTime:
+              tx.createdAt?.toDate?.() ||
+              (tx.createdAt?.seconds
+                ? new Date(tx.createdAt.seconds * 1000)
+                : new Date(tx.date || 0)),
+          }))
+          .sort((a, b) => b.sortTime - a.sortTime)
+          .slice(0, 5);
+
+        setTransactions(sorted);
       } catch (err) {
         console.error("Failed to fetch transactions:", err);
       } finally {
@@ -50,6 +64,18 @@ export default function RecentTransactions() {
     }
     fetchData();
   }, [user]);
+
+  const formatDate = (date) => {
+    if (!date) return "N/A";
+    try {
+      if (date.toDate) return date.toDate().toLocaleDateString("en-GB");
+      if (date.seconds)
+        return new Date(date.seconds * 1000).toLocaleDateString("en-GB");
+      return new Date(date).toLocaleDateString("en-GB");
+    } catch {
+      return String(date);
+    }
+  };
 
   return (
     <Card>
@@ -99,7 +125,7 @@ export default function RecentTransactions() {
                   <div className="flex-1">
                     <p className="font-medium">{tx.description}</p>
                     <p className="text-sm text-muted-foreground">
-                      {new Date(tx.date).toLocaleDateString()}
+                      {formatDate(tx.createdAt || tx.date)}
                     </p>
                   </div>
                   <div className="text-right">
