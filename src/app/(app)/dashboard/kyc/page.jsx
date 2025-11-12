@@ -27,7 +27,7 @@ import {
   Wallet,
   ArrowRight,
 } from "lucide-react";
-import { auth, db } from "@/lib/firebase";
+import { firestore, auth } from "@/lib/firebaseConfig";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
@@ -110,7 +110,7 @@ export default function KycPage() {
   // Fetch user data
   const fetchUserData = async (currentUser) => {
     try {
-      const userDocRef = doc(db, "users", currentUser.uid);
+      const userDocRef = doc(firestore, "users", currentUser.uid);
       const userDoc = await getDoc(userDocRef);
 
       if (userDoc.exists()) {
