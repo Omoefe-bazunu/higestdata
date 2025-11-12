@@ -128,9 +128,13 @@ function ElectricityForm({ user, router }) {
         customer_id: meterNumber,
         variation_id: meterType,
       });
-      const response = await fetch(`/api/electricity/verify?${params}`, {
-        method: "GET",
-      });
+      const response = await fetch(
+        `https://higestdata-proxy.onrender.com/api/electricity/verify?${params}`,
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
       const result = await response.json();
       if (result.success && result.data) {
         setMeterVerified(true);
@@ -144,15 +148,16 @@ function ElectricityForm({ user, router }) {
         setCustomerDetails(null);
         toast({
           title: "Verification Failed",
-          description: result.message,
+          description: result.message || "Invalid meter details.",
           variant: "destructive",
         });
       }
     } catch (error) {
       setMeterVerified(false);
+      setCustomerDetails(null);
       toast({
         title: "Verification Error",
-        description: "Try again.",
+        description: "Unable to verify meter. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -218,19 +223,10 @@ function ElectricityForm({ user, router }) {
       return;
     }
 
-    if (electricityAmount < 1000) {
+    if (electricityAmount < 1000 || electricityAmount > 100000) {
       toast({
-        title: "Minimum Amount Required",
-        description: "Minimum purchase amount is ₦1000.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (electricityAmount > 100000) {
-      toast({
-        title: "Maximum Amount Exceeded",
-        description: "Maximum purchase amount is ₦100,000.",
+        title: "Amount Out of Range",
+        description: "Amount must be between ₦1000 and ₦100,000.",
         variant: "destructive",
       });
       return;
@@ -255,10 +251,9 @@ function ElectricityForm({ user, router }) {
     try {
       const auth = getAuth();
       const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("User not authenticated");
 
-      if (!currentUser) {
-        throw new Error("User not authenticated");
-      }
+      const token = await currentUser.getIdToken(true);
 
       const transactionPayload = {
         userId: currentUser.uid,
@@ -271,95 +266,51 @@ function ElectricityForm({ user, router }) {
         variationId: meterType,
       };
 
-      // Call API first
-      const response = await fetch("/api/electricity/purchase", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${await currentUser.getIdToken(true)}`,
-        },
-        body: JSON.stringify(transactionPayload),
-      });
+      // CALL RENDER BACKEND
+      const response = await fetch(
+        "https://higestdata-proxy.onrender.com/api/electricity/purchase",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(transactionPayload),
+        }
+      );
 
       const result = await response.json();
 
-      if (result.success && result.transactionData) {
-        // Use Firestore transaction to update wallet and save transaction atomically
-        await runTransaction(firestore, async (transaction) => {
-          const userDocRef = doc(firestore, "users", currentUser.uid);
-          const userDoc = await transaction.get(userDocRef);
-
-          if (!userDoc.exists()) {
-            throw new Error("User document not found");
-          }
-
-          const currentBalance = userDoc.data().walletBalance || 0;
-          const newBalance = currentBalance - totalAmount;
-
-          // Update wallet balance
-          transaction.update(userDocRef, {
-            walletBalance: newBalance,
-            updatedAt: serverTimestamp(),
-          });
-
-          // Save transaction
-          const transactionRef = doc(
-            firestore,
-            "users",
-            currentUser.uid,
-            "transactions",
-            result.transactionId
-          );
-
-          transaction.set(transactionRef, {
-            ...result.transactionData,
-            createdAt: serverTimestamp(),
-          });
-        });
-
-        toast({
-          title: "Purchase Successful",
-          description: `₦${electricityAmount.toLocaleString()} electricity units credited to your meter.`,
-        });
-
-        // Reset form
-        setProvider("");
-        setMeterNumber("");
-        setMeterType("");
-        setAmount("");
-        setMeterVerified(false);
-        setCustomerDetails(null);
-
-        // Refresh wallet balance
-        await fetchWalletBalance();
-      } else {
-        // Handle failed transaction - just save it without deducting wallet
-        if (result.transactionData) {
-          const transactionRef = doc(
-            firestore,
-            "users",
-            currentUser.uid,
-            "transactions",
-            result.transactionId
-          );
-
-          await setDoc(transactionRef, {
-            ...result.transactionData,
-            createdAt: serverTimestamp(),
-          });
-        }
-
-        toast({
-          title: "Transaction Failed",
-          description: result.message || "Please try again.",
-          variant: "destructive",
-        });
+      if (!response.ok) {
+        throw new Error(result.message || "Transaction failed");
       }
+
+      // NO WALLET UPDATE
+      // NO setDoc() or runTransaction()
+      // → Backend + Webhook handles everything
+
+      toast({
+        title: "Processing...",
+        description: result.message.includes("processing")
+          ? "Electricity purchase is being processed..."
+          : `₦${electricityAmount.toLocaleString()} units credited!`,
+      });
+
+      // Reset form
+      setProvider("");
+      setMeterNumber("");
+      setMeterType("");
+      setAmount("");
+      setMeterVerified(false);
+      setCustomerDetails(null);
+
+      // Balance will update via Firestore listener
+      fetchWalletBalance();
     } catch (error) {
       console.error("Transaction error:", error);
       toast({
         title: "Transaction Failed",
-        description: error.message || "Network error. Please try again.",
+        description: error.message || "Please try again.",
         variant: "destructive",
       });
     } finally {

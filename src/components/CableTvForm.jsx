@@ -135,7 +135,7 @@ function CableTVForm({ user, router }) {
     setIsVerifying(true);
     try {
       const response = await fetch(
-        `/api/tv/verify?provider=${provider}&customerId=${cardNumber}`,
+        `https://higestdata-proxy.onrender.com/api/tv/verify?provider=${provider}&customerId=${cardNumber}`,
         {
           method: "GET",
           headers: { "Content-Type": "application/json" },
@@ -230,94 +230,57 @@ function CableTVForm({ user, router }) {
     try {
       const auth = getAuth();
       const currentUser = auth.currentUser;
-
-      if (!currentUser) {
-        throw new Error("User not authenticated");
-      }
+      if (!currentUser) throw new Error("User not authenticated");
 
       const token = await currentUser.getIdToken(true);
+
       const transactionData = {
         userId: currentUser.uid,
         serviceType: "cable",
-        amount,
-        provider,
-        customerId: cardNumber,
+        amount, // eBills amount
+        finalPrice: amount, // wallet deduction
+        phone: undefined,
+        network: provider,
         variationId: plan,
+        customerId: cardNumber,
       };
 
-      const response = await fetch("/api/vtu/transaction", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(transactionData),
-      });
+      // CALL RENDER BACKEND
+      const response = await fetch(
+        "https://higestdata-proxy.onrender.com/api/vtu/transaction",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(transactionData),
+        }
+      );
 
       const result = await response.json();
 
-      if (response.status === 402) {
-        toast({
-          title: "Insufficient Balance",
-          description:
-            "Your wallet balance is not enough for this transaction.",
-          variant: "destructive",
-        });
-        return;
-      }
-
       if (!response.ok) {
-        if (result.transactionData) {
-          const transactionId =
-            result.transactionId ||
-            `txn_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-          await setDoc(
-            doc(
-              firestore,
-              "users",
-              currentUser.uid,
-              "transactions",
-              transactionId
-            ),
-            {
-              ...result.transactionData,
-              createdAt: serverTimestamp(),
-            }
-          );
-        }
         throw new Error(result.error || "Transaction failed");
       }
 
-      await updateDoc(doc(firestore, "users", currentUser.uid), {
-        walletBalance: walletBalance - result.transactionData.amount,
-      });
-
-      if (result.transactionData) {
-        await setDoc(
-          doc(
-            firestore,
-            "users",
-            currentUser.uid,
-            "transactions",
-            result.transactionId
-          ),
-          {
-            ...result.transactionData,
-            createdAt: serverTimestamp(),
-          }
-        );
-      }
+      // NO WALLET UPDATE
+      // NO setDoc() — backend handles it
+      // Webhook will deduct if pending → success
 
       toast({
-        title: "Subscription Successful",
-        description: "Cable TV subscription completed successfully.",
+        title: "Processing...",
+        description: result.message.includes("processing")
+          ? "Your cable subscription is being processed."
+          : "Cable TV subscription successful!",
       });
 
+      // Reset form
       setProvider("");
       setCardNumber("");
       setPlan("");
       setCardVerified(false);
-      fetchWalletBalance();
+      fetchWalletBalance(); // Will update via Firestore listener
     } catch (error) {
       console.error("Transaction error:", error);
       toast({

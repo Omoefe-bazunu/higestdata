@@ -125,9 +125,13 @@ function BettingForm({ user, router }) {
         provider,
         customerId,
       });
-      const response = await fetch(`/api/betting/verify?${params}`, {
-        method: "GET",
-      });
+      const response = await fetch(
+        `https://higestdata-proxy.onrender.com/api/betting/verify?${params}`,
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
       const result = await response.json();
       if (result.success && result.data) {
         setCustomerVerified(true);
@@ -139,7 +143,7 @@ function BettingForm({ user, router }) {
         setCustomerVerified(false);
         toast({
           title: "Verification Failed",
-          description: result.message,
+          description: result.message || "Invalid customer ID.",
           variant: "destructive",
         });
       }
@@ -147,14 +151,13 @@ function BettingForm({ user, router }) {
       setCustomerVerified(false);
       toast({
         title: "Verification Error",
-        description: "Try again.",
+        description: "Unable to verify customer ID. Please try again.",
         variant: "destructive",
       });
     } finally {
       setIsVerifying(false);
     }
   };
-
   const getBettingAmount = () => {
     return parseFloat(amount || 0);
   };
@@ -212,19 +215,10 @@ function BettingForm({ user, router }) {
       return;
     }
 
-    if (bettingAmount < 100) {
+    if (bettingAmount < 100 || bettingAmount > 100000) {
       toast({
-        title: "Minimum Amount Required",
-        description: "Minimum funding amount is ₦100.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (bettingAmount > 100000) {
-      toast({
-        title: "Maximum Amount Exceeded",
-        description: "Maximum funding amount is ₦100,000.",
+        title: "Amount Out of Range",
+        description: "Amount must be between ₦100 and ₦100,000.",
         variant: "destructive",
       });
       return;
@@ -249,10 +243,9 @@ function BettingForm({ user, router }) {
     try {
       const auth = getAuth();
       const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("User not authenticated");
 
-      if (!currentUser) {
-        throw new Error("User not authenticated");
-      }
+      const token = await currentUser.getIdToken(true);
 
       const transactionPayload = {
         userId: currentUser.uid,
@@ -264,93 +257,49 @@ function BettingForm({ user, router }) {
         customerId,
       };
 
-      // Call API first
-      const response = await fetch("/api/betting/fund", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${await currentUser.getIdToken(true)}`,
-        },
-        body: JSON.stringify(transactionPayload),
-      });
+      // CALL RENDER BACKEND
+      const response = await fetch(
+        "https://higestdata-proxy.onrender.com/api/betting/fund",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(transactionPayload),
+        }
+      );
 
       const result = await response.json();
 
-      if (result.success && result.transactionData) {
-        // Use Firestore transaction to update wallet and save transaction atomically
-        await runTransaction(firestore, async (transaction) => {
-          const userDocRef = doc(firestore, "users", currentUser.uid);
-          const userDoc = await transaction.get(userDocRef);
-
-          if (!userDoc.exists()) {
-            throw new Error("User document not found");
-          }
-
-          const currentBalance = userDoc.data().walletBalance || 0;
-          const newBalance = currentBalance - totalAmount;
-
-          // Update wallet balance
-          transaction.update(userDocRef, {
-            walletBalance: newBalance,
-            updatedAt: serverTimestamp(),
-          });
-
-          // Save transaction
-          const transactionRef = doc(
-            firestore,
-            "users",
-            currentUser.uid,
-            "transactions",
-            result.transactionId
-          );
-
-          transaction.set(transactionRef, {
-            ...result.transactionData,
-            createdAt: serverTimestamp(),
-          });
-        });
-
-        toast({
-          title: "Funding Successful",
-          description: `₦${bettingAmount.toLocaleString()} has been credited to your ${provider} account.`,
-        });
-
-        // Reset form
-        setProvider("");
-        setCustomerId("");
-        setAmount("");
-        setCustomerVerified(false);
-
-        // Refresh wallet balance
-        await fetchWalletBalance();
-      } else {
-        // Handle failed transaction - just save it without deducting wallet
-        if (result.transactionData) {
-          const transactionRef = doc(
-            firestore,
-            "users",
-            currentUser.uid,
-            "transactions",
-            result.transactionId
-          );
-
-          await setDoc(transactionRef, {
-            ...result.transactionData,
-            createdAt: serverTimestamp(),
-          });
-        }
-
-        toast({
-          title: "Transaction Failed",
-          description: result.message || "Please try again.",
-          variant: "destructive",
-        });
+      if (!response.ok) {
+        throw new Error(result.message || "Transaction failed");
       }
+
+      // NO WALLET UPDATE
+      // NO setDoc() or runTransaction()
+      // → Backend + Webhook handles deduction & save
+
+      toast({
+        title: "Processing...",
+        description: result.message.includes("processing")
+          ? "Funding is being processed..."
+          : `₦${bettingAmount.toLocaleString()} credited to ${provider}!`,
+      });
+
+      // Reset form
+      setProvider("");
+      setCustomerId("");
+      setAmount("");
+      setCustomerVerified(false);
+
+      // Balance updates via Firestore listener
+      fetchWalletBalance();
     } catch (error) {
       console.error("Transaction error:", error);
       toast({
         title: "Transaction Failed",
-        description: error.message || "Network error. Please try again.",
+        description: error.message || "Please try again.",
         variant: "destructive",
       });
     } finally {

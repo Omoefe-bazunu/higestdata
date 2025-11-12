@@ -227,100 +227,56 @@ function PurchaseForm({ type, user, router }) {
     try {
       const auth = getAuth();
       const currentUser = auth.currentUser;
-
-      if (!currentUser) {
-        throw new Error("User not authenticated");
-      }
+      if (!currentUser) throw new Error("User not authenticated");
 
       const token = await currentUser.getIdToken(true);
 
-      // Build transaction data
       const transactionData = {
         userId: currentUser.uid,
         serviceType: type.toLowerCase(),
-        amount: type === "Airtime" ? eBillsAmount : walletDeduction,
-        finalPrice: walletDeduction,
+        amount: eBillsAmount, // Amount sent to eBills
+        finalPrice: walletDeduction, // Amount deducted from wallet
         phone,
         network,
         variationId: dataPlan || undefined,
       };
 
-      const response = await fetch("/api/vtu/transaction", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(transactionData),
-      });
+      // CALL RENDER BACKEND
+      const response = await fetch(
+        "https://higestdata-proxy.onrender.com/api/vtu/transaction",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(transactionData),
+        }
+      );
 
       const result = await response.json();
 
-      if (response.status === 402) {
-        toast({
-          title: "Insufficient Balance",
-          description:
-            "Your wallet balance is not enough for this transaction.",
-          variant: "destructive",
-        });
-        return;
-      }
-
       if (!response.ok) {
-        if (result.transactionData) {
-          const transactionId =
-            result.transactionId ||
-            `txn_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-          await setDoc(
-            doc(
-              firestore,
-              "users",
-              currentUser.uid,
-              "transactions",
-              transactionId
-            ),
-            {
-              ...result.transactionData,
-              walletDeduction,
-              createdAt: serverTimestamp(),
-            }
-          );
-        }
         throw new Error(result.error || "Transaction failed");
       }
 
-      // Deduct the discounted amount from wallet
-      await updateDoc(doc(firestore, "users", currentUser.uid), {
-        walletBalance: walletBalance - walletDeduction,
-      });
-
-      if (result.transactionData) {
-        await setDoc(
-          doc(
-            firestore,
-            "users",
-            currentUser.uid,
-            "transactions",
-            result.transactionId
-          ),
-          {
-            ...result.transactionData,
-            walletDeduction,
-            createdAt: serverTimestamp(),
-          }
-        );
-      }
+      // NO WALLET DEDUCTION HERE
+      // NO TRANSACTION SAVE HERE
+      // → Backend + Webhook handles it
 
       toast({
-        title: "Transaction Successful",
-        description: `${type} purchase completed successfully.`,
+        title: "Success",
+        description: result.message.includes("processing")
+          ? "Transaction is being processed..."
+          : `${type} purchased successfully!`,
       });
 
+      // Reset form
       setNetwork("");
       setPhone("");
       setAmount("");
       setDataPlan("");
-      fetchWalletBalance();
+      fetchWalletBalance(); // Refresh balance (will update via Firestore listener later)
     } catch (error) {
       console.error("Transaction error:", error);
       toast({
