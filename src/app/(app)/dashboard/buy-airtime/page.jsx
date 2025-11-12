@@ -6,6 +6,8 @@ import { getAuth } from "firebase/auth";
 import {
   doc,
   getDoc,
+  onSnapshot,
+  collection,
   setDoc,
   serverTimestamp,
   updateDoc,
@@ -70,6 +72,32 @@ function PurchaseForm({ type, user, router }) {
       fetchDataPlans(network);
     }
   }, [network, type]);
+
+  //TRANSACTION NOTICE
+
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = onSnapshot(
+      collection(firestore, "users", user.uid, "transactions"),
+      (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "modified") {
+            const txn = change.doc.data();
+            if (txn.status === "success" && txn.pending === false) {
+              toast({
+                title: "Transaction Completed!",
+                description: `Your ${txn.serviceType} transaction was successful.`,
+              });
+              fetchWalletBalance(); // Refresh balance
+            }
+          }
+        });
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
 
   const fetchWalletBalance = async () => {
     try {
@@ -265,10 +293,12 @@ function PurchaseForm({ type, user, router }) {
       // → Backend + Webhook handles it
 
       toast({
-        title: "Success",
-        description: result.message.includes("processing")
-          ? "Transaction is being processed..."
-          : `${type} purchased successfully!`,
+        title: result.status === "success" ? "Success!" : "Processing",
+        description:
+          result.status === "success"
+            ? `${type} purchased successfully!`
+            : "Transaction is being processed. You'll be notified when complete.",
+        variant: result.status === "success" ? "default" : "default",
       });
 
       // Reset form

@@ -6,6 +6,9 @@ import { getAuth } from "firebase/auth";
 import {
   doc,
   getDoc,
+  snapshot,
+  onSnapshot,
+  collection,
   setDoc,
   updateDoc,
   serverTimestamp,
@@ -84,6 +87,32 @@ function BettingForm({ user, router }) {
       fetchWalletBalance();
       fetchBettingRates();
     }
+  }, [user]);
+
+  //TRANSACTION NOTICE
+
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = onSnapshot(
+      collection(firestore, "users", user.uid, "transactions"),
+      (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "modified") {
+            const txn = change.doc.data();
+            if (txn.status === "success" && txn.pending === false) {
+              toast({
+                title: "Transaction Completed!",
+                description: `Your ${txn.serviceType} transaction was successful.`,
+              });
+              fetchWalletBalance(); // Refresh balance
+            }
+          }
+        });
+      }
+    );
+
+    return () => unsubscribe();
   }, [user]);
 
   const fetchWalletBalance = async () => {
@@ -257,7 +286,6 @@ function BettingForm({ user, router }) {
         customerId,
       };
 
-      // CALL RENDER BACKEND
       const response = await fetch(
         "https://higestdata-proxy.onrender.com/api/betting/fund",
         {
@@ -273,18 +301,16 @@ function BettingForm({ user, router }) {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || "Transaction failed");
+        throw new Error(result.error || "Transaction failed");
       }
 
-      // NO WALLET UPDATE
-      // NO setDoc() or runTransaction()
-      // → Backend + Webhook handles deduction & save
+      const isCompleted = result.transactionData?.status === "success";
 
       toast({
-        title: "Processing...",
-        description: result.message.includes("processing")
-          ? "Funding is being processed..."
-          : `₦${bettingAmount.toLocaleString()} credited to ${provider}!`,
+        title: isCompleted ? "Success!" : "Processing",
+        description: isCompleted
+          ? `₦${bettingAmount.toLocaleString()} credited to ${provider} successfully!`
+          : "Betting account funding is being processed. You'll be notified when complete.",
       });
 
       // Reset form
@@ -292,8 +318,8 @@ function BettingForm({ user, router }) {
       setCustomerId("");
       setAmount("");
       setCustomerVerified(false);
+      setCustomerDetails(null);
 
-      // Balance updates via Firestore listener
       fetchWalletBalance();
     } catch (error) {
       console.error("Transaction error:", error);

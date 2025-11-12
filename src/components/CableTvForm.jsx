@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, collection } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import {
   Card,
@@ -61,6 +61,32 @@ function CableTVForm({ user, router }) {
       fetchTVPlans(provider);
     }
   }, [provider]);
+
+  //TRANSACTION NOTICE
+
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = onSnapshot(
+      collection(firestore, "users", user.uid, "transactions"),
+      (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "modified") {
+            const txn = change.doc.data();
+            if (txn.status === "success" && txn.pending === false) {
+              toast({
+                title: "Transaction Completed!",
+                description: `Your ${txn.serviceType} transaction was successful.`,
+              });
+              fetchWalletBalance(); // Refresh balance
+            }
+          }
+        });
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
 
   const fetchWalletBalance = async () => {
     try {
@@ -237,15 +263,13 @@ function CableTVForm({ user, router }) {
       const transactionData = {
         userId: currentUser.uid,
         serviceType: "cable",
-        amount, // eBills amount
-        finalPrice: amount, // wallet deduction
-        phone: undefined,
+        amount,
+        finalPrice: amount,
         network: provider,
         variationId: plan,
         customerId: cardNumber,
       };
 
-      // CALL RENDER BACKEND
       const response = await fetch(
         "https://higestdata-proxy.onrender.com/api/vtu/transaction",
         {
@@ -264,15 +288,13 @@ function CableTVForm({ user, router }) {
         throw new Error(result.error || "Transaction failed");
       }
 
-      // NO WALLET UPDATE
-      // NO setDoc() — backend handles it
-      // Webhook will deduct if pending → success
+      const isCompleted = result.status === "success";
 
       toast({
-        title: "Processing...",
-        description: result.message.includes("processing")
-          ? "Your cable subscription is being processed."
-          : "Cable TV subscription successful!",
+        title: isCompleted ? "Success!" : "Processing",
+        description: isCompleted
+          ? "Cable TV subscription activated successfully!"
+          : "Your cable subscription is being processed. You'll be notified when complete.",
       });
 
       // Reset form
@@ -280,7 +302,9 @@ function CableTVForm({ user, router }) {
       setCardNumber("");
       setPlan("");
       setCardVerified(false);
-      fetchWalletBalance(); // Will update via Firestore listener
+      setCustomerDetails(null);
+
+      fetchWalletBalance();
     } catch (error) {
       console.error("Transaction error:", error);
       toast({

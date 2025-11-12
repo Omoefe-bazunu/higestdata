@@ -6,6 +6,8 @@ import { getAuth } from "firebase/auth";
 import {
   doc,
   getDoc,
+  onSnapshot,
+  collection,
   setDoc,
   updateDoc,
   serverTimestamp,
@@ -84,6 +86,32 @@ function ElectricityForm({ user, router }) {
       fetchWalletBalance();
       fetchElectricityRates();
     }
+  }, [user]);
+
+  //TRANSACTION NOTICE
+
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = onSnapshot(
+      collection(firestore, "users", user.uid, "transactions"),
+      (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "modified") {
+            const txn = change.doc.data();
+            if (txn.status === "success" && txn.pending === false) {
+              toast({
+                title: "Transaction Completed!",
+                description: `Your ${txn.serviceType} transaction was successful.`,
+              });
+              fetchWalletBalance(); // Refresh balance
+            }
+          }
+        });
+      }
+    );
+
+    return () => unsubscribe();
   }, [user]);
 
   const fetchWalletBalance = async () => {
@@ -266,7 +294,6 @@ function ElectricityForm({ user, router }) {
         variationId: meterType,
       };
 
-      // CALL RENDER BACKEND
       const response = await fetch(
         "https://higestdata-proxy.onrender.com/api/electricity/purchase",
         {
@@ -282,18 +309,16 @@ function ElectricityForm({ user, router }) {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || "Transaction failed");
+        throw new Error(result.error || "Transaction failed");
       }
 
-      // NO WALLET UPDATE
-      // NO setDoc() or runTransaction()
-      // → Backend + Webhook handles everything
+      const isCompleted = result.transactionData?.status === "success";
 
       toast({
-        title: "Processing...",
-        description: result.message.includes("processing")
-          ? "Electricity purchase is being processed..."
-          : `₦${electricityAmount.toLocaleString()} units credited!`,
+        title: isCompleted ? "Success!" : "Processing",
+        description: isCompleted
+          ? `₦${electricityAmount.toLocaleString()} units credited successfully!`
+          : "Electricity purchase is being processed. You'll be notified when complete.",
       });
 
       // Reset form
@@ -304,7 +329,6 @@ function ElectricityForm({ user, router }) {
       setMeterVerified(false);
       setCustomerDetails(null);
 
-      // Balance will update via Firestore listener
       fetchWalletBalance();
     } catch (error) {
       console.error("Transaction error:", error);
