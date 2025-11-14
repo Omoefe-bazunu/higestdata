@@ -2,16 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { firestore as db } from "@/lib/firebaseConfig";
-import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  doc,
-  runTransaction,
-  where,
-  getDocs,
-} from "firebase/firestore";
+import { auth } from "@/lib/firebaseConfig"; // Import auth
+import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -22,6 +14,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 export default function AdminWithdrawals() {
   const [requests, setRequests] = useState([]);
@@ -49,69 +43,33 @@ export default function AdminWithdrawals() {
     setLoading((prev) => ({ ...prev, [requestId]: true }));
 
     try {
-      const newStatus = action === "complete" ? "completed" : "failed";
-      const userRef = doc(db, "users", request.userId);
-      const withdrawalRef = doc(db, "withdrawalRequests", requestId);
+      // Get Firebase ID token
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("Not authenticated");
+      }
+      const idToken = await user.getIdToken();
 
-      // Fetch transaction docs BEFORE transaction
-      const txQuery = query(
-        collection(db, "users", request.userId, "transactions"),
-        where("reference", "==", request.reference)
-      );
-      const txSnapshot = await getDocs(txQuery);
-      const txDocs = txSnapshot.docs;
-
-      await runTransaction(db, async (tx) => {
-        // === ALL READS FIRST ===
-        const userSnap = await tx.get(userRef);
-        if (!userSnap.exists()) throw new Error("User not found");
-
-        const currentBalance = userSnap.data()?.walletBalance || 0;
-        let newBalance = currentBalance;
-
-        // Deduct on complete
-        if (action === "complete") {
-          if (currentBalance < request.totalAmount) {
-            throw new Error("Insufficient balance");
-          }
-          newBalance = currentBalance - request.totalAmount;
-        }
-
-        // Refund on reject
-        if (action === "reject") {
-          newBalance = currentBalance + request.totalAmount;
-        }
-
-        // === ALL WRITES AFTER ===
-        tx.update(withdrawalRef, {
-          status: newStatus,
-          processedAt: new Date(),
-        });
-
-        tx.update(userRef, { walletBalance: newBalance });
-
-        // Update all matching transaction docs
-        txDocs.forEach((docSnap) => {
-          tx.update(docSnap.ref, { status: newStatus });
-        });
-      });
-
-      // Notify user
-      await fetch("/api/withdrawal/notify-user", {
+      // Call backend API
+      const response = await fetch(`${API_BASE_URL}/api/withdrawal/process`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
-          email: request.userEmail,
-          userName: request.userName,
-          amount: request.amount,
-          status: newStatus,
-          reference: request.reference,
-          bankName: request.bankName,
-          accountNumber: request.accountNumber,
+          requestId,
+          action, // 'complete' or 'reject'
         }),
       });
 
-      toast.success(`Withdrawal ${newStatus}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to process withdrawal");
+      }
+
+      toast.success(data.message || `Withdrawal ${data.status}`);
     } catch (err) {
       console.error("Error processing withdrawal:", err);
       toast.error(err.message || "Failed to process withdrawal");

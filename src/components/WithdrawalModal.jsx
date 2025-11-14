@@ -98,6 +98,7 @@ export default function WithdrawalModal({ open, onOpenChange }) {
     }
   };
 
+  // handleSubmitWithdrawal — DO NOT deduct wallet
   const handleSubmitWithdrawal = async () => {
     const amt = parseFloat(amount);
     const total = amt + FEE;
@@ -124,6 +125,7 @@ export default function WithdrawalModal({ open, onOpenChange }) {
       const userDoc = await getDoc(doc(db, "users", user.uid));
       const userData = userDoc.data();
 
+      // NO WALLET DEDUCTION HERE
       await addDoc(collection(db, "withdrawalRequests"), {
         userId: user.uid,
         userName: userData.name || userData.email,
@@ -133,7 +135,7 @@ export default function WithdrawalModal({ open, onOpenChange }) {
         amount: amt,
         fee: FEE,
         totalAmount: total,
-        walletBalance,
+        walletBalance: walletBalance, // Current balance (not deducted)
         bankName,
         accountNumber,
         accountName,
@@ -151,11 +153,7 @@ export default function WithdrawalModal({ open, onOpenChange }) {
         status: "pending",
         date: new Date().toLocaleDateString("en-GB"),
         createdAt: new Date(),
-        metadata: {
-          bankName,
-          accountNumber,
-          accountName,
-        },
+        metadata: { bankName, accountNumber, accountName },
       });
 
       await fetch("/api/withdrawal/notify-admin", {

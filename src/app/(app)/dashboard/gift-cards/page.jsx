@@ -87,14 +87,19 @@ export default function GiftCardsPage() {
           }
         }
 
-        // Fetch gift card rates
+        // Fetch gift card rates with limits
         const snapshot = await getDocs(collection(firestore, "giftCardRates"));
         const data = snapshot.docs.map((doc) => ({
           id: doc.id,
           name: doc.data().name || doc.id,
-          currencies: doc.data().currencies || {},
-          min: doc.data().min || 10,
-          max: doc.data().max || 1000,
+          limits: doc.data().limits || [
+            {
+              id: `limit-${Date.now()}`,
+              min: 10,
+              max: 1000,
+              currencies: {},
+            },
+          ],
         }));
         setGiftCards(data);
       } catch (err) {
@@ -109,7 +114,21 @@ export default function GiftCardsPage() {
   }, [authChecked, user, toast]);
 
   const selectedCardData = giftCards.find((c) => c.id === selectedCard);
-  const ratePerUnit = selectedCardData?.currencies?.[currency] || 0;
+
+  // Find the appropriate limit based on face value
+  const getApplicableLimit = () => {
+    if (!selectedCardData || !faceValue) return null;
+    const value = parseFloat(faceValue);
+    if (isNaN(value)) return null;
+
+    // Find the limit range that contains this value
+    return selectedCardData.limits.find(
+      (limit) => value >= limit.min && value <= limit.max
+    );
+  };
+
+  const applicableLimit = getApplicableLimit();
+  const ratePerUnit = applicableLimit?.currencies?.[currency] || 0;
   const payoutNaira =
     faceValue && ratePerUnit ? parseFloat(faceValue) * ratePerUnit : 0;
 
@@ -117,6 +136,7 @@ export default function GiftCardsPage() {
     selectedCard &&
     faceValue &&
     parseFloat(faceValue) > 0 &&
+    applicableLimit &&
     cardImages.length > 0 &&
     currency;
 
@@ -208,6 +228,13 @@ export default function GiftCardsPage() {
         cardCode: cardCode || null,
         payoutNaira,
         ratePerUnit,
+        limitRange: applicableLimit
+          ? {
+              min: applicableLimit.min,
+              max: applicableLimit.max,
+              limitId: applicableLimit.id,
+            }
+          : null,
         status: "pending",
         submittedAt: new Date().toISOString(),
         imageUrls: [],
@@ -354,23 +381,51 @@ export default function GiftCardsPage() {
               </div>
             </div>
 
-            {selectedCard && faceValue && ratePerUnit > 0 && (
-              <Alert className="bg-green-50 border-green-200">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <AlertTitle>Payout</AlertTitle>
-                <AlertDescription>
-                  You will receive:{" "}
-                  <strong>
-                    ₦
-                    {payoutNaira.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                    })}
-                  </strong>
-                  <br />
-                  Rate: 1 {currency} = ₦{ratePerUnit.toLocaleString()}
-                </AlertDescription>
-              </Alert>
-            )}
+            {selectedCard &&
+              faceValue &&
+              ratePerUnit > 0 &&
+              applicableLimit && (
+                <Alert className="bg-green-50 border-green-200">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <AlertTitle>Payout</AlertTitle>
+                  <AlertDescription>
+                    You will receive:{" "}
+                    <strong>
+                      ₦
+                      {payoutNaira.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}
+                    </strong>
+                    <br />
+                    Rate: 1 {currency} = ₦{ratePerUnit.toLocaleString()}
+                    <br />
+                    <span className="text-xs text-muted-foreground">
+                      Range: {applicableLimit.min} - {applicableLimit.max}
+                    </span>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+            {selectedCard &&
+              faceValue &&
+              parseFloat(faceValue) > 0 &&
+              !applicableLimit && (
+                <Alert className="bg-yellow-50 border-yellow-200">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  <AlertTitle>Invalid Amount</AlertTitle>
+                  <AlertDescription>
+                    The amount you entered doesn't match any available rate
+                    range for this card.
+                    <br />
+                    <span className="text-xs">
+                      Available ranges:{" "}
+                      {selectedCardData?.limits
+                        .map((l) => `${l.min}-${l.max}`)
+                        .join(", ")}
+                    </span>
+                  </AlertDescription>
+                </Alert>
+              )}
 
             <div className="space-y-2">
               <Label>Card Code (Optional)</Label>
