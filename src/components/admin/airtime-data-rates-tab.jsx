@@ -176,17 +176,20 @@ export default function AdminRatesDashboard() {
         return;
       }
 
-      const response = await fetch("/api/vtu/fetch-rates", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          type: serviceType,
-          provider: serviceType === "tv" ? selectedProvider : undefined,
-        }),
-      });
+      const response = await fetch(
+        "https://higestdata-proxy.onrender.com/api/vtu/fetch-rates",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            type: serviceType,
+            provider: serviceType === "tv" ? selectedProvider : undefined,
+          }),
+        }
+      );
 
       const result = await response.json();
 
