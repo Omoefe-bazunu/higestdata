@@ -2,14 +2,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { doc, collection, runTransaction } from "firebase/firestore";
-import { firestore } from "@/lib/firebaseConfig";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,189 +15,159 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+
 export default function FundingModal({ open, onOpenChange }) {
   const { user } = useAuth();
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [scriptLoaded, setScriptLoaded] = useState(false);
-  const processedRefs = useRef(new Set());
+  const hasVerified = useRef(false);
 
+  // Load Kor KoraPay script ONCE when modal opens
   useEffect(() => {
+    if (!open || scriptLoaded) return;
+
     const script = document.createElement("script");
     script.src =
       "https://korablobstorage.blob.core.windows.net/modal-bucket/korapay-collections.min.js";
     script.async = true;
-    script.onload = () => setScriptLoaded(true);
+    script.onload = () => {
+      console.log("Korapay script loaded");
+      setScriptLoaded(true);
+    };
+    script.onerror = () => {
+      toast({
+        title: "Error",
+        description: "Failed to load payment gateway",
+        variant: "destructive",
+      });
+    };
     document.body.appendChild(script);
 
     return () => {
       if (document.body.contains(script)) {
         document.body.removeChild(script);
       }
+      setScriptLoaded(false);
     };
-  }, []);
+  }, [open, scriptLoaded]);
 
-  const updateWalletBalance = async (amountPaid, reference) => {
-    if (processedRefs.current.has(reference)) {
-      console.log("Duplicate prevented:", reference);
-      return;
-    }
-    processedRefs.current.add(reference);
-
-    const now = new Date();
-    const dateStr = now.toLocaleDateString("en-GB"); // e.g., 04/11/2025
-
-    try {
-      const userRef = doc(firestore, "users", user.uid);
-      const txRef = doc(
-        collection(firestore, "users", user.uid, "transactions")
-      );
-
-      await runTransaction(firestore, async (tx) => {
-        const userSnap = await tx.get(userRef);
-        const current = userSnap.data()?.walletBalance || 0;
-        const newBalance = current + amountPaid;
-
-        tx.update(userRef, { walletBalance: newBalance });
-        tx.set(txRef, {
-          userId: user.uid,
-          reference,
-          description: "Wallet funding via Kora",
-          amount: amountPaid,
-          type: "credit",
-          status: "success",
-          date: dateStr,
-          createdAt: now,
-        });
-      });
-
-      toast({
-        title: "Success",
-        description: `₦${amountPaid.toLocaleString()} added.`,
-      });
-      onOpenChange(false);
-      setAmount("");
-    } catch (error) {
-      console.error("Update error:", error);
-      toast({
-        title: "Failed",
-        description: "Contact support.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const verifyPayment = async (reference) => {
-    try {
-      const response = await fetch("/api/kora/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reference }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.status === "success") {
-        await updateWalletBalance(data.amount, reference);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error("Verify error:", error);
-      return false;
-    }
-  };
-
-  const handleFundWallet = async (e) => {
+  const handleFund = async (e) => {
     e.preventDefault();
-
-    if (!user) {
-      toast({
+    if (!user)
+      return toast({
         title: "Error",
-        description: "Sign in required.",
+        description: "Sign in first",
         variant: "destructive",
       });
-      return;
-    }
-
-    const fundAmount = parseFloat(amount);
-    if (isNaN(fundAmount) || fundAmount < 100) {
-      toast({
+    if (Number(amount) < 100)
+      return toast({
         title: "Invalid",
-        description: "Min ₦100.",
+        description: "Minimum ₦100",
         variant: "destructive",
       });
-      return;
-    }
 
     if (!scriptLoaded || !window.Korapay) {
-      toast({
-        title: "Loading...",
-        description: "Please wait.",
+      return toast({
+        title: "Error",
+        description: "Payment gateway not ready",
         variant: "destructive",
       });
-      return;
     }
 
+    hasVerified.current = false;
     setLoading(true);
-    processedRefs.current.clear();
 
     try {
-      const initRes = await fetch("/api/kora/initialize", {
+      const initRes = await fetch(`${API_URL}/api/kora/initialize`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: user.email,
-          amount: fundAmount,
-          userId: user.uid,
-          name: user.displayName || user.email.split("@")[0],
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${await user.getIdToken()}`,
+        },
+        body: JSON.stringify({ amount: Number(amount) }),
       });
 
       const initData = await initRes.json();
-      if (!initRes.ok) throw new Error(initData.error || "Init failed");
+      if (!initRes.ok)
+        throw new Error(initData.error || "Failed to start payment");
 
       window.Korapay.initialize({
         key: initData.publicKey,
         reference: initData.reference,
-        amount: fundAmount,
+        amount: initData.amount,
         currency: "NGN",
-        customer: {
-          name: user.displayName || user.email.split("@")[0],
-          email: user.email,
-        },
-        onSuccess: async (data) => {
-          setLoading(false);
-          if (processedRefs.current.has(data.reference)) return;
-          const verified = await verifyPayment(data.reference);
-          if (!verified) {
+        customer: initData.customer,
+
+        onSuccess: async () => {
+          if (hasVerified.current) return;
+          hasVerified.current = true;
+
+          toast({ title: "Verifying payment...", description: "Please wait" });
+
+          try {
+            const verifyRes = await fetch(
+              `${API_URL}/api/kora/verify-and-credit`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${await user.getIdToken()}`,
+                },
+                body: JSON.stringify({ reference: initData.reference }),
+              }
+            );
+
+            const data = await verifyRes.json();
+
+            if (verifyRes.ok) {
+              toast({
+                title: "Success!",
+                description: `₦${
+                  data.amount?.toLocaleString() || amount
+                } added`,
+              });
+              onOpenChange(false);
+              setAmount("");
+            } else {
+              toast({
+                title: "Failed",
+                description: data.error || "Verification failed",
+                variant: "destructive",
+              });
+            }
+          } catch (err) {
             toast({
-              title: "Verify Failed",
-              description: `Ref: ${data.reference}`,
+              title: "Error",
+              description: "Network error",
               variant: "destructive",
             });
+          } finally {
+            setLoading(false);
           }
         },
+
         onFailed: () => {
-          setLoading(false);
+          if (!hasVerified.current) setLoading(false);
           toast({
-            title: "Failed",
-            description: "Try again.",
+            title: "Payment Failed",
+            description: "Try again",
             variant: "destructive",
           });
         },
-        onClose: () => setLoading(false),
-        onPending: () => {
-          toast({ title: "Pending", description: "Processing..." });
+
+        onClose: () => {
+          if (!hasVerified.current) setLoading(false);
         },
       });
-    } catch (error) {
-      setLoading(false);
+    } catch (err) {
       toast({
         title: "Error",
-        description: error.message,
+        description: err.message,
         variant: "destructive",
       });
+      setLoading(false);
     }
   };
 
@@ -208,39 +176,42 @@ export default function FundingModal({ open, onOpenChange }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Fund Wallet</DialogTitle>
-          <DialogDescription>Enter amount</DialogDescription>
+          <DialogDescription>
+            Add money instantly with KoraPay
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+
+        <form onSubmit={handleFund} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="amount">Amount (₦)</Label>
+            <Label>Amount (₦)</Label>
             <Input
-              id="amount"
               type="number"
-              placeholder="100"
+              placeholder="1000"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               min="100"
+              required
               disabled={loading}
             />
-            <p className="text-sm text-muted-foreground">Min: ₦100</p>
           </div>
+
           <Button
-            onClick={handleFundWallet}
+            type="submit"
             className="w-full"
             disabled={loading || !scriptLoaded || !amount}
           >
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
+                Opening payment...
               </>
             ) : !scriptLoaded ? (
-              "Loading..."
+              "Loading payment gateway..."
             ) : (
-              "Pay Now"
+              "Fund with KoraPay"
             )}
           </Button>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

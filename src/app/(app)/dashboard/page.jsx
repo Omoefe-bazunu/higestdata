@@ -9,7 +9,6 @@ import { useRouter } from "next/navigation";
 import WalletSummary from "@/components/dashboard/wallet-summary";
 import RecentTransactions from "@/components/dashboard/recent-transactions";
 import QuickActions from "@/components/dashboard/quick-actions";
-import PaymentSuccessHandler from "@/components/PaymentSuccessHandler";
 import {
   Dialog,
   DialogContent,
@@ -117,8 +116,6 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PaymentSuccessHandler />
-
       {/* Verification Modal - Cannot be closed */}
       <Dialog open={showVerificationModal} onOpenChange={() => {}}>
         <DialogContent
