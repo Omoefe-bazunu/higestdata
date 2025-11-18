@@ -1,4 +1,3 @@
-// app/(auth)/login/page.jsx
 "use client";
 
 import { useState } from "react";
@@ -21,14 +20,16 @@ import Image from "next/image";
 import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, resetPassword } = useAuth();
   const router = useRouter();
 
   const [emailOrPhone, setEmailOrPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showResetSuccess, setShowResetSuccess] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -62,6 +63,46 @@ export default function LoginPage() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!emailOrPhone) {
+      setMessage("❌ Please enter your email to reset password.");
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailOrPhone)) {
+      setMessage("❌ Please enter a valid email address for password reset.");
+      return;
+    }
+
+    setResetLoading(true);
+    setMessage("");
+
+    try {
+      await resetPassword(emailOrPhone);
+      setShowResetSuccess(true);
+      toast({
+        title: "📧 Password Reset Email Sent",
+        description: "Check your inbox for further instructions.",
+      });
+    } catch (err) {
+      console.error("Password reset error:", err);
+
+      if (err.code === "auth/user-not-found") {
+        setMessage("❌ No account found with this email address.");
+      } else if (err.code === "auth/invalid-email") {
+        setMessage("❌ Please enter a valid email address.");
+      } else if (err.code === "auth/too-many-requests") {
+        setMessage("❌ Too many reset attempts. Please try again later.");
+      } else {
+        setMessage(`❌ ${err.message}`);
+      }
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
     <div className="relative min-h-screen flex items-center justify-center mt-12">
       {/* Background Image */}
@@ -90,7 +131,11 @@ export default function LoginPage() {
                 type="text"
                 placeholder="your.email@example.com or +234 800 000 0000"
                 value={emailOrPhone}
-                onChange={(e) => setEmailOrPhone(e.target.value)}
+                onChange={(e) => {
+                  setEmailOrPhone(e.target.value);
+                  setMessage("");
+                  setShowResetSuccess(false);
+                }}
                 required
               />
             </div>
@@ -99,9 +144,15 @@ export default function LoginPage() {
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Link href="/forgot-password" className="text-sm underline">
-                  Forgot password?
-                </Link>
+
+                <button
+                  type="button"
+                  className="text-sm underline hover:text-blue-600 transition-colors"
+                  onClick={handleResetPassword}
+                  disabled={resetLoading}
+                >
+                  {resetLoading ? "Sending..." : "Forgot password?"}
+                </button>
               </div>
               <div className="relative">
                 <Input
@@ -126,13 +177,22 @@ export default function LoginPage() {
             </Button>
           </form>
 
+          {showResetSuccess && (
+            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
+              <p className="text-sm text-green-800 text-center">
+                ✅ Password reset email sent! Check your inbox or spam and
+                follow the instructions.
+              </p>
+            </div>
+          )}
+
           {message && (
             <p className="mt-4 text-sm text-center text-red-500">{message}</p>
           )}
 
           <div className="mt-4 text-center text-sm">
             Don't have an account?{" "}
-            <Link href="/signup" className="underline">
+            <Link href="/signup" className="underline hover:text-blue-600">
               Sign up
             </Link>
           </div>
