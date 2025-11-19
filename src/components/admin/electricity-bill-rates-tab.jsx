@@ -28,7 +28,6 @@ import { useToast } from "@/hooks/use-toast";
 
 function ElectricityRatesForm() {
   const [serviceCharge, setServiceCharge] = useState("");
-  const [chargeType, setChargeType] = useState("percentage");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const { toast } = useToast();
@@ -56,7 +55,6 @@ function ElectricityRatesForm() {
       if (ratesDoc.exists()) {
         const data = ratesDoc.data();
         setServiceCharge(data.serviceCharge?.toString() || "");
-        setChargeType(data.chargeType || "percentage");
       }
     } catch (error) {
       console.error("Error fetching electricity rates:", error);
@@ -75,13 +73,13 @@ function ElectricityRatesForm() {
 
     const chargeValue = parseFloat(serviceCharge);
     if (isNaN(chargeValue) || chargeValue < 0) {
-      setError("Please enter a valid service charge.");
+      setError("Please enter a valid service charge percentage.");
       setIsSubmitting(false);
       return;
     }
 
-    if (chargeType === "percentage" && chargeValue > 100) {
-      setError("Percentage charge cannot exceed 100%.");
+    if (chargeValue > 100) {
+      setError("Service charge percentage cannot exceed 100%.");
       setIsSubmitting(false);
       return;
     }
@@ -89,7 +87,6 @@ function ElectricityRatesForm() {
     try {
       await setDoc(doc(firestore, "settings", "electricityRates"), {
         serviceCharge: chargeValue,
-        chargeType,
         updatedAt: serverTimestamp(),
       });
       toast({
@@ -123,15 +120,16 @@ function ElectricityRatesForm() {
           Set Electricity Rates
         </h1>
         <p className="text-muted-foreground">
-          Configure the service charge for electricity bill payments.
+          Configure the service charge percentage for electricity bill payments.
         </p>
       </div>
 
-      <Card className="max-w-md ">
+      <Card className="max-w-md">
         <CardHeader>
-          <CardTitle>Electricity Rates</CardTitle>
+          <CardTitle>Electricity Service Charge</CardTitle>
           <CardDescription>
-            Set the service charge applied to electricity purchases.
+            Set the service charge percentage applied to electricity purchases.
+            This charge will be added to the electricity amount.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -144,35 +142,56 @@ function ElectricityRatesForm() {
           )}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="serviceCharge">Service Charge *</Label>
+              <Label htmlFor="serviceCharge">Service Charge Percentage *</Label>
               <Input
                 id="serviceCharge"
                 type="number"
                 value={serviceCharge}
                 onChange={(e) => setServiceCharge(e.target.value)}
-                placeholder="Enter charge amount"
-                step="0.01"
+                placeholder="Enter percentage (e.g., 10 for 10%)"
+                step="0.1"
+                min="0"
+                max="100"
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Enter the service charge (e.g., 10 for 10% or 100 for ₦100).
+                Enter the service charge percentage (0-100%). Example: 10 for
+                10% service charge.
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="chargeType">Charge Type *</Label>
-              <Select value={chargeType} onValueChange={setChargeType} required>
-                <SelectTrigger id="chargeType">
-                  <SelectValue placeholder="Select charge type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="percentage">Percentage</SelectItem>
-                  <SelectItem value="fixed">Fixed</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Choose whether the charge is a percentage or fixed amount.
+            <div className="bg-muted p-4 rounded-lg">
+              <h4 className="font-medium mb-2">Example Calculation:</h4>
+              <p className="text-sm">
+                If customer purchases ₦5,000 electricity with{" "}
+                {serviceCharge || "0"}% service charge:
               </p>
+              <div className="mt-2 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span>Electricity Amount:</span>
+                  <span>₦5,000</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Service Charge ({serviceCharge || "0"}%):</span>
+                  <span>
+                    ₦
+                    {(
+                      (5000 * (parseFloat(serviceCharge) || 0)) /
+                      100
+                    ).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between font-medium border-t pt-1">
+                  <span>Total Charged:</span>
+                  <span>
+                    ₦
+                    {(
+                      5000 *
+                      (1 + (parseFloat(serviceCharge) || 0) / 100)
+                    ).toLocaleString()}
+                  </span>
+                </div>
+              </div>
             </div>
 
             <Button type="submit" className="w-full" disabled={isSubmitting}>
@@ -182,7 +201,7 @@ function ElectricityRatesForm() {
                   Saving...
                 </>
               ) : (
-                "Save Rates"
+                "Save Service Charge"
               )}
             </Button>
           </form>

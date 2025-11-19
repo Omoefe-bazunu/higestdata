@@ -3,17 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
-import {
-  doc,
-  getDoc,
-  snapshot,
-  onSnapshot,
-  collection,
-  setDoc,
-  updateDoc,
-  serverTimestamp,
-  runTransaction,
-} from "firebase/firestore";
+import { doc, getDoc, onSnapshot, collection } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import {
   Card,
@@ -49,20 +39,24 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const BETTING_PROVIDERS = [
-  { id: "1xBet", name: "1xBet" },
-  { id: "BangBet", name: "BangBet" },
-  { id: "Bet9ja", name: "Bet9ja" },
-  { id: "BetKing", name: "BetKing" },
-  { id: "BetLand", name: "BetLand" },
-  { id: "BetLion", name: "BetLion" },
-  { id: "BetWay", name: "BetWay" },
-  { id: "CloudBet", name: "CloudBet" },
-  { id: "LiveScoreBet", name: "LiveScoreBet" },
-  { id: "MerryBet", name: "MerryBet" },
-  { id: "NaijaBet", name: "NaijaBet" },
-  { id: "NairaBet", name: "NairaBet" },
-  { id: "SupaBet", name: "SupaBet" },
+// VTU Africa betting service codes
+const VTU_AFRICA_BETTING_SERVICES = [
+  { id: "bet9ja", name: "Bet9ja" },
+  { id: "betking", name: "BetKing" },
+  { id: "1xbet", name: "1XBet" },
+  { id: "nairabet", name: "NairaBet" },
+  { id: "betbiga", name: "BetBiga" },
+  { id: "merrybet", name: "MerryBet" },
+  { id: "sportybet", name: "SportyBet" },
+  { id: "naijabet", name: "NaijaBet" },
+  { id: "betway", name: "Betway" },
+  { id: "bangbet", name: "BangBet" },
+  { id: "melbet", name: "MelBet" },
+  { id: "livescorebet", name: "LiveScoreBet" },
+  { id: "naira-million", name: "Naira-Million" },
+  { id: "cloudbet", name: "CloudBet" },
+  { id: "paripesa", name: "Paripesa" },
+  { id: "mylottohub", name: "MylottoHub" },
 ];
 
 function BettingForm({ user, router }) {
@@ -76,7 +70,7 @@ function BettingForm({ user, router }) {
   const [showInsufficientModal, setShowInsufficientModal] = useState(false);
   const [bettingRates, setBettingRates] = useState({
     serviceCharge: 0,
-    chargeType: "percentage",
+    chargeType: "fixed",
   });
   const { toast } = useToast();
 
@@ -89,8 +83,7 @@ function BettingForm({ user, router }) {
     }
   }, [user]);
 
-  //TRANSACTION NOTICE
-
+  // TRANSACTION NOTICE
   useEffect(() => {
     if (!user) return;
 
@@ -138,7 +131,7 @@ function BettingForm({ user, router }) {
         const data = ratesDoc.data();
         setBettingRates({
           serviceCharge: data.serviceCharge || 0,
-          chargeType: data.chargeType || "percentage",
+          chargeType: data.chargeType || "fixed",
         });
       }
     } catch (error) {
@@ -150,29 +143,44 @@ function BettingForm({ user, router }) {
     if (!provider || !customerId) return;
     setIsVerifying(true);
     try {
-      const params = new URLSearchParams({
-        provider,
-        customerId,
-      });
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("User not authenticated");
+
+      const token = await currentUser.getIdToken(true);
+
       const response = await fetch(
-        `https://higestdata-proxy.onrender.com/api/betting/verify?${params}`,
+        "https://higestdata-proxy.onrender.com/api/betting/verify",
         {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            service: provider,
+            userid: customerId,
+          }),
         }
       );
+
       const result = await response.json();
-      if (result.success && result.data) {
+
+      if (!response.ok) {
+        throw new Error(result.error || "Verification failed");
+      }
+
+      if (result.success) {
         setCustomerVerified(true);
         toast({
-          title: "Customer Verified",
-          description: `Customer ID verified for ${provider}.`,
+          title: "Account Verified",
+          description: `${provider} account verified successfully.`,
         });
       } else {
         setCustomerVerified(false);
         toast({
           title: "Verification Failed",
-          description: result.message || "Invalid customer ID.",
+          description: result.error || "Invalid account ID.",
           variant: "destructive",
         });
       }
@@ -180,13 +188,14 @@ function BettingForm({ user, router }) {
       setCustomerVerified(false);
       toast({
         title: "Verification Error",
-        description: "Unable to verify customer ID. Please try again.",
+        description: "Unable to verify account ID. Please try again.",
         variant: "destructive",
       });
     } finally {
       setIsVerifying(false);
     }
   };
+
   const getBettingAmount = () => {
     return parseFloat(amount || 0);
   };
@@ -260,8 +269,8 @@ function BettingForm({ user, router }) {
 
     if (!customerVerified) {
       toast({
-        title: "Customer Not Verified",
-        description: "Please verify your customer ID before proceeding.",
+        title: "Account Not Verified",
+        description: "Please verify your betting account before proceeding.",
         variant: "destructive",
       });
       return;
@@ -275,17 +284,16 @@ function BettingForm({ user, router }) {
       if (!currentUser) throw new Error("User not authenticated");
 
       const token = await currentUser.getIdToken(true);
+      const reference = `BET_${currentUser.uid}_${Date.now()}`;
 
-      const transactionPayload = {
-        userId: currentUser.uid,
-        serviceType: "betting",
+      const transactionData = {
+        service: provider,
+        userid: customerId,
         amount: bettingAmount,
-        serviceCharge: getServiceCharge(),
-        totalAmount: totalAmount,
-        provider,
-        customerId,
+        ref: reference,
       };
 
+      // Call VTU Africa betting funding endpoint
       const response = await fetch(
         "https://higestdata-proxy.onrender.com/api/betting/fund",
         {
@@ -294,7 +302,7 @@ function BettingForm({ user, router }) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(transactionPayload),
+          body: JSON.stringify(transactionData),
         }
       );
 
@@ -304,23 +312,21 @@ function BettingForm({ user, router }) {
         throw new Error(result.error || "Transaction failed");
       }
 
-      const isCompleted = result.transactionData?.status === "success";
+      if (result.success) {
+        toast({
+          title: "Success!",
+          description: `₦${bettingAmount.toLocaleString()} credited to ${provider} successfully!`,
+        });
 
-      toast({
-        title: isCompleted ? "Success!" : "Processing",
-        description: isCompleted
-          ? `₦${bettingAmount.toLocaleString()} credited to ${provider} successfully!`
-          : "Betting account funding is being processed. You'll be notified when complete.",
-      });
-
-      // Reset form
-      setProvider("");
-      setCustomerId("");
-      setAmount("");
-      setCustomerVerified(false);
-      setCustomerDetails(null);
-
-      fetchWalletBalance();
+        // Reset form
+        setProvider("");
+        setCustomerId("");
+        setAmount("");
+        setCustomerVerified(false);
+        fetchWalletBalance();
+      } else {
+        throw new Error(result.error || "Transaction failed");
+      }
     } catch (error) {
       console.error("Transaction error:", error);
       toast({
@@ -363,7 +369,7 @@ function BettingForm({ user, router }) {
               <SelectValue placeholder="Choose betting provider" />
             </SelectTrigger>
             <SelectContent>
-              {BETTING_PROVIDERS.map((betting) => (
+              {VTU_AFRICA_BETTING_SERVICES.map((betting) => (
                 <SelectItem key={betting.id} value={betting.id}>
                   {betting.name}
                 </SelectItem>
@@ -373,7 +379,7 @@ function BettingForm({ user, router }) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="customerId">Customer ID *</Label>
+          <Label htmlFor="customerId">Account ID *</Label>
           <div className="flex gap-2">
             <Input
               id="customerId"
@@ -382,7 +388,7 @@ function BettingForm({ user, router }) {
                 setCustomerId(e.target.value);
                 setCustomerVerified(false);
               }}
-              placeholder="Enter customer (account) ID"
+              placeholder="Enter your betting account ID"
               required
             />
             <Button
@@ -453,7 +459,7 @@ function BettingForm({ user, router }) {
             </div>
             <p className="text-xs text-muted-foreground">
               ₦{getBettingAmount().toLocaleString()} will be credited to your
-              betting account.{" "}
+              betting account via VTU Africa.{" "}
               {getServiceCharge() > 0 &&
                 "Service charge will be deducted from your wallet."}
             </p>
@@ -569,8 +575,8 @@ export default function BettingPage() {
           Fund Your Betting Accounts
         </h1>
         <p className="text-muted-foreground">
-          Top up your favorite betting platforms instantly. Fast, secure, and
-          reliable.
+          Top up your favorite betting platforms instantly via VTU Africa. Fast,
+          secure, and reliable.
         </p>
       </div>
 
@@ -593,15 +599,17 @@ export default function BettingPage() {
                 <h3 className="text-xl font-semibold mb-2">
                   Betting Made Easy
                 </h3>
-                <p className="text-sm opacity-90">Fund all major platforms</p>
+                <p className="text-sm opacity-90">
+                  Fund all major platforms via VTU Africa
+                </p>
               </div>
             </div>
             <h3 className="text-xl font-semibold mb-4 text-secondary-foreground">
               Supported Platforms
             </h3>
             <p className="text-muted-foreground mb-4">
-              Fund your accounts on 1xBet, BangBet, Bet9ja, BetKing, BetLand,
-              BetWay, and many more betting platforms.
+              Fund your accounts on Bet9ja, BetKing, 1XBet, SportyBet, MerryBet,
+              and 12+ more betting platforms via VTU Africa.
             </p>
             <ul className="space-y-2 text-sm">
               <li className="flex items-center gap-2">
@@ -614,7 +622,11 @@ export default function BettingPage() {
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Support for 13+ betting platforms</span>
+                <span>Support for 16+ betting platforms</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-primary" />
+                <span>Powered by VTU Africa API</span>
               </li>
             </ul>
           </div>

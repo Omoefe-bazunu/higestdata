@@ -156,6 +156,8 @@ export default function FundingModal({ open, onOpenChange }) {
         amount: initData.amount,
         currency: "NGN",
         customer: initData.customer,
+        channels: ["bank_transfer"],
+        default_channel: "bank_transfer",
 
         onSuccess: async (data) => {
           console.log("KoraPay onSuccess called:", data);

@@ -17,6 +17,26 @@ import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 
+// VTU Africa betting service codes
+const VTU_AFRICA_BETTING_SERVICES = [
+  { id: "bet9ja", name: "Bet9ja" },
+  { id: "betking", name: "BetKing" },
+  { id: "1xbet", name: "1XBet" },
+  { id: "nairabet", name: "NairaBet" },
+  { id: "betbiga", name: "BetBiga" },
+  { id: "merrybet", name: "MerryBet" },
+  { id: "sportybet", name: "SportyBet" },
+  { id: "naijabet", name: "NaijaBet" },
+  { id: "betway", name: "Betway" },
+  { id: "bangbet", name: "BangBet" },
+  { id: "melbet", name: "MelBet" },
+  { id: "livescorebet", name: "LiveScoreBet" },
+  { id: "naira-million", name: "Naira-Million" },
+  { id: "cloudbet", name: "CloudBet" },
+  { id: "paripesa", name: "Paripesa" },
+  { id: "mylottohub", name: "MylottoHub" },
+];
+
 export default function BettingRatesTab() {
   const [bettingRate, setBettingRate] = useState({
     serviceCharge: 0,
@@ -117,7 +137,7 @@ export default function BettingRatesTab() {
         <div>
           <h2 className="text-2xl font-bold">Betting Service Rates</h2>
           <p className="text-muted-foreground">
-            Configure service charges for betting account funding
+            Configure service charges for betting account funding via VTU Africa
           </p>
         </div>
         <Button onClick={saveBettingRates} disabled={isSaving}>
@@ -143,7 +163,7 @@ export default function BettingRatesTab() {
               Service Charge Configuration
             </CardTitle>
             <CardDescription>
-              Set the service charge for betting account funding
+              Set the service charge for betting account funding via VTU Africa
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -206,54 +226,81 @@ export default function BettingRatesTab() {
           </CardContent>
         </Card>
 
-        {/* Example Calculations Card */}
+        {/* Supported Providers Card */}
         <Card>
           <CardHeader>
-            <CardTitle>Pricing Examples</CardTitle>
+            <CardTitle>Supported Platforms</CardTitle>
             <CardDescription>
-              See how your rates affect customer charges
+              Betting platforms available via VTU Africa
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {[500, 1000, 2000, 5000, 10000].map((amount) => (
+            <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+              {VTU_AFRICA_BETTING_SERVICES.map((provider) => (
                 <div
-                  key={amount}
-                  className="flex justify-between items-center p-3 border rounded-lg"
+                  key={provider.id}
+                  className="p-2 border rounded text-center text-sm"
                 >
-                  <div>
-                    <p className="font-medium">
-                      ₦{amount.toLocaleString()} Funding
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Service charge:{" "}
-                      {bettingRate.chargeType === "percentage"
-                        ? `${bettingRate.serviceCharge}%`
-                        : `₦${bettingRate.serviceCharge}`}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-lg">
-                      ₦{calculateExampleTotal(amount).toLocaleString()}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Total charged
-                    </p>
-                  </div>
+                  {provider.name}
                 </div>
               ))}
             </div>
 
             <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
               <p className="text-sm text-blue-700 dark:text-blue-300">
-                <strong>Note:</strong> The total amount shown will be deducted
-                from the user's wallet. The original betting amount will be
-                credited to their betting account.
+                <strong>Powered by VTU Africa:</strong> All betting transactions
+                are processed through VTU Africa's secure API.
               </p>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Example Calculations Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Pricing Examples</CardTitle>
+          <CardDescription>
+            See how your rates affect customer charges
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {[500, 1000, 2000, 5000, 10000].map((amount) => (
+              <div
+                key={amount}
+                className="flex justify-between items-center p-3 border rounded-lg"
+              >
+                <div>
+                  <p className="font-medium">
+                    ₦{amount.toLocaleString()} Funding
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Service charge:{" "}
+                    {bettingRate.chargeType === "percentage"
+                      ? `${bettingRate.serviceCharge}%`
+                      : `₦${bettingRate.serviceCharge}`}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-lg">
+                    ₦{calculateExampleTotal(amount).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Total charged</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 p-3 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
+            <p className="text-sm text-green-700 dark:text-green-300">
+              <strong>Note:</strong> The total amount shown will be deducted
+              from the user's wallet. The original betting amount will be
+              credited to their betting account via VTU Africa.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Summary Information */}
       <Card>

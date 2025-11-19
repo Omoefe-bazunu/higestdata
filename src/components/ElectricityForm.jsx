@@ -3,16 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
-import {
-  doc,
-  getDoc,
-  onSnapshot,
-  collection,
-  setDoc,
-  updateDoc,
-  serverTimestamp,
-  runTransaction,
-} from "firebase/firestore";
+import { doc, getDoc, onSnapshot, collection } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import {
   Card,
@@ -42,6 +33,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+// Updated electricity providers to match VTU Africa service IDs
 const ELECTRICITY_PROVIDERS = [
   { id: "ikeja-electric", name: "Ikeja (IKEDC)" },
   { id: "eko-electric", name: "Eko (EKEDC)" },
@@ -75,7 +67,6 @@ function ElectricityForm({ user, router }) {
   const [showInsufficientModal, setShowInsufficientModal] = useState(false);
   const [electricityRates, setElectricityRates] = useState({
     serviceCharge: 0,
-    chargeType: "percentage",
   });
   const { toast } = useToast();
 
@@ -85,33 +76,28 @@ function ElectricityForm({ user, router }) {
     if (user) {
       fetchWalletBalance();
       fetchElectricityRates();
-    }
-  }, [user]);
 
-  //TRANSACTION NOTICE
-
-  useEffect(() => {
-    if (!user) return;
-
-    const unsubscribe = onSnapshot(
-      collection(firestore, "users", user.uid, "transactions"),
-      (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === "modified") {
-            const txn = change.doc.data();
-            if (txn.status === "success" && txn.pending === false) {
-              toast({
-                title: "Transaction Completed!",
-                description: `Your ${txn.serviceType} transaction was successful.`,
-              });
-              fetchWalletBalance(); // Refresh balance
+      // Listen for transaction updates
+      const unsubscribe = onSnapshot(
+        collection(firestore, "users", user.uid, "transactions"),
+        (snapshot) => {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === "added" || change.type === "modified") {
+              const txn = change.doc.data();
+              if (txn.type === "electricity" && txn.status === "success") {
+                toast({
+                  title: "Electricity Purchase Successful!",
+                  description: `₦${txn.amountToVTU?.toLocaleString()} electricity units purchased successfully.`,
+                });
+                fetchWalletBalance();
+              }
             }
-          }
-        });
-      }
-    );
+          });
+        }
+      );
 
-    return () => unsubscribe();
+      return () => unsubscribe();
+    }
   }, [user]);
 
   const fetchWalletBalance = async () => {
@@ -139,7 +125,6 @@ function ElectricityForm({ user, router }) {
         const data = ratesDoc.data();
         setElectricityRates({
           serviceCharge: data.serviceCharge || 0,
-          chargeType: data.chargeType || "percentage",
         });
       }
     } catch (error) {
@@ -151,32 +136,43 @@ function ElectricityForm({ user, router }) {
     if (!provider || !meterNumber || !meterType) return;
     setIsVerifying(true);
     try {
-      const params = new URLSearchParams({
-        service_id: provider,
-        customer_id: meterNumber,
-        variation_id: meterType,
-      });
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("User not authenticated");
+
+      const token = await currentUser.getIdToken(true);
+
       const response = await fetch(
-        `https://higestdata-proxy.onrender.com/api/electricity/verify?${params}`,
+        "https://higestdata-proxy.onrender.com/api/electricity/verify",
         {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            service: provider,
+            meterNo: meterNumber,
+            metertype: meterType,
+          }),
         }
       );
+
       const result = await response.json();
-      if (result.success && result.data) {
+
+      if (result.success) {
         setMeterVerified(true);
         setCustomerDetails(result.data);
         toast({
           title: "Meter Verified",
-          description: `Name: ${result.data.customer_name}`,
+          description: `Meter details verified successfully`,
         });
       } else {
         setMeterVerified(false);
         setCustomerDetails(null);
         toast({
           title: "Verification Failed",
-          description: result.message || "Invalid meter details.",
+          description: result.error || "Invalid meter details",
           variant: "destructive",
         });
       }
@@ -200,9 +196,7 @@ function ElectricityForm({ user, router }) {
   const getServiceCharge = () => {
     const electricityAmount = getElectricityAmount();
     const serviceCharge = parseFloat(electricityRates.serviceCharge) || 0;
-    return electricityRates.chargeType === "percentage"
-      ? (electricityAmount * serviceCharge) / 100
-      : serviceCharge;
+    return (electricityAmount * serviceCharge) / 100;
   };
 
   const getTotalAmount = () => {
@@ -282,16 +276,14 @@ function ElectricityForm({ user, router }) {
       if (!currentUser) throw new Error("User not authenticated");
 
       const token = await currentUser.getIdToken(true);
+      const ref = `ELEC_${currentUser.uid}_${Date.now()}`;
 
       const transactionPayload = {
-        userId: currentUser.uid,
-        serviceType: "electricity",
+        service: provider,
+        meterNo: meterNumber,
+        metertype: meterType,
         amount: electricityAmount,
-        serviceCharge: getServiceCharge(),
-        totalAmount: totalAmount,
-        provider,
-        customerId: meterNumber,
-        variationId: meterType,
+        ref: ref,
       };
 
       const response = await fetch(
@@ -312,24 +304,24 @@ function ElectricityForm({ user, router }) {
         throw new Error(result.error || "Transaction failed");
       }
 
-      const isCompleted = result.transactionData?.status === "success";
+      if (result.success) {
+        toast({
+          title: "Success!",
+          description: `₦${electricityAmount.toLocaleString()} electricity purchase successful!`,
+        });
 
-      toast({
-        title: isCompleted ? "Success!" : "Processing",
-        description: isCompleted
-          ? `₦${electricityAmount.toLocaleString()} units credited successfully!`
-          : "Electricity purchase is being processed. You'll be notified when complete.",
-      });
+        // Reset form
+        setProvider("");
+        setMeterNumber("");
+        setMeterType("");
+        setAmount("");
+        setMeterVerified(false);
+        setCustomerDetails(null);
 
-      // Reset form
-      setProvider("");
-      setMeterNumber("");
-      setMeterType("");
-      setAmount("");
-      setMeterVerified(false);
-      setCustomerDetails(null);
-
-      fetchWalletBalance();
+        fetchWalletBalance();
+      } else {
+        throw new Error(result.error || "Transaction failed");
+      }
     } catch (error) {
       console.error("Transaction error:", error);
       toast({
@@ -369,12 +361,7 @@ function ElectricityForm({ user, router }) {
           <CheckCircle className="h-4 w-4 text-green-500" />
           <AlertTitle>Meter Verified</AlertTitle>
           <AlertDescription>
-            <p>
-              <strong>Name:</strong> {customerDetails.customer_name}
-            </p>
-            <p>
-              <strong>Address:</strong> {customerDetails.customer_address}
-            </p>
+            Meter details verified successfully. You can proceed with payment.
           </AlertDescription>
         </Alert>
       )}
@@ -478,7 +465,7 @@ function ElectricityForm({ user, router }) {
             </div>
             {getServiceCharge() > 0 && (
               <div className="flex justify-between text-sm">
-                <span>Service Charge:</span>
+                <span>Service Charge ({electricityRates.serviceCharge}%):</span>
                 <span className="font-medium">
                   ₦{getServiceCharge().toLocaleString()}
                 </span>
@@ -493,8 +480,8 @@ function ElectricityForm({ user, router }) {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              ₦{getElectricityAmount().toLocaleString()} will be credited to
-              your meter.{" "}
+              ₦{getElectricityAmount().toLocaleString()} will be sent to your
+              meter.{" "}
               {getServiceCharge() > 0 &&
                 "Service charge will be deducted from your wallet."}
             </p>
@@ -610,7 +597,8 @@ export default function ElectricityPage() {
           Pay Electricity Bills
         </h1>
         <p className="text-muted-foreground">
-          Purchase electricity units instantly. Fast, secure, and reliable.
+          Purchase electricity units instantly via VTU Africa. Fast, secure, and
+          reliable.
         </p>
       </div>
 
@@ -632,7 +620,7 @@ export default function ElectricityPage() {
                 <Zap className="h-16 w-16 mx-auto mb-4 opacity-80" />
                 <h3 className="text-xl font-semibold mb-2">Power Your Home</h3>
                 <p className="text-sm opacity-90">
-                  Pay bills for all major providers
+                  Pay bills for all major providers via VTU Africa
                 </p>
               </div>
             </div>
@@ -641,12 +629,12 @@ export default function ElectricityPage() {
             </h3>
             <p className="text-muted-foreground mb-4">
               Pay bills for Ikeja, Eko, Kano, Portharcourt, Jos, Ibadan, and
-              more.
+              more through our VTU Africa integration.
             </p>
             <ul className="space-y-2 text-sm">
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Instant meter crediting</span>
+                <span>Instant meter crediting via VTU Africa</span>
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />
@@ -655,6 +643,10 @@ export default function ElectricityPage() {
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />
                 <span>Support for prepaid and postpaid meters</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-primary" />
+                <span>Real-time transaction tracking</span>
               </li>
             </ul>
           </div>

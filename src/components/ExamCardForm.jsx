@@ -3,14 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
-import {
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  serverTimestamp,
-  runTransaction,
-} from "firebase/firestore";
+import { doc, getDoc, onSnapshot, collection } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import {
   Card,
@@ -40,13 +33,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+// Updated exam services to match VTU Africa
+const EXAM_SERVICES = [
+  { id: "waec", name: "WAEC Scratch Card" },
+  { id: "neco", name: "NECO Token Card" },
+  { id: "nabteb", name: "NABTEB Scratch Card" },
+  { id: "waec-gce", name: "WAEC GCE" },
+  { id: "neco-gce", name: "NECO GCE" },
+];
+
 function ExamCardForm({ user, router }) {
-  const [cardType, setCardType] = useState("");
+  const [service, setService] = useState("");
+  const [productCode, setProductCode] = useState("");
   const [quantity, setQuantity] = useState("");
+  const [profileCode, setProfileCode] = useState("");
+  const [sender, setSender] = useState("");
+  const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [showInsufficientModal, setShowInsufficientModal] = useState(false);
-  const [examCards, setExamCards] = useState({});
+  const [examRates, setExamRates] = useState({});
   const [purchasedCards, setPurchasedCards] = useState(null);
   const { toast } = useToast();
 
@@ -55,7 +61,28 @@ function ExamCardForm({ user, router }) {
   useEffect(() => {
     if (user) {
       fetchWalletBalance();
-      fetchExamCards();
+      fetchExamRates();
+
+      // Listen for transaction updates
+      const unsubscribe = onSnapshot(
+        collection(firestore, "users", user.uid, "transactions"),
+        (snapshot) => {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === "added" || change.type === "modified") {
+              const txn = change.doc.data();
+              if (txn.type === "exam" && txn.status === "success") {
+                toast({
+                  title: "Exam Card Purchase Successful!",
+                  description: `${txn.quantity} ${txn.service} card(s) purchased successfully.`,
+                });
+                fetchWalletBalance();
+              }
+            }
+          });
+        }
+      );
+
+      return () => unsubscribe();
     }
   }, [user]);
 
@@ -75,27 +102,24 @@ function ExamCardForm({ user, router }) {
     }
   };
 
-  const fetchExamCards = async () => {
+  const fetchExamRates = async () => {
     try {
-      const ratesDoc = await getDoc(
-        doc(firestore, "settings", "examCardRates")
-      );
+      const ratesDoc = await getDoc(doc(firestore, "settings", "examRates"));
       if (ratesDoc.exists()) {
-        setExamCards(ratesDoc.data().rates || {});
+        setExamRates(ratesDoc.data() || {});
       }
     } catch (error) {
-      console.error("Error fetching exam cards:", error);
+      console.error("Error fetching exam rates:", error);
     }
   };
 
-  const getSelectedCard = () => {
-    return examCards[cardType] || null;
-  };
-
   const getTotalAmount = () => {
-    const card = getSelectedCard();
     const qty = parseInt(quantity) || 0;
-    return card ? card.finalPrice * qty : 0;
+    const profitMargin = parseFloat(examRates.profitMargin) || 0;
+
+    // For exam cards, we'll calculate the final amount after getting the VTU response
+    // This is just an estimate for display
+    return qty * 1000 * (1 + profitMargin / 100); // Base estimate
   };
 
   const isSubmitDisabled = () => {
@@ -103,7 +127,8 @@ function ExamCardForm({ user, router }) {
     const qty = parseInt(quantity) || 0;
     return (
       !isAuthenticated ||
-      !cardType ||
+      !service ||
+      !productCode ||
       !qty ||
       qty < 1 ||
       qty > 100 ||
@@ -150,100 +175,69 @@ function ExamCardForm({ user, router }) {
         throw new Error("User not authenticated");
       }
 
+      const token = await currentUser.getIdToken(true);
+      const ref = `EXAM_${currentUser.uid}_${Date.now()}`;
+
       const transactionPayload = {
-        userId: currentUser.uid,
-        cardTypeId: cardType,
+        service,
+        product_code: productCode,
         quantity: qty,
+        ref,
+        webhookURL: "https://higestdata-proxy.onrender.com/webhook/vtu",
       };
 
-      // Call API first
-      const response = await fetch("/api/exam-cards/purchase", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${await currentUser.getIdToken(true)}`,
-        },
-        body: JSON.stringify(transactionPayload),
-      });
+      // Add optional parameters if provided
+      if (profileCode) transactionPayload.profilecode = profileCode;
+      if (sender) transactionPayload.sender = sender;
+      if (phone) transactionPayload.phone = phone;
+
+      const response = await fetch(
+        "https://higestdata-proxy.onrender.com/api/exam/purchase",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(transactionPayload),
+        }
+      );
 
       const result = await response.json();
 
-      if (result.success && result.transactionData) {
-        // Use Firestore transaction to update wallet and save transaction atomically
-        await runTransaction(firestore, async (transaction) => {
-          const userDocRef = doc(firestore, "users", currentUser.uid);
-          const userDoc = await transaction.get(userDocRef);
+      if (!response.ok) {
+        throw new Error(result.error || "Transaction failed");
+      }
 
-          if (!userDoc.exists()) {
-            throw new Error("User document not found");
-          }
-
-          const currentBalance = userDoc.data().walletBalance || 0;
-          const newBalance = currentBalance - totalAmount;
-
-          // Update wallet balance
-          transaction.update(userDocRef, {
-            walletBalance: newBalance,
-            updatedAt: serverTimestamp(),
-          });
-
-          // Save transaction
-          const transactionRef = doc(
-            firestore,
-            "users",
-            currentUser.uid,
-            "transactions",
-            result.transactionId
-          );
-
-          transaction.set(transactionRef, {
-            ...result.transactionData,
-            createdAt: serverTimestamp(),
-          });
-        });
-
-        // Show purchased cards
-        setPurchasedCards(result.data.cards);
+      if (result.success) {
+        // Show purchased cards if available
+        if (result.data?.description?.pins) {
+          setPurchasedCards(result.data.description.pins);
+        }
 
         toast({
-          title: "Purchase Successful",
-          description: `${qty} exam card(s) purchased successfully`,
+          title: "Purchase Successful!",
+          description: `${qty} ${service.toUpperCase()} exam card(s) purchased successfully.`,
         });
 
         // Reset form
-        setCardType("");
+        setService("");
+        setProductCode("");
         setQuantity("");
+        setProfileCode("");
+        setSender("");
+        setPhone("");
 
         // Refresh wallet balance
         await fetchWalletBalance();
       } else {
-        // Handle failed transaction - just save it without deducting wallet
-        if (result.transactionData) {
-          const transactionRef = doc(
-            firestore,
-            "users",
-            currentUser.uid,
-            "transactions",
-            result.transactionId
-          );
-
-          await setDoc(transactionRef, {
-            ...result.transactionData,
-            createdAt: serverTimestamp(),
-          });
-        }
-
-        toast({
-          title: "Transaction Failed",
-          description: result.message || "Please try again.",
-          variant: "destructive",
-        });
+        throw new Error(result.error || "Transaction failed");
       }
     } catch (error) {
       console.error("Transaction error:", error);
       toast({
         title: "Transaction Failed",
-        description: error.message || "Network error. Please try again.",
+        description: error.message || "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -266,35 +260,42 @@ function ExamCardForm({ user, router }) {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Insufficient Balance</AlertTitle>
           <AlertDescription>
-            Your wallet balance (₦{walletBalance.toLocaleString()}) is less than
-            the required amount (₦{getTotalAmount().toLocaleString()}). Please
-            fund your wallet to proceed.
+            Your wallet balance (₦{walletBalance.toLocaleString()}) may be
+            insufficient for this purchase. The final amount will be calculated
+            based on VTU Africa pricing.
           </AlertDescription>
         </Alert>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-2">
-          <Label htmlFor="cardType">Exam Card Type *</Label>
-          <Select value={cardType} onValueChange={setCardType} required>
-            <SelectTrigger id="cardType">
-              <SelectValue placeholder="Select exam card type" />
+          <Label htmlFor="service">Exam Service *</Label>
+          <Select value={service} onValueChange={setService} required>
+            <SelectTrigger id="service">
+              <SelectValue placeholder="Select exam service" />
             </SelectTrigger>
             <SelectContent>
-              {Object.keys(examCards).length > 0 ? (
-                Object.keys(examCards).map((cardId) => (
-                  <SelectItem key={cardId} value={cardId}>
-                    {examCards[cardId].name} - ₦
-                    {examCards[cardId].finalPrice.toLocaleString()}
-                  </SelectItem>
-                ))
-              ) : (
-                <div className="p-2 text-sm text-muted-foreground">
-                  No exam cards available
-                </div>
-              )}
+              {EXAM_SERVICES.map((service) => (
+                <SelectItem key={service.id} value={service.id}>
+                  {service.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="productCode">Product Code *</Label>
+          <Input
+            id="productCode"
+            value={productCode}
+            onChange={(e) => setProductCode(e.target.value)}
+            placeholder="Enter product code (e.g., waec-direct)"
+            required
+          />
+          <p className="text-xs text-muted-foreground">
+            Enter the specific product code for the exam card
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -314,26 +315,52 @@ function ExamCardForm({ user, router }) {
           </p>
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="profileCode">Profile Code (Optional)</Label>
+          <Input
+            id="profileCode"
+            value={profileCode}
+            onChange={(e) => setProfileCode(e.target.value)}
+            placeholder="Enter profile code if required"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="sender">Sender Name (Optional)</Label>
+          <Input
+            id="sender"
+            value={sender}
+            onChange={(e) => setSender(e.target.value)}
+            placeholder="Enter sender name"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="phone">Phone Number (Optional)</Label>
+          <Input
+            id="phone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Enter phone number"
+          />
+        </div>
+
         {getTotalAmount() > 0 && (
           <div className="bg-muted p-4 rounded-lg space-y-3">
             <div className="flex justify-between text-sm">
-              <span>Unit Price:</span>
+              <span>Estimated Amount:</span>
               <span className="font-medium">
-                ₦{(getSelectedCard()?.finalPrice || 0).toLocaleString()}
+                ₦{getTotalAmount().toLocaleString()}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span>Quantity:</span>
               <span className="font-medium">{parseInt(quantity) || 0}</span>
             </div>
-            <div className="border-t pt-2">
-              <div className="flex justify-between">
-                <span className="font-semibold">Total Amount:</span>
-                <span className="font-bold text-lg">
-                  ₦{getTotalAmount().toLocaleString()}
-                </span>
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Final amount will be calculated by VTU Africa based on current
+              rates
+            </p>
           </div>
         )}
 
@@ -358,28 +385,42 @@ function ExamCardForm({ user, router }) {
           <DialogHeader>
             <DialogTitle>Purchase Successful</DialogTitle>
             <DialogDescription>
-              Your exam cards have been generated. Save these details.
+              Your exam cards have been generated. Save these PINs securely.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 max-h-96 overflow-y-auto">
-            {purchasedCards?.map((card, index) => (
-              <div key={index} className="bg-muted p-4 rounded-lg">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Card #{index + 1}
-                    </p>
-                    <p className="font-mono font-bold text-lg">{card.pin}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Serial Number
-                    </p>
-                    <p className="font-mono font-medium">{card.serial_no}</p>
+            {Array.isArray(purchasedCards) ? (
+              purchasedCards.map((pin, index) => (
+                <div key={index} className="bg-muted p-4 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Card #{index + 1}
+                      </p>
+                      <p className="font-mono font-bold text-lg">{pin}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(pin);
+                        toast({
+                          title: "Copied!",
+                          description: "PIN copied to clipboard",
+                        });
+                      }}
+                    >
+                      Copy
+                    </Button>
                   </div>
                 </div>
+              ))
+            ) : (
+              <div className="text-center py-4 text-muted-foreground">
+                No PINs available in response. Check your transaction history
+                for details.
               </div>
-            ))}
+            )}
           </div>
           <Button onClick={() => setPurchasedCards(null)} className="w-full">
             Close
@@ -399,13 +440,13 @@ function ExamCardForm({ user, router }) {
               Insufficient Balance
             </DialogTitle>
             <DialogDescription>
-              Your wallet balance is insufficient for this transaction.
+              Your wallet balance may be insufficient for this transaction.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="bg-muted p-4 rounded-lg">
               <p className="text-sm">
-                <span className="font-medium">Required Amount:</span> ₦
+                <span className="font-medium">Estimated Amount:</span> ₦
                 {getTotalAmount().toLocaleString()}
               </p>
               <p className="text-sm">
@@ -413,7 +454,7 @@ function ExamCardForm({ user, router }) {
                 {walletBalance.toLocaleString()}
               </p>
               <p className="text-sm text-red-600">
-                <span className="font-medium">Shortfall:</span> ₦
+                <span className="font-medium">Potential Shortfall:</span> ₦
                 {(getTotalAmount() - walletBalance).toLocaleString()}
               </p>
             </div>
@@ -475,7 +516,8 @@ export default function ExamCardsPage() {
           Buy Exam Scratch Cards
         </h1>
         <p className="text-muted-foreground">
-          Purchase WAEC, NECO, NABTEB exam scratch cards instantly.
+          Purchase WAEC, NECO, NABTEB exam scratch cards instantly via VTU
+          Africa.
         </p>
       </div>
 
@@ -485,7 +527,7 @@ export default function ExamCardsPage() {
             <CardHeader className="px-0">
               <CardTitle>Exam Card Purchase</CardTitle>
               <CardDescription>
-                Select card type and quantity to purchase.
+                Select service and enter product details to purchase exam cards.
               </CardDescription>
             </CardHeader>
             <ExamCardForm user={user} router={router} />
@@ -499,7 +541,7 @@ export default function ExamCardsPage() {
                   Exam Results Made Easy
                 </h3>
                 <p className="text-sm opacity-90">
-                  Get your scratch cards instantly
+                  Get your scratch cards instantly via VTU Africa
                 </p>
               </div>
             </div>
@@ -507,8 +549,8 @@ export default function ExamCardsPage() {
               Available Exam Cards
             </h3>
             <p className="text-muted-foreground mb-4">
-              Purchase WAEC, NECO, and NABTEB scratch cards for checking exam
-              results.
+              Purchase WAEC, NECO, and NABTEB scratch cards through our VTU
+              Africa integration.
             </p>
             <ul className="space-y-2 text-sm">
               <li className="flex items-center gap-2">
@@ -525,7 +567,11 @@ export default function ExamCardsPage() {
               </li>
               <li className="flex items-center gap-2">
                 <GraduationCap className="h-4 w-4 text-primary" />
-                <span>Instant delivery with PIN & Serial</span>
+                <span>Instant PIN delivery</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <GraduationCap className="h-4 w-4 text-primary" />
+                <span>Real-time transaction tracking</span>
               </li>
             </ul>
           </div>

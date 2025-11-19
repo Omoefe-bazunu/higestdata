@@ -34,6 +34,11 @@ const navItems = [
   { href: "/dashboard/cable-tv", label: "Cable Tv", icon: Tv },
   { href: "/dashboard/betting", label: "Betting Funding", icon: CreditCard },
   {
+    href: "/dashboard/airtime-to-cash",
+    label: "Airtime to Cash",
+    icon: CreditCard,
+  },
+  {
     href: "/dashboard/electricity-bill",
     label: "Electricity Bill",
     icon: UtilityPole,
