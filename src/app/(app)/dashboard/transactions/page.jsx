@@ -104,9 +104,23 @@ function TransactionDetailsModal({ transaction }) {
             <div className="space-y-2">
               <DetailRow label="Transaction ID" value={transaction.id} />
               <DetailRow label="Description" value={transaction.description} />
-              <DetailRow
+              {/* <DetailRow
                 label="Amount"
                 value={`₦${Math.abs(transaction.amount).toLocaleString()}`}
+                className={
+                  transaction.type === "credit"
+                    ? "text-green-600"
+                    : "text-red-600"
+                }
+              /> */}
+              <DetailRow
+                label="Amount"
+                value={`₦${(
+                  transaction.amountCharged ||
+                  transaction.amountToVTU ||
+                  Math.abs(transaction.amount) ||
+                  0
+                ).toLocaleString()}`}
                 className={
                   transaction.type === "credit"
                     ? "text-green-600"
@@ -257,36 +271,34 @@ function TransactionDetailsModal({ transaction }) {
           )}
 
           {/* eBills Response */}
-          {transaction.ebillsResponse && (
+          {transaction.vtuResponse && (
             <div className="bg-muted/50 p-4 rounded-lg">
               <h3 className="font-semibold mb-3 text-sm uppercase tracking-wide">
-                Provider Response
+                VTU Africa Response
               </h3>
-              <div className="space-y-2">
-                {transaction.ebillsResponse.message && (
+              <div className="space-y-2 text-xs">
+                {transaction.vtuResponse.description?.Status && (
+                  <DetailRow
+                    label="Status"
+                    value={transaction.vtuResponse.description.Status}
+                  />
+                )}
+                {transaction.vtuResponse.description?.ProductName && (
+                  <DetailRow
+                    label="Product"
+                    value={transaction.vtuResponse.description.ProductName}
+                  />
+                )}
+                {transaction.vtuResponse.description?.Token && (
+                  <DetailRow
+                    label="Token"
+                    value={transaction.vtuResponse.description.Token}
+                  />
+                )}
+                {transaction.vtuResponse.description?.message && (
                   <DetailRow
                     label="Message"
-                    value={transaction.ebillsResponse.message}
-                  />
-                )}
-
-                {transaction.ebillsResponse.code && (
-                  <DetailRow
-                    label="Response Code"
-                    value={transaction.ebillsResponse.code}
-                  />
-                )}
-
-                {transaction.ebillsResponse.data?.status && (
-                  <DetailRow
-                    label="Provider Status"
-                    value={transaction.ebillsResponse.data.status}
-                  />
-                )}
-                {transaction.ebillsResponse.data?.token && (
-                  <DetailRow
-                    label="Prepaid Token (Load this in your machine)"
-                    value={transaction.ebillsResponse.data.token}
+                    value={transaction.vtuResponse.description.message}
                   />
                 )}
               </div>
@@ -481,7 +493,12 @@ export default function TransactionsPage() {
                       )}
                     >
                       {tx.type === "credit" ? "+" : "-"}₦
-                      {Math.abs(tx.amount).toLocaleString()}
+                      {(
+                        tx.amountCharged ||
+                        tx.amountToVTU ||
+                        Math.abs(tx.amount) ||
+                        0
+                      ).toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right">
                       <TransactionDetailsModal transaction={tx} />

@@ -270,14 +270,14 @@ export default function UserProfile() {
             <Badge
               variant="outline"
               className={
-                userData.kyc === "approved"
+                userData.kycStatus === "approved"
                   ? "bg-green-50 text-green-700 border-green-200"
-                  : userData.kyc === "pending"
+                  : userData.kycStatus === "pending"
                   ? "bg-yellow-50 text-yellow-700 border-yellow-200"
                   : "bg-gray-50 text-gray-700 border-gray-200"
               }
             >
-              KYC: {userData.kyc || "pending"}
+              KYC: {userData.kycStatus || "pending"}
             </Badge>
           </div>
         </div>

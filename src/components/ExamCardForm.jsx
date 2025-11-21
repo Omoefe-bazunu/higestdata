@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, onSnapshot, collection } from "firebase/firestore";
@@ -22,7 +22,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader, AlertTriangle, Wallet, GraduationCap } from "lucide-react";
+import {
+  Loader,
+  AlertTriangle,
+  Wallet,
+  GraduationCap,
+  User,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -33,19 +39,75 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-// Updated exam services to match VTU Africa
+// Updated exam services to match VTU Africa API
 const EXAM_SERVICES = [
-  { id: "waec", name: "WAEC Scratch Card" },
-  { id: "neco", name: "NECO Token Card" },
-  { id: "nabteb", name: "NABTEB Scratch Card" },
-  { id: "waec-gce", name: "WAEC GCE" },
-  { id: "neco-gce", name: "NECO GCE" },
+  { id: "waec", name: "WAEC", description: "WAEC Examination" },
+  { id: "neco", name: "NECO", description: "NECO Examination" },
+  { id: "nabteb", name: "NABTEB", description: "NABTEB Examination" },
+  { id: "jamb", name: "JAMB", description: "JAMB Examination" },
 ];
+
+// Product codes based on VTU Africa documentation
+const PRODUCT_CODES = {
+  waec: [
+    {
+      code: "1",
+      name: "WAEC Result Checking PIN",
+      description: "For checking WAEC results",
+    },
+    {
+      code: "2",
+      name: "WAEC GCE Registration PIN",
+      description: "For WAEC GCE registration",
+    },
+    {
+      code: "3",
+      name: "WAEC Verification PIN",
+      description: "For WAEC result verification",
+    },
+  ],
+  neco: [
+    {
+      code: "1",
+      name: "NECO Result Checking Token",
+      description: "For checking NECO results",
+    },
+    {
+      code: "2",
+      name: "NECO GCE Registration PIN",
+      description: "For NECO GCE registration",
+    },
+  ],
+  nabteb: [
+    {
+      code: "1",
+      name: "NABTEB Result Checking PIN",
+      description: "For checking NABTEB results",
+    },
+    {
+      code: "2",
+      name: "NABTEB GCE Registration PIN",
+      description: "For NABTEB GCE registration",
+    },
+  ],
+  jamb: [
+    {
+      code: "1",
+      name: "JAMB UTME Registration PIN",
+      description: "For JAMB UTME registration",
+    },
+    {
+      code: "2",
+      name: "JAMB Direct Entry Registration PIN",
+      description: "For JAMB Direct Entry",
+    },
+  ],
+};
 
 function ExamCardForm({ user, router }) {
   const [service, setService] = useState("");
   const [productCode, setProductCode] = useState("");
-  const [quantity, setQuantity] = useState("");
+  const [quantity, setQuantity] = useState("1");
   const [profileCode, setProfileCode] = useState("");
   const [sender, setSender] = useState("");
   const [phone, setPhone] = useState("");
@@ -54,7 +116,13 @@ function ExamCardForm({ user, router }) {
   const [showInsufficientModal, setShowInsufficientModal] = useState(false);
   const [examRates, setExamRates] = useState({});
   const [purchasedCards, setPurchasedCards] = useState(null);
+  const [candidateName, setCandidateName] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [estimatedPrice, setEstimatedPrice] = useState(null);
+  const [isEstimating, setIsEstimating] = useState(false);
   const { toast } = useToast();
+  const processedTransactions = useRef(new Set());
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
 
   const isAuthenticated = !!user;
 
@@ -63,28 +131,60 @@ function ExamCardForm({ user, router }) {
       fetchWalletBalance();
       fetchExamRates();
 
-      // Listen for transaction updates
+      // Fixed transaction listener - only show toasts for NEW transactions
       const unsubscribe = onSnapshot(
         collection(firestore, "users", user.uid, "transactions"),
         (snapshot) => {
           snapshot.docChanges().forEach((change) => {
-            if (change.type === "added" || change.type === "modified") {
+            // Only process NEW transactions, not existing ones
+            if (change.type === "added") {
               const txn = change.doc.data();
+              const txnId = change.doc.id;
+
+              // Skip if we've already processed this transaction
+              if (processedTransactions.current.has(txnId)) {
+                return;
+              }
+
+              // Mark as processed
+              processedTransactions.current.add(txnId);
+
               if (txn.type === "exam" && txn.status === "success") {
-                toast({
-                  title: "Exam Card Purchase Successful!",
-                  description: `${txn.quantity} ${txn.service} card(s) purchased successfully.`,
-                });
+                // Don't show toast on initial load for existing transactions
+                if (!isFirstLoad) {
+                  toast({
+                    title: "Exam Card Purchase Successful!",
+                    description: `${txn.quantity} ${txn.service} card(s) purchased successfully.`,
+                  });
+                }
                 fetchWalletBalance();
               }
             }
           });
+
+          // After first load, mark that initial transactions are processed
+          if (isFirstLoad) {
+            // Add all existing transactions to processed set
+            snapshot.docs.forEach((doc) => {
+              processedTransactions.current.add(doc.id);
+            });
+            setIsFirstLoad(false);
+          }
         }
       );
 
       return () => unsubscribe();
     }
-  }, [user]);
+  }, [user, toast, isFirstLoad]);
+
+  // Fetch estimated price when service, product code, or quantity changes
+  useEffect(() => {
+    if (service && productCode && quantity && parseInt(quantity) > 0) {
+      fetchEstimatedPrice();
+    } else {
+      setEstimatedPrice(null);
+    }
+  }, [service, productCode, quantity]);
 
   const fetchWalletBalance = async () => {
     try {
@@ -113,18 +213,123 @@ function ExamCardForm({ user, router }) {
     }
   };
 
-  const getTotalAmount = () => {
-    const qty = parseInt(quantity) || 0;
-    const profitMargin = parseFloat(examRates.profitMargin) || 0;
+  const fetchEstimatedPrice = async () => {
+    setIsEstimating(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      const token = await currentUser.getIdToken(true);
 
-    // For exam cards, we'll calculate the final amount after getting the VTU response
-    // This is just an estimate for display
-    return qty * 1000 * (1 + profitMargin / 100); // Base estimate
+      const response = await fetch(
+        "https://higestdata-proxy.onrender.com/api/exam/estimate-price",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            service: service.toLowerCase(),
+            product_code: productCode,
+            quantity: parseInt(quantity),
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        setEstimatedPrice(result.data);
+      } else {
+        throw new Error(result.error || "Failed to estimate price");
+      }
+    } catch (error) {
+      console.error("Price estimation error:", error);
+      // Don't show toast for estimation errors to avoid spamming the user
+      setEstimatedPrice(null);
+    } finally {
+      setIsEstimating(false);
+    }
+  };
+
+  // Verify JAMB candidate
+  const verifyJambCandidate = async () => {
+    if (!profileCode || !productCode) {
+      toast({
+        title: "Missing Information",
+        description:
+          "Profile code and product code are required for JAMB verification",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      const token = await currentUser.getIdToken(true);
+
+      const response = await fetch(
+        "https://higestdata-proxy.onrender.com/api/exam/verify-jamb",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            profilecode: profileCode,
+            product_code: productCode,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        setCandidateName(result.data.candidateName);
+        toast({
+          title: "Verification Successful",
+          description: `Candidate: ${result.data.candidateName}`,
+        });
+      } else {
+        throw new Error(result.error || "Verification failed");
+      }
+    } catch (error) {
+      console.error("JAMB verification error:", error);
+      toast({
+        title: "Verification Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      setCandidateName("");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // Reset form when service changes
+  useEffect(() => {
+    setProductCode("");
+    setProfileCode("");
+    setCandidateName("");
+    setEstimatedPrice(null);
+  }, [service]);
+
+  const getTotalAmount = () => {
+    return estimatedPrice?.totalAmount || 0;
   };
 
   const isSubmitDisabled = () => {
-    const totalAmount = getTotalAmount();
     const qty = parseInt(quantity) || 0;
+    const totalAmount = getTotalAmount();
+
+    // For JAMB, require profile code verification
+    if (service === "jamb" && !candidateName) {
+      return true;
+    }
+
     return (
       !isAuthenticated ||
       !service ||
@@ -133,7 +338,8 @@ function ExamCardForm({ user, router }) {
       qty < 1 ||
       qty > 100 ||
       walletBalance < totalAmount ||
-      isSubmitting
+      isSubmitting ||
+      isEstimating
     );
   };
 
@@ -179,9 +385,9 @@ function ExamCardForm({ user, router }) {
       const ref = `EXAM_${currentUser.uid}_${Date.now()}`;
 
       const transactionPayload = {
-        service,
+        service: service.toLowerCase(),
         product_code: productCode,
-        quantity: qty,
+        quantity: qty.toString(),
         ref,
         webhookURL: "https://higestdata-proxy.onrender.com/webhook/vtu",
       };
@@ -190,6 +396,8 @@ function ExamCardForm({ user, router }) {
       if (profileCode) transactionPayload.profilecode = profileCode;
       if (sender) transactionPayload.sender = sender;
       if (phone) transactionPayload.phone = phone;
+
+      console.log("Sending exam purchase request:", transactionPayload);
 
       const response = await fetch(
         "https://higestdata-proxy.onrender.com/api/exam/purchase",
@@ -210,10 +418,26 @@ function ExamCardForm({ user, router }) {
       }
 
       if (result.success) {
-        // Show purchased cards if available
+        // Parse PINs from response
+        let pins = [];
         if (result.data?.description?.pins) {
-          setPurchasedCards(result.data.description.pins);
+          // PINs might be in format: "PIN1<=>PIN2<=>PIN3"
+          const pinString = result.data.description.pins;
+          pins = pinString
+            .split("<=")
+            .map((pin) => pin.trim())
+            .filter((pin) => pin);
         }
+
+        setPurchasedCards({
+          pins: pins,
+          productName: result.data.description?.ProductName,
+          quantity: result.data.description?.Quantity,
+          amount:
+            result.amountBreakdown?.totalAmount ||
+            result.data.description?.Amount_Charged,
+          breakdown: result.amountBreakdown,
+        });
 
         toast({
           title: "Purchase Successful!",
@@ -223,10 +447,12 @@ function ExamCardForm({ user, router }) {
         // Reset form
         setService("");
         setProductCode("");
-        setQuantity("");
+        setQuantity("1");
         setProfileCode("");
         setSender("");
         setPhone("");
+        setCandidateName("");
+        setEstimatedPrice(null);
 
         // Refresh wallet balance
         await fetchWalletBalance();
@@ -245,6 +471,8 @@ function ExamCardForm({ user, router }) {
     }
   };
 
+  const currentProducts = PRODUCT_CODES[service] || [];
+
   return (
     <>
       <div className="bg-primary/5 p-4 rounded-lg mb-6">
@@ -260,9 +488,8 @@ function ExamCardForm({ user, router }) {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Insufficient Balance</AlertTitle>
           <AlertDescription>
-            Your wallet balance (₦{walletBalance.toLocaleString()}) may be
-            insufficient for this purchase. The final amount will be calculated
-            based on VTU Africa pricing.
+            Your wallet balance (₦{walletBalance.toLocaleString()}) is
+            insufficient for this purchase.
           </AlertDescription>
         </Alert>
       )}
@@ -277,26 +504,40 @@ function ExamCardForm({ user, router }) {
             <SelectContent>
               {EXAM_SERVICES.map((service) => (
                 <SelectItem key={service.id} value={service.id}>
-                  {service.name}
+                  <div>
+                    <div className="font-medium">{service.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {service.description}
+                    </div>
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="productCode">Product Code *</Label>
-          <Input
-            id="productCode"
-            value={productCode}
-            onChange={(e) => setProductCode(e.target.value)}
-            placeholder="Enter product code (e.g., waec-direct)"
-            required
-          />
-          <p className="text-xs text-muted-foreground">
-            Enter the specific product code for the exam card
-          </p>
-        </div>
+        {service && (
+          <div className="space-y-2">
+            <Label htmlFor="productCode">Product Type *</Label>
+            <Select value={productCode} onValueChange={setProductCode} required>
+              <SelectTrigger id="productCode">
+                <SelectValue placeholder="Select product type" />
+              </SelectTrigger>
+              <SelectContent>
+                {currentProducts.map((product) => (
+                  <SelectItem key={product.code} value={product.code}>
+                    <div>
+                      <div className="font-medium">{product.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {product.description}
+                      </div>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="quantity">Quantity (1-100) *</Label>
@@ -315,52 +556,109 @@ function ExamCardForm({ user, router }) {
           </p>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="profileCode">Profile Code (Optional)</Label>
-          <Input
-            id="profileCode"
-            value={profileCode}
-            onChange={(e) => setProfileCode(e.target.value)}
-            placeholder="Enter profile code if required"
-          />
-        </div>
+        {/* JAMB Specific Fields */}
+        {service === "jamb" && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="profileCode">JAMB Profile Code *</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="profileCode"
+                  value={profileCode}
+                  onChange={(e) => setProfileCode(e.target.value)}
+                  placeholder="Enter JAMB profile code"
+                  required
+                />
+                <Button
+                  type="button"
+                  onClick={verifyJambCandidate}
+                  disabled={!profileCode || !productCode || isVerifying}
+                  variant="outline"
+                >
+                  {isVerifying ? (
+                    <Loader className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <User className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              {candidateName && (
+                <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                  <p className="text-sm text-green-800 font-medium">
+                    Verified Candidate: {candidateName}
+                  </p>
+                </div>
+              )}
+            </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="sender">Sender Name (Optional)</Label>
-          <Input
-            id="sender"
-            value={sender}
-            onChange={(e) => setSender(e.target.value)}
-            placeholder="Enter sender name"
-          />
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="sender">Sender Email (Optional)</Label>
+              <Input
+                id="sender"
+                type="email"
+                value={sender}
+                onChange={(e) => setSender(e.target.value)}
+                placeholder="Enter email to receive JAMB PIN"
+              />
+            </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="phone">Phone Number (Optional)</Label>
-          <Input
-            id="phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Enter phone number"
-          />
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number (Optional)</Label>
+              <Input
+                id="phone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Enter phone number to receive JAMB PIN"
+              />
+            </div>
+          </>
+        )}
 
-        {getTotalAmount() > 0 && (
+        {/* Other services optional profile code */}
+        {service && service !== "jamb" && (
+          <div className="space-y-2">
+            <Label htmlFor="profileCode">Profile Code (Optional)</Label>
+            <Input
+              id="profileCode"
+              value={profileCode}
+              onChange={(e) => setProfileCode(e.target.value)}
+              placeholder="Enter profile code if required"
+            />
+          </div>
+        )}
+
+        {/* Estimated Price Display */}
+        {estimatedPrice && (
           <div className="bg-muted p-4 rounded-lg space-y-3">
             <div className="flex justify-between text-sm">
-              <span>Estimated Amount:</span>
+              <span>Main Amount:</span>
               <span className="font-medium">
-                ₦{getTotalAmount().toLocaleString()}
+                ₦{estimatedPrice.mainAmount.toLocaleString()}
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span>Quantity:</span>
-              <span className="font-medium">{parseInt(quantity) || 0}</span>
+              <span>Admin Fee ({estimatedPrice.profitPercentage}%):</span>
+              <span className="font-medium">
+                ₦{estimatedPrice.adminFee.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm font-medium border-t pt-2">
+              <span>Total Amount:</span>
+              <span className="text-primary">
+                ₦{estimatedPrice.totalAmount.toLocaleString()}
+              </span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Final amount will be calculated by VTU Africa based on current
-              rates
+              This is the estimated amount that will be deducted from your
+              wallet
             </p>
+          </div>
+        )}
+
+        {isEstimating && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader className="h-4 w-4 animate-spin" />
+            Calculating estimated amount...
           </div>
         )}
 
@@ -383,21 +681,46 @@ function ExamCardForm({ user, router }) {
       >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Purchase Successful</DialogTitle>
+            <DialogTitle>Purchase Successful! 🎉</DialogTitle>
             <DialogDescription>
-              Your exam cards have been generated. Save these PINs securely.
+              Your {purchasedCards?.productName} has been generated
+              successfully.
+              {purchasedCards?.breakdown && (
+                <div className="mt-2 space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span>Main Amount:</span>
+                    <span>
+                      ₦{purchasedCards.breakdown.mainAmount.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Admin Fee:</span>
+                    <span>
+                      ₦{purchasedCards.breakdown.adminFee.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between font-medium">
+                    <span>Total Deducted:</span>
+                    <span>
+                      ₦{purchasedCards.breakdown.totalAmount.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 max-h-96 overflow-y-auto">
-            {Array.isArray(purchasedCards) ? (
-              purchasedCards.map((pin, index) => (
-                <div key={index} className="bg-muted p-4 rounded-lg">
+            {purchasedCards?.pins && purchasedCards.pins.length > 0 ? (
+              purchasedCards.pins.map((pin, index) => (
+                <div key={index} className="bg-muted p-4 rounded-lg border">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs text-muted-foreground">
                         Card #{index + 1}
                       </p>
-                      <p className="font-mono font-bold text-lg">{pin}</p>
+                      <p className="font-mono font-bold text-lg bg-background p-2 rounded border">
+                        {pin}
+                      </p>
                     </div>
                     <Button
                       variant="outline"
@@ -416,15 +739,39 @@ function ExamCardForm({ user, router }) {
                 </div>
               ))
             ) : (
-              <div className="text-center py-4 text-muted-foreground">
-                No PINs available in response. Check your transaction history
-                for details.
+              <div className="text-center py-8 text-muted-foreground">
+                <GraduationCap className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No PINs available in response.</p>
+                <p className="text-sm">
+                  Check your transaction history for details.
+                </p>
               </div>
             )}
           </div>
-          <Button onClick={() => setPurchasedCards(null)} className="w-full">
-            Close
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setPurchasedCards(null)}
+              variant="outline"
+              className="flex-1"
+            >
+              Close
+            </Button>
+            {purchasedCards?.pins && purchasedCards.pins.length > 0 && (
+              <Button
+                onClick={() => {
+                  const allPins = purchasedCards.pins.join("\n");
+                  navigator.clipboard.writeText(allPins);
+                  toast({
+                    title: "All PINs Copied!",
+                    description: "All PINs copied to clipboard",
+                  });
+                }}
+                className="flex-1"
+              >
+                Copy All PINs
+              </Button>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -440,7 +787,7 @@ function ExamCardForm({ user, router }) {
               Insufficient Balance
             </DialogTitle>
             <DialogDescription>
-              Your wallet balance may be insufficient for this transaction.
+              Your wallet balance is insufficient for this transaction.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -454,7 +801,7 @@ function ExamCardForm({ user, router }) {
                 {walletBalance.toLocaleString()}
               </p>
               <p className="text-sm text-red-600">
-                <span className="font-medium">Potential Shortfall:</span> ₦
+                <span className="font-medium">Shortfall:</span> ₦
                 {(getTotalAmount() - walletBalance).toLocaleString()}
               </p>
             </div>
@@ -516,7 +863,7 @@ export default function ExamCardsPage() {
           Buy Exam Scratch Cards
         </h1>
         <p className="text-muted-foreground">
-          Purchase WAEC, NECO, NABTEB exam scratch cards instantly via VTU
+          Purchase WAEC, NECO, NABTEB, and JAMB exam cards instantly via VTU
           Africa.
         </p>
       </div>
@@ -527,51 +874,82 @@ export default function ExamCardsPage() {
             <CardHeader className="px-0">
               <CardTitle>Exam Card Purchase</CardTitle>
               <CardDescription>
-                Select service and enter product details to purchase exam cards.
+                Select service and product type to purchase exam cards. JAMB
+                purchases require profile code verification.
               </CardDescription>
             </CardHeader>
             <ExamCardForm user={user} router={router} />
           </div>
 
           <div className="bg-muted/50 p-8 md:p-12 flex flex-col justify-center">
-            <div className="relative aspect-video mb-8 rounded-lg overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <div className="text-center text-white">
-                <GraduationCap className="h-16 w-16 mx-auto mb-4 opacity-80" />
-                <h3 className="text-xl font-semibold mb-2">
-                  Exam Results Made Easy
-                </h3>
-                <p className="text-sm opacity-90">
-                  Get your scratch cards instantly via VTU Africa
-                </p>
-              </div>
-            </div>
+            <div
+              className="relative aspect-video mb-8 rounded-lg overflow-hidden bg-cover bg-center bg-no-repeat"
+              style={{
+                backgroundImage: "url('/exam.png')",
+              }}
+            ></div>
+
             <h3 className="text-xl font-semibold mb-4 text-secondary-foreground">
               Available Exam Cards
             </h3>
             <p className="text-muted-foreground mb-4">
-              Purchase WAEC, NECO, and NABTEB scratch cards through our VTU
-              Africa integration.
+              Purchase WAEC, NECO, NABTEB, and JAMB cards through our VTU Africa
+              integration.
             </p>
-            <ul className="space-y-2 text-sm">
-              <li className="flex items-center gap-2">
-                <GraduationCap className="h-4 w-4 text-primary" />
-                <span>WAEC Scratch Cards</span>
+            <ul className="space-y-3 text-sm">
+              <li className="flex items-center gap-3">
+                <GraduationCap className="h-4 w-4 text-primary flex-shrink-0" />
+                <div>
+                  <span className="font-medium">WAEC Cards</span>
+                  <p className="text-xs text-muted-foreground">
+                    Result Checking, GCE Registration, Verification
+                  </p>
+                </div>
               </li>
-              <li className="flex items-center gap-2">
-                <GraduationCap className="h-4 w-4 text-primary" />
-                <span>NECO Token Cards</span>
+              <li className="flex items-center gap-3">
+                <GraduationCap className="h-4 w-4 text-primary flex-shrink-0" />
+                <div>
+                  <span className="font-medium">NECO Cards</span>
+                  <p className="text-xs text-muted-foreground">
+                    Result Checking, GCE Registration
+                  </p>
+                </div>
               </li>
-              <li className="flex items-center gap-2">
-                <GraduationCap className="h-4 w-4 text-primary" />
-                <span>NABTEB Scratch Cards</span>
+              <li className="flex items-center gap-3">
+                <GraduationCap className="h-4 w-4 text-primary flex-shrink-0" />
+                <div>
+                  <span className="font-medium">NABTEB Cards</span>
+                  <p className="text-xs text-muted-foreground">
+                    Result Checking, GCE Registration
+                  </p>
+                </div>
               </li>
-              <li className="flex items-center gap-2">
-                <GraduationCap className="h-4 w-4 text-primary" />
-                <span>Instant PIN delivery</span>
+              <li className="flex items-center gap-3">
+                <GraduationCap className="h-4 w-4 text-primary flex-shrink-0" />
+                <div>
+                  <span className="font-medium">JAMB Cards</span>
+                  <p className="text-xs text-muted-foreground">
+                    UTME & Direct Entry Registration
+                  </p>
+                </div>
               </li>
-              <li className="flex items-center gap-2">
-                <GraduationCap className="h-4 w-4 text-primary" />
-                <span>Real-time transaction tracking</span>
+              <li className="flex items-center gap-3">
+                <GraduationCap className="h-4 w-4 text-primary flex-shrink-0" />
+                <div>
+                  <span className="font-medium">Instant Delivery</span>
+                  <p className="text-xs text-muted-foreground">
+                    Real-time PIN generation and delivery
+                  </p>
+                </div>
+              </li>
+              <li className="flex items-center gap-3">
+                <GraduationCap className="h-4 w-4 text-primary flex-shrink-0" />
+                <div>
+                  <span className="font-medium">Transparent Pricing</span>
+                  <p className="text-xs text-muted-foreground">
+                    Clear breakdown of main amount and admin fee
+                  </p>
+                </div>
               </li>
             </ul>
           </div>

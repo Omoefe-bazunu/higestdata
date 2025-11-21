@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Loader, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { Label } from "@/components/ui/label";
 
 export default function ExamRatesForm() {
   const [profitMargin, setProfitMargin] = useState("");

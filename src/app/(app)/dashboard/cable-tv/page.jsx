@@ -329,28 +329,17 @@ export default function CableTVPage() {
             <CableTVForm user={user} router={router} />
           </div>
 
-          <div className="bg-muted/50 p-8 md:p-12 flex flex-col justify-center">
-            <div className="text-center mb-8">
-              <Tv className="h-16 w-16 mx-auto mb-4 text-primary opacity-80" />
-              <h3 className="text-xl font-semibold">Instant TV Subscription</h3>
-              <p className="text-sm text-muted-foreground mt-2">
-                Powered by VTU Africa • No verification needed
-              </p>
-            </div>
-            <ul className="space-y-3 text-sm">
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Instant activation</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-primary" />
-                <span>All major providers</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Pay from wallet</span>
-              </li>
-            </ul>
+          <div
+            className="p-8 md:p-12 flex flex-col justify-center relative min-h-[400px] rounded-lg overflow-hidden"
+            style={{
+              backgroundImage: "url('/cabletv.png')",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+            }}
+          >
+            {/* Optional overlay for better text readability if needed */}
+            <div className="absolute inset-0 bg-black/20"></div>
           </div>
         </div>
       </Card>

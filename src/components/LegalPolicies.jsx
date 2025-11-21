@@ -86,7 +86,7 @@ export default function LegalPolicies() {
                           <li>Airtime and data purchase</li>
                           <li>Cable TV subscription</li>
                           <li>Sports betting account funding</li>
-                          <li>Wallet funding and withdrawal via Paystack</li>
+                          <li>Wallet funding and withdrawal via Kora</li>
                         </ul>
                       </section>
 
@@ -138,8 +138,8 @@ export default function LegalPolicies() {
                         <div className="space-y-3 ">
                           <p>
                             <strong>5.1 Wallet Funding:</strong> Users can fund
-                            their wallets using Paystack payment gateway. Funds
-                            are typically credited within minutes, subject to
+                            their wallets using Kora payment gateway. Funds are
+                            typically credited within minutes, subject to
                             payment processor confirmation.
                           </p>
 
@@ -159,7 +159,7 @@ export default function LegalPolicies() {
                           <p>
                             <strong>5.4 Withdrawals:</strong> Wallet withdrawals
                             are processed within 24-48 hours to your registered
-                            bank account via Paystack.
+                            bank account via Kora.
                           </p>
                         </div>
                       </section>
@@ -338,7 +338,7 @@ export default function LegalPolicies() {
                             <strong>2.3 Transaction Data:</strong>
                           </p>
                           <ul className="list-disc list-inside space-y-1 ml-4">
-                            <li>Payment information processed via Paystack</li>
+                            <li>Payment information processed via Kora</li>
                             <li>Transaction history and wallet activity</li>
                             <li>Gift card details</li>
                           </ul>
@@ -377,9 +377,8 @@ export default function LegalPolicies() {
 
                           <p>
                             <strong>4.1 Service Providers:</strong> Third-party
-                            payment processors (Paystack), API providers
-                            (eBills), and cloud hosting services for operational
-                            purposes.
+                            payment processors (Kora), API providers (eBills),
+                            and cloud hosting services for operational purposes.
                           </p>
 
                           <p>
@@ -474,7 +473,7 @@ export default function LegalPolicies() {
                           9. Third-Party Services
                         </h3>
                         <p className="">
-                          Our platform integrates with Paystack for payments and
+                          Our platform integrates with Kora for payments and
                           other third-party services. These providers have their
                           own privacy policies, and we recommend reviewing them.
                           We are not responsible for their privacy practices.

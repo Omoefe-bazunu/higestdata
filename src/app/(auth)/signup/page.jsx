@@ -53,6 +53,7 @@ export default function SignupPage() {
         email: user.email.toLowerCase(),
         phoneNumber: phoneNumber,
         kyc: "pending",
+        kycStatus: "pending",
         walletBalance: 0,
         isVerified: false,
         verificationToken: verificationCode,

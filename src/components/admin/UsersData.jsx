@@ -106,13 +106,13 @@ export default function AdminUsersManagement() {
             </div>
             <div className="text-center p-3 md:p-4 bg-yellow-50 rounded-lg">
               <p className="text-xl md:text-2xl font-bold text-yellow-700">
-                {users.filter((u) => u.kyc === "pending").length}
+                {users.filter((u) => u.kycStatus === "pending").length}
               </p>
               <p className="text-xs md:text-sm text-gray-600">KYC Pending</p>
             </div>
             <div className="text-center p-3 md:p-4 bg-blue-50 rounded-lg">
               <p className="text-xl md:text-2xl font-bold text-blue-700">
-                {users.filter((u) => u.kyc === "approved").length}
+                {users.filter((u) => u.kycStatus === "approved").length}
               </p>
               <p className="text-xs md:text-sm text-gray-600">KYC Approved</p>
             </div>
@@ -204,14 +204,14 @@ export default function AdminUsersManagement() {
                       <Badge
                         variant="outline"
                         className={`text-xs ${
-                          user.kyc === "approved"
+                          user.kycStatus === "approved"
                             ? "bg-green-50 text-green-700 border-green-200"
-                            : user.kyc === "pending"
+                            : user.kycStatus === "pending"
                             ? "bg-yellow-50 text-yellow-700 border-yellow-200"
                             : "bg-gray-50 text-gray-700 border-gray-200"
                         }`}
                       >
-                        KYC: {user.kyc || "pending"}
+                        KYC: {user.kycStatus || "pending"}
                       </Badge>
 
                       <Badge

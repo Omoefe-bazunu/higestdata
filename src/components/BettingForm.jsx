@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, onSnapshot, collection } from "firebase/firestore";
@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   Wallet,
   DollarSign,
+  Phone,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
@@ -39,7 +40,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-// VTU Africa betting service codes
+// VTU Africa betting service codes - updated to match API documentation
 const VTU_AFRICA_BETTING_SERVICES = [
   { id: "bet9ja", name: "Bet9ja" },
   { id: "betking", name: "BetKing" },
@@ -63,6 +64,7 @@ function BettingForm({ user, router }) {
   const [provider, setProvider] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [amount, setAmount] = useState("");
+  const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [customerVerified, setCustomerVerified] = useState(false);
@@ -72,7 +74,11 @@ function BettingForm({ user, router }) {
     serviceCharge: 0,
     chargeType: "fixed",
   });
+  const [customerName, setCustomerName] = useState("");
   const { toast } = useToast();
+
+  // Add this ref to track initial load
+  const initialLoadRef = useRef(true);
 
   const isAuthenticated = !!user;
 
@@ -83,7 +89,7 @@ function BettingForm({ user, router }) {
     }
   }, [user]);
 
-  // TRANSACTION NOTICE
+  // TRANSACTION NOTICE - Fixed to prevent initial load toasts
   useEffect(() => {
     if (!user) return;
 
@@ -91,14 +97,37 @@ function BettingForm({ user, router }) {
       collection(firestore, "users", user.uid, "transactions"),
       (snapshot) => {
         snapshot.docChanges().forEach((change) => {
-          if (change.type === "modified") {
+          // Skip the initial load - only process new changes after first load
+          if (initialLoadRef.current) {
+            initialLoadRef.current = false;
+            return;
+          }
+
+          if (change.type === "added" || change.type === "modified") {
             const txn = change.doc.data();
-            if (txn.status === "success" && txn.pending === false) {
+            // Only show toasts for recent transactions (last 5 minutes)
+            const transactionTime = txn.createdAt?.toDate?.() || new Date();
+            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+            if (transactionTime < fiveMinutesAgo) {
+              return; // Skip old transactions
+            }
+
+            // Handle betting transactions specifically
+            if (txn.type === "betting" && txn.status === "success") {
               toast({
-                title: "Transaction Completed!",
-                description: `Your ${txn.serviceType} transaction was successful.`,
+                title: "Betting Account Funded!",
+                description: `₦${txn.amountToVTU?.toLocaleString()} credited to ${
+                  txn.service
+                } account successfully.`,
               });
               fetchWalletBalance(); // Refresh balance
+            } else if (txn.type === "betting" && txn.status === "pending") {
+              toast({
+                title: "Transaction Pending",
+                description: `Your ${txn.service} funding is being processed. Please wait for confirmation.`,
+                variant: "default",
+              });
             }
           }
         });
@@ -106,6 +135,13 @@ function BettingForm({ user, router }) {
     );
 
     return () => unsubscribe();
+  }, [user, toast]);
+
+  // Reset initialLoadRef when component unmounts or user changes
+  useEffect(() => {
+    return () => {
+      initialLoadRef.current = true;
+    };
   }, [user]);
 
   const fetchWalletBalance = async () => {
@@ -172,12 +208,17 @@ function BettingForm({ user, router }) {
 
       if (result.success) {
         setCustomerVerified(true);
+        // Extract customer name from response if available
+        const customerName =
+          result.data?.description?.Customer || "Verified Customer";
+        setCustomerName(customerName);
         toast({
           title: "Account Verified",
-          description: `${provider} account verified successfully.`,
+          description: `${provider} account for ${customerName} verified successfully.`,
         });
       } else {
         setCustomerVerified(false);
+        setCustomerName("");
         toast({
           title: "Verification Failed",
           description: result.error || "Invalid account ID.",
@@ -186,9 +227,11 @@ function BettingForm({ user, router }) {
       }
     } catch (error) {
       setCustomerVerified(false);
+      setCustomerName("");
       toast({
         title: "Verification Error",
-        description: "Unable to verify account ID. Please try again.",
+        description:
+          error.message || "Unable to verify account ID. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -286,12 +329,16 @@ function BettingForm({ user, router }) {
       const token = await currentUser.getIdToken(true);
       const reference = `BET_${currentUser.uid}_${Date.now()}`;
 
+      // Updated transaction data to match backend expectations
       const transactionData = {
         service: provider,
         userid: customerId,
         amount: bettingAmount,
         ref: reference,
+        phone: phone || undefined, // Optional parameter
       };
+
+      console.log("Sending betting transaction:", transactionData);
 
       // Call VTU Africa betting funding endpoint
       const response = await fetch(
@@ -315,14 +362,28 @@ function BettingForm({ user, router }) {
       if (result.success) {
         toast({
           title: "Success!",
-          description: `₦${bettingAmount.toLocaleString()} credited to ${provider} successfully!`,
+          description: `₦${bettingAmount.toLocaleString()} credited to ${provider} account successfully!`,
         });
 
         // Reset form
         setProvider("");
         setCustomerId("");
         setAmount("");
+        setPhone("");
         setCustomerVerified(false);
+        setCustomerName("");
+        fetchWalletBalance();
+      } else if (result.status === "pending") {
+        // Handle pending transactions
+        toast({
+          title: "Transaction Processing",
+          description:
+            result.message ||
+            "Your transaction is being processed. Please wait for confirmation.",
+          variant: "default",
+        });
+
+        // Don't reset form for pending transactions
         fetchWalletBalance();
       } else {
         throw new Error(result.error || "Transaction failed");
@@ -338,6 +399,14 @@ function BettingForm({ user, router }) {
       setIsSubmitting(false);
     }
   };
+
+  // Reset verification when provider or customer ID changes
+  useEffect(() => {
+    if (customerVerified) {
+      setCustomerVerified(false);
+      setCustomerName("");
+    }
+  }, [provider, customerId]);
 
   return (
     <>
@@ -364,7 +433,15 @@ function BettingForm({ user, router }) {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-2">
           <Label htmlFor="provider">Betting Provider *</Label>
-          <Select value={provider} onValueChange={setProvider} required>
+          <Select
+            value={provider}
+            onValueChange={(value) => {
+              setProvider(value);
+              setCustomerVerified(false);
+              setCustomerName("");
+            }}
+            required
+          >
             <SelectTrigger id="provider">
               <SelectValue placeholder="Choose betting provider" />
             </SelectTrigger>
@@ -387,6 +464,7 @@ function BettingForm({ user, router }) {
               onChange={(e) => {
                 setCustomerId(e.target.value);
                 setCustomerVerified(false);
+                setCustomerName("");
               }}
               placeholder="Enter your betting account ID"
               required
@@ -395,6 +473,7 @@ function BettingForm({ user, router }) {
               type="button"
               onClick={verifyCustomerId}
               disabled={!provider || !customerId || isVerifying}
+              variant={customerVerified ? "outline" : "default"}
             >
               {isVerifying ? (
                 <>
@@ -411,8 +490,33 @@ function BettingForm({ user, router }) {
               )}
             </Button>
           </div>
+          {customerName && (
+            <p className="text-sm text-green-600 font-medium">
+              ✓ Verified: {customerName}
+            </p>
+          )}
           <p className="text-xs text-muted-foreground">
             Your betting account ID or username. Verify before funding.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="phone">
+            Phone Number{" "}
+            <span className="text-muted-foreground">(Optional)</span>
+          </Label>
+          <div className="flex items-center gap-2">
+            <Phone className="h-4 w-4 text-muted-foreground" />
+            <Input
+              id="phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="08012345678"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Your phone number (optional but recommended for some providers)
           </p>
         </div>
 
@@ -592,18 +696,13 @@ export default function BettingPage() {
             <BettingForm user={user} router={router} />
           </div>
 
-          <div className="bg-muted/50 p-8 md:p-12 flex flex-col justify-center">
-            <div className="relative aspect-video mb-8 rounded-lg overflow-hidden bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center">
-              <div className="text-center text-white">
-                <DollarSign className="h-16 w-16 mx-auto mb-4 opacity-80" />
-                <h3 className="text-xl font-semibold mb-2">
-                  Betting Made Easy
-                </h3>
-                <p className="text-sm opacity-90">
-                  Fund all major platforms via VTU Africa
-                </p>
-              </div>
-            </div>
+          <div className="bg-muted/50 Image p-8 md:p-12 flex flex-col justify-center">
+            <div
+              className="relative aspect-video mb-8 rounded-lg overflow-hidden bg-cover bg-center bg-no-repeat"
+              style={{
+                backgroundImage: "url('/betting.jpg')",
+              }}
+            />
             <h3 className="text-xl font-semibold mb-4 text-secondary-foreground">
               Supported Platforms
             </h3>
@@ -623,6 +722,10 @@ export default function BettingPage() {
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />
                 <span>Support for 16+ betting platforms</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-primary" />
+                <span>Account verification before funding</span>
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />

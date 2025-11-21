@@ -23,15 +23,43 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Save, Loader, Smartphone } from "lucide-react";
+import { Save, Loader, Smartphone, RefreshCw, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
+// VTU Africa standard rates
 const NETWORKS = [
-  { id: "mtn", name: "MTN" },
-  { id: "airtel", name: "Airtel" },
-  { id: "glo", name: "Glo" },
-  { id: "9mobile", name: "9mobile" },
+  {
+    id: "mtn",
+    name: "MTN",
+    defaultRate: 0.7,
+    charge: 30,
+    color: "bg-yellow-500",
+  },
+  {
+    id: "airtel",
+    name: "Airtel",
+    defaultRate: 0.65,
+    charge: 35,
+    color: "bg-red-500",
+  },
+  {
+    id: "glo",
+    name: "Glo",
+    defaultRate: 0.55,
+    charge: 45,
+    color: "bg-green-500",
+    maxAmount: 1000,
+  },
+  {
+    id: "9mobile",
+    name: "9mobile",
+    defaultRate: 0.55,
+    charge: 45,
+    color: "bg-emerald-600",
+  },
 ];
 
 export default function AirtimeToCashRatesPage() {
@@ -63,14 +91,13 @@ export default function AirtimeToCashRatesPage() {
       );
 
       if (ratesDoc.exists()) {
-        setRates(ratesDoc.data() || {});
+        const data = ratesDoc.data();
+        // Remove metadata fields
+        const { updatedAt, ...ratesOnly } = data;
+        setRates(ratesOnly);
       } else {
-        // Initialize with default rates
-        const defaultRates = {};
-        NETWORKS.forEach((network) => {
-          defaultRates[network.id] = { rate: 0.7, enabled: true };
-        });
-        setRates(defaultRates);
+        // Initialize with VTU Africa default rates
+        initializeDefaultRates();
       }
     } catch (error) {
       console.error("Error loading rates:", error);
@@ -84,19 +111,63 @@ export default function AirtimeToCashRatesPage() {
     }
   };
 
+  const initializeDefaultRates = () => {
+    const defaultRates = {};
+    NETWORKS.forEach((network) => {
+      defaultRates[network.id] = {
+        rate: network.defaultRate,
+        charge: network.charge,
+        enabled: true,
+      };
+    });
+    setRates(defaultRates);
+  };
+
   const updateRate = (networkId, field, value) => {
     setRates((prev) => ({
       ...prev,
       [networkId]: {
         ...prev[networkId],
         [field]: field === "rate" ? parseFloat(value) || 0 : value,
+        // Auto-calculate charge when rate changes
+        ...(field === "rate" && {
+          charge: Math.round((1 - (parseFloat(value) || 0)) * 100),
+        }),
       },
     }));
+  };
+
+  const toggleNetwork = (networkId) => {
+    setRates((prev) => ({
+      ...prev,
+      [networkId]: {
+        ...prev[networkId],
+        enabled: !prev[networkId]?.enabled,
+      },
+    }));
+  };
+
+  const resetToDefaults = () => {
+    initializeDefaultRates();
+    toast({
+      title: "Reset Complete",
+      description: "Rates have been reset to VTU Africa defaults.",
+    });
   };
 
   const saveRates = async () => {
     try {
       setIsSaving(true);
+
+      // Validate rates before saving
+      for (const [networkId, networkRate] of Object.entries(rates)) {
+        if (!networkRate.rate || networkRate.rate < 0 || networkRate.rate > 1) {
+          throw new Error(
+            `Invalid rate for ${networkId}. Must be between 0 and 1.`
+          );
+        }
+      }
+
       await setDoc(
         doc(firestore, "settings", "airtimeToCashRates"),
         {
@@ -114,7 +185,7 @@ export default function AirtimeToCashRatesPage() {
       console.error("Error saving rates:", error);
       toast({
         title: "Error",
-        description: "Failed to save rates.",
+        description: error.message || "Failed to save rates.",
         variant: "destructive",
       });
     } finally {
@@ -128,6 +199,16 @@ export default function AirtimeToCashRatesPage() {
 
   const calculateServiceFee = (amount, rate) => {
     return amount * (1 - rate);
+  };
+
+  const hasChangesFromDefaults = () => {
+    return NETWORKS.some((network) => {
+      const currentRate = rates[network.id];
+      return (
+        currentRate?.rate !== network.defaultRate ||
+        currentRate?.enabled !== true
+      );
+    });
   };
 
   if (!authChecked || isLoading) {
@@ -145,30 +226,52 @@ export default function AirtimeToCashRatesPage() {
         <div>
           <h1 className="text-3xl font-bold">Airtime to Cash Rates</h1>
           <p className="text-muted-foreground">
-            Configure conversion rates for airtime to cash services
+            Configure conversion rates for airtime to cash services (VTU Africa)
           </p>
         </div>
-        <Button onClick={saveRates} disabled={isSaving}>
-          {isSaving ? (
-            <>
-              <Loader className="mr-2 h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <Save className="mr-2 h-4 w-4" />
-              Save Changes
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={resetToDefaults}
+            variant="outline"
+            disabled={isSaving}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Reset to Defaults
+          </Button>
+          <Button onClick={saveRates} disabled={isSaving}>
+            {isSaving ? (
+              <>
+                <Loader className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 h-4 w-4" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        </div>
       </div>
+
+      <Alert className="border-orange-200 bg-orange-50">
+        <AlertCircle className="h-4 w-4 text-orange-600" />
+        <AlertTitle className="text-orange-800">
+          VTU Africa Standard Rates
+        </AlertTitle>
+        <AlertDescription className="text-orange-700">
+          These rates are based on VTU Africa's official documentation. MTN: 30%
+          charge (70% to customer), Airtel: 35% (65%), Glo: 45% (55%), 9mobile:
+          45% (55%). Glo has a maximum transfer limit of ₦1,000.
+        </AlertDescription>
+      </Alert>
 
       <div className="grid md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Conversion Rates</CardTitle>
+            <CardTitle>Network Conversion Rates</CardTitle>
             <CardDescription>
-              Set the conversion rate for each network (0.0 to 1.0)
+              Configure rate and status for each network
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -177,42 +280,71 @@ export default function AirtimeToCashRatesPage() {
                 <TableRow>
                   <TableHead>Network</TableHead>
                   <TableHead>Rate</TableHead>
+                  <TableHead>Charge</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {NETWORKS.map((network) => (
-                  <TableRow key={network.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <Smartphone className="h-4 w-4" />
-                        {network.name}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={rates[network.id]?.rate || 0}
-                        onChange={(e) =>
-                          updateRate(network.id, "rate", e.target.value)
-                        }
-                        className="w-24"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          rates[network.id]?.enabled ? "success" : "destructive"
-                        }
-                      >
-                        {rates[network.id]?.enabled ? "Enabled" : "Disabled"}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {NETWORKS.map((network) => {
+                  const networkRate = rates[network.id] || {};
+                  const isDefault = networkRate.rate === network.defaultRate;
+
+                  return (
+                    <TableRow key={network.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-3 h-3 rounded-full ${network.color}`}
+                          />
+                          <div>
+                            <div>{network.name}</div>
+                            {network.maxAmount && (
+                              <div className="text-xs text-muted-foreground">
+                                Max: ₦{network.maxAmount}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={networkRate.rate || 0}
+                            onChange={(e) =>
+                              updateRate(network.id, "rate", e.target.value)
+                            }
+                            className="w-20"
+                          />
+                          {!isDefault && (
+                            <Badge variant="outline" className="text-xs">
+                              Modified
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {networkRate.charge || network.charge}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={networkRate.enabled ?? true}
+                            onCheckedChange={() => toggleNetwork(network.id)}
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            {networkRate.enabled ? "Active" : "Inactive"}
+                          </span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>
@@ -220,62 +352,69 @@ export default function AirtimeToCashRatesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Rate Preview</CardTitle>
+            <CardTitle>Rate Preview Calculator</CardTitle>
             <CardDescription>
-              See how rates affect customer payments
+              See how rates affect customer payments (₦1,000 example)
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="previewAmount">Test Amount (₦)</Label>
-                <Input
-                  id="previewAmount"
-                  type="number"
-                  defaultValue="1000"
-                  min="100"
-                  max="10000"
-                  className="w-full"
-                />
-              </div>
+            <div className="space-y-3">
+              {NETWORKS.map((network) => {
+                const rate = rates[network.id]?.rate || network.defaultRate;
+                const enabled = rates[network.id]?.enabled ?? true;
+                const testAmount = 1000;
+                const receives = calculateCustomerReceives(testAmount, rate);
+                const fee = calculateServiceFee(testAmount, rate);
 
-              <div className="space-y-3">
-                {NETWORKS.map((network) => {
-                  const rate = rates[network.id]?.rate || 0;
-                  const testAmount = 1000; // Fixed test amount for preview
-                  const receives = calculateCustomerReceives(testAmount, rate);
-                  const fee = calculateServiceFee(testAmount, rate);
-
-                  return (
-                    <div key={network.id} className="p-3 border rounded-lg">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="font-medium">{network.name}</span>
-                        <Badge variant="outline">
-                          {(rate * 100).toFixed(0)}%
-                        </Badge>
+                return (
+                  <div
+                    key={network.id}
+                    className={`p-4 border rounded-lg transition-opacity ${
+                      !enabled ? "opacity-50 bg-gray-50" : "bg-white"
+                    }`}
+                  >
+                    <div className="flex justify-between items-center mb-3">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-2 h-2 rounded-full ${network.color}`}
+                        />
+                        <span className="font-semibold">{network.name}</span>
                       </div>
-                      <div className="space-y-1 text-sm">
-                        <div className="flex justify-between">
-                          <span>Airtime Sent:</span>
-                          <span>₦{testAmount.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Customer Receives:</span>
-                          <span className="text-green-600">
-                            ₦{receives.toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Service Fee:</span>
-                          <span className="text-red-600">
-                            ₦{fee.toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
+                      <Badge variant="outline">
+                        {(rate * 100).toFixed(0)}% rate
+                      </Badge>
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          Airtime Sent:
+                        </span>
+                        <span className="font-medium">
+                          ₦{testAmount.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-green-600">
+                        <span>Customer Receives:</span>
+                        <span className="font-bold">
+                          ₦{receives.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-red-600">
+                        <span>Service Fee:</span>
+                        <span className="font-bold">₦{fee.toFixed(2)}</span>
+                      </div>
+                      {!enabled && (
+                        <Badge
+                          variant="secondary"
+                          className="w-full justify-center mt-2"
+                        >
+                          Service Disabled
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -284,41 +423,62 @@ export default function AirtimeToCashRatesPage() {
       <Card>
         <CardHeader>
           <CardTitle>Configuration Summary</CardTitle>
-          <CardDescription>Current rate configuration overview</CardDescription>
+          <CardDescription>Overview of current rate settings</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="p-4 border rounded-lg">
-              <h4 className="font-semibold mb-2">Average Rate</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-4 border rounded-lg bg-gradient-to-br from-blue-50 to-white">
+              <h4 className="font-semibold mb-2 text-sm text-muted-foreground">
+                Average Rate
+              </h4>
               <p className="text-3xl font-bold">
-                {(
-                  Object.values(rates).reduce(
-                    (sum, rate) => sum + (rate.rate || 0),
-                    0
-                  ) / Object.keys(rates).length
-                ).toFixed(2)}
+                {Object.keys(rates).length > 0
+                  ? (
+                      (Object.values(rates).reduce(
+                        (sum, rate) => sum + (rate.rate || 0),
+                        0
+                      ) /
+                        Object.keys(rates).length) *
+                      100
+                    ).toFixed(0) + "%"
+                  : "0%"}
               </p>
             </div>
-            <div className="p-4 border rounded-lg">
-              <h4 className="font-semibold mb-2">Enabled Networks</h4>
-              <p className="text-3xl font-bold">
-                {Object.values(rates).filter((rate) => rate.enabled).length}
+            <div className="p-4 border rounded-lg bg-gradient-to-br from-green-50 to-white">
+              <h4 className="font-semibold mb-2 text-sm text-muted-foreground">
+                Enabled Networks
+              </h4>
+              <p className="text-3xl font-bold text-green-600">
+                {Object.values(rates).filter((rate) => rate.enabled).length}/
+                {NETWORKS.length}
               </p>
             </div>
-            <div className="p-4 border rounded-lg">
-              <h4 className="font-semibold mb-2">Highest Rate</h4>
-              <p className="text-3xl font-bold">
-                {Math.max(
-                  ...Object.values(rates).map((rate) => rate.rate || 0)
-                ).toFixed(2)}
+            <div className="p-4 border rounded-lg bg-gradient-to-br from-purple-50 to-white">
+              <h4 className="font-semibold mb-2 text-sm text-muted-foreground">
+                Highest Rate
+              </h4>
+              <p className="text-3xl font-bold text-purple-600">
+                {Object.keys(rates).length > 0
+                  ? (
+                      Math.max(
+                        ...Object.values(rates).map((rate) => rate.rate || 0)
+                      ) * 100
+                    ).toFixed(0) + "%"
+                  : "0%"}
               </p>
             </div>
-            <div className="p-4 border rounded-lg">
-              <h4 className="font-semibold mb-2">Lowest Rate</h4>
-              <p className="text-3xl font-bold">
-                {Math.min(
-                  ...Object.values(rates).map((rate) => rate.rate || 0)
-                ).toFixed(2)}
+            <div className="p-4 border rounded-lg bg-gradient-to-br from-orange-50 to-white">
+              <h4 className="font-semibold mb-2 text-sm text-muted-foreground">
+                Lowest Rate
+              </h4>
+              <p className="text-3xl font-bold text-orange-600">
+                {Object.keys(rates).length > 0
+                  ? (
+                      Math.min(
+                        ...Object.values(rates).map((rate) => rate.rate || 0)
+                      ) * 100
+                    ).toFixed(0) + "%"
+                  : "0%"}
               </p>
             </div>
           </div>
@@ -327,39 +487,54 @@ export default function AirtimeToCashRatesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Rate Configuration Guide</CardTitle>
-          <CardDescription>Understanding conversion rates</CardDescription>
+          <CardTitle>Understanding Conversion Rates</CardTitle>
+          <CardDescription>
+            How rates work in airtime to cash conversions
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="grid md:grid-cols-3 gap-4">
-              <div className="p-4 border rounded-lg">
-                <h4 className="font-semibold mb-2">Rate = 0.7 (70%)</h4>
-                <p className="text-sm text-muted-foreground">
-                  Customer sends ₦1,000 airtime, receives ₦700 cash. Service
-                  fee: ₦300
-                </p>
-              </div>
-              <div className="p-4 border rounded-lg">
-                <h4 className="font-semibold mb-2">Rate = 0.8 (80%)</h4>
-                <p className="text-sm text-muted-foreground">
-                  Customer sends ₦1,000 airtime, receives ₦800 cash. Service
-                  fee: ₦200
-                </p>
-              </div>
-              <div className="p-4 border rounded-lg">
-                <h4 className="font-semibold mb-2">Rate = 0.6 (60%)</h4>
-                <p className="text-sm text-muted-foreground">
-                  Customer sends ₦1,000 airtime, receives ₦600 cash. Service
-                  fee: ₦400
-                </p>
-              </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              {NETWORKS.map((network) => (
+                <div
+                  key={network.id}
+                  className="p-4 border rounded-lg space-y-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${network.color}`} />
+                    <h4 className="font-semibold">{network.name}</h4>
+                  </div>
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    <p>
+                      <strong>Rate:</strong> {network.defaultRate} (
+                      {(network.defaultRate * 100).toFixed(0)}%)
+                    </p>
+                    <p>
+                      <strong>Charge:</strong> {network.charge}%
+                    </p>
+                    <p>
+                      <strong>Example:</strong> Customer sends ₦1,000 → receives
+                      ₦{(1000 * network.defaultRate).toFixed(0)}
+                    </p>
+                    {network.maxAmount && (
+                      <p className="text-orange-600">
+                        <strong>Max per transfer:</strong> ₦{network.maxAmount}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-            <p className="text-sm text-muted-foreground">
-              <strong>Note:</strong> Higher rates are more attractive to
-              customers but lower your profit margin. Find the right balance
-              based on market competition and operational costs.
-            </p>
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-sm">
+                <strong>Important:</strong> Higher rates attract more customers
+                but reduce profit margins. Lower rates increase profits but may
+                drive customers to competitors. These VTU Africa standard rates
+                represent typical market rates. Monitor transaction volume and
+                adjust carefully based on business goals.
+              </AlertDescription>
+            </Alert>
           </div>
         </CardContent>
       </Card>

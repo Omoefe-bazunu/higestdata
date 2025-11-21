@@ -18,6 +18,8 @@ import {
   School,
   Shield,
   Settings2,
+  Mails,
+  Ticket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -36,7 +38,12 @@ const navItems = [
   {
     href: "/dashboard/airtime-to-cash",
     label: "Airtime to Cash",
-    icon: CreditCard,
+    icon: Ticket,
+  },
+  {
+    href: "/dashboard/bulksms",
+    label: "Bulk SMS",
+    icon: Mails,
   },
   {
     href: "/dashboard/electricity-bill",

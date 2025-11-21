@@ -16,14 +16,6 @@ const fadeRight = {
 };
 
 const services = [
-  // {
-  //   title: "Crypto Trading",
-  //   subtitle: "Trade with Confidence",
-  //   desc: "Buy and sell crypto assets at competitive rates, backed by top-level security and a user-friendly platform.",
-  //   img: "/crypto.jpg",
-  //   cta: "Start Trading",
-  //   url: "/dashboard/crypto",
-  // },
   {
     title: "Gift Card Exchange",
     subtitle: "Instant & Reliable",
@@ -47,6 +39,46 @@ const services = [
     img: "/betting.jpg",
     cta: "Fund Now",
     url: "/dashboard/betting",
+  },
+  {
+    title: "CableTv Subscription",
+    subtitle: "Binge Watching",
+    desc: "Stay glued to your favorite channel by keeping your TV subscriptions always recharged.",
+    img: "/cabletv.png",
+    cta: "Subscribe Now",
+    url: "/dashboard/cable-tv",
+  },
+  {
+    title: "Electricity Bill Subscription",
+    subtitle: "Keep Your Lights Up",
+    desc: "Never go a day without power supply. Keep your Electricity subscription loaded and power all your devices.",
+    img: "/electricity.png",
+    cta: "Subscribe Now",
+    url: "/dashboard/electricity-bill",
+  },
+  {
+    title: "Exam Scratch Cards",
+    subtitle: "Check Your Results",
+    desc: "Be on the know about your exam grades and admission progress by getting scratch cards for your WAEC, NECO or JAMB results.",
+    img: "/exam.png",
+    cta: "Buy Now",
+    url: "/dashboard/exam-cards",
+  },
+  {
+    title: "Bulk SMS",
+    subtitle: "Send Bulk Messages",
+    desc: "Send messages to a large group without the stress of repeating yourself. Use our bulk SMS service right away",
+    img: "/bulksms.png",
+    cta: "Send Messages",
+    url: "/dashboard/bulksms",
+  },
+  {
+    title: "Convert Airtime 2 Cash",
+    subtitle: "Get your Cash Back",
+    desc: "Whether you recharged excess or just want to get back some of your airtime as cash, you can do that with ease with our airtime to cash service.",
+    img: "/airtime2cash.png",
+    cta: "Convert Now",
+    url: "/dashboard/airtime-to-cash",
   },
 ];
 

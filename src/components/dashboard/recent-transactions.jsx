@@ -19,12 +19,14 @@ import { ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function getStatusBadgeVariant(status) {
-  switch (status) {
-    case "Completed":
+  switch (status?.toLowerCase()) {
+    case "completed":
+    case "success":
       return "default";
-    case "Pending":
+    case "pending":
+    case "processing":
       return "secondary";
-    case "Failed":
+    case "failed":
       return "destructive";
     default:
       return "outline";
@@ -38,11 +40,11 @@ export default function RecentTransactions() {
 
   useEffect(() => {
     if (!user) return;
+
     async function fetchData() {
       try {
         const txs = await getTransactions(user.uid);
 
-        // Sort by createdAt (Timestamp) or date — newest first
         const sorted = txs
           .map((tx) => ({
             ...tx,
@@ -50,7 +52,7 @@ export default function RecentTransactions() {
               tx.createdAt?.toDate?.() ||
               (tx.createdAt?.seconds
                 ? new Date(tx.createdAt.seconds * 1000)
-                : new Date(tx.date || 0)),
+                : 0),
           }))
           .sort((a, b) => b.sortTime - a.sortTime)
           .slice(0, 5);
@@ -62,19 +64,33 @@ export default function RecentTransactions() {
         setLoading(false);
       }
     }
+
     fetchData();
   }, [user]);
 
-  const formatDate = (date) => {
-    if (!date) return "N/A";
+  const formatDate = (timestamp) => {
+    if (!timestamp) return "N/A";
     try {
-      if (date.toDate) return date.toDate().toLocaleDateString("en-GB");
-      if (date.seconds)
-        return new Date(date.seconds * 1000).toLocaleDateString("en-GB");
-      return new Date(date).toLocaleDateString("en-GB");
+      const date =
+        timestamp.toDate?.() ||
+        new Date(timestamp.seconds ? timestamp.seconds * 1000 : timestamp);
+      return date.toLocaleDateString("en-GB");
     } catch {
-      return String(date);
+      return "N/A";
     }
+  };
+
+  // Get correct amount (supports VTU Africa fields)
+  const getDisplayAmount = (tx) => {
+    const amount = tx.amountCharged || tx.amountToVTU || tx.amount || 0;
+    return Math.abs(amount);
+  };
+
+  const getDescription = (tx) => {
+    return (
+      tx.description ||
+      `${tx.type === "credit" ? "Wallet Funding" : "Purchase"}`
+    );
   };
 
   return (
@@ -92,63 +108,66 @@ export default function RecentTransactions() {
       </CardHeader>
       <CardContent>
         <ul className="space-y-4">
-          {loading
-            ? Array.from({ length: 3 }).map((_, idx) => (
-                <li key={idx} className="flex items-center gap-4">
-                  <Skeleton className="h-10 w-10 rounded-full" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-3 w-20" />
-                  </div>
-                  <div className="text-right space-y-2">
-                    <Skeleton className="h-4 w-16 ml-auto" />
-                    <Skeleton className="h-4 w-12 ml-auto" />
-                  </div>
-                </li>
-              ))
-            : transactions.map((tx) => (
-                <li key={tx.id} className="flex items-center gap-4">
-                  <div
+          {loading ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <li key={i} className="flex items-center gap-4">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+                <Skeleton className="h-8 w-20" />
+              </li>
+            ))
+          ) : transactions.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">
+              No transactions yet
+            </p>
+          ) : (
+            transactions.map((tx) => (
+              <li key={tx.id} className="flex items-center gap-4">
+                <div
+                  className={cn(
+                    "flex items-center justify-center w-10 h-10 rounded-full",
+                    tx.type === "credit"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  )}
+                >
+                  {tx.type === "credit" ? (
+                    <ArrowDownLeft className="h-5 w-5" />
+                  ) : (
+                    <ArrowUpRight className="h-5 w-5" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium">{getDescription(tx)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatDate(tx.createdAt)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p
                     className={cn(
-                      "flex items-center justify-center w-10 h-10 rounded-full",
+                      "font-semibold",
                       tx.type === "credit"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
+                        ? "text-green-600"
+                        : "text-foreground"
                     )}
                   >
-                    {tx.type === "credit" ? (
-                      <ArrowDownLeft className="h-5 w-5" />
-                    ) : (
-                      <ArrowUpRight className="h-5 w-5" />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium">{tx.description}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatDate(tx.createdAt || tx.date)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p
-                      className={cn(
-                        "font-semibold",
-                        tx.type === "credit"
-                          ? "text-green-600"
-                          : "text-foreground"
-                      )}
-                    >
-                      {tx.type === "credit" ? "+" : ""}₦
-                      {Math.abs(tx.amount).toFixed(2)}
-                    </p>
-                    <Badge
-                      variant={getStatusBadgeVariant(tx.status)}
-                      className="mt-1"
-                    >
-                      {tx.status}
-                    </Badge>
-                  </div>
-                </li>
-              ))}
+                    {tx.type === "credit" ? "+" : "-"}₦
+                    {getDisplayAmount(tx).toLocaleString()}
+                  </p>
+                  <Badge
+                    variant={getStatusBadgeVariant(tx.status)}
+                    className="mt-1"
+                  >
+                    {tx.status || "Pending"}
+                  </Badge>
+                </div>
+              </li>
+            ))
+          )}
         </ul>
       </CardContent>
     </Card>

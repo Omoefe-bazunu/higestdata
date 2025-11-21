@@ -35,9 +35,9 @@ export default function Hero() {
             transition={{ duration: 1, delay: 0.3 }}
             className="text-normal max-w-xl mx-auto lg:w-full mb-8"
           >
-            Trade gift cards, purchase airtime & data, subscribe to cable TV,
-            and fund your sports betting account — all at amazing rates through
-            a secure, responsive system.
+            Trade gift cards, purchase airtime & data, subscribe your cable TV &
+            Electricity Bill, fund your sports betting account,send bulk sms,
+            and more, all at amazing rates through a secure, responsive system.
           </motion.p>
 
           {/* Button */}

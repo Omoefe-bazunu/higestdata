@@ -615,15 +615,12 @@ export default function ElectricityPage() {
           </div>
 
           <div className="bg-muted/50 p-8 md:p-12 flex flex-col justify-center">
-            <div className="relative aspect-video mb-8 rounded-lg overflow-hidden bg-gradient-to-br from-yellow-500 to-orange-600 flex items-center justify-center">
-              <div className="text-center text-white">
-                <Zap className="h-16 w-16 mx-auto mb-4 opacity-80" />
-                <h3 className="text-xl font-semibold mb-2">Power Your Home</h3>
-                <p className="text-sm opacity-90">
-                  Pay bills for all major providers via VTU Africa
-                </p>
-              </div>
-            </div>
+            <div
+              className="relative aspect-video mb-8 rounded-lg overflow-hidden bg-cover bg-center bg-no-repeat"
+              style={{
+                backgroundImage: "url('/electricity.png')",
+              }}
+            />
             <h3 className="text-xl font-semibold mb-4 text-secondary-foreground">
               Supported Providers
             </h3>

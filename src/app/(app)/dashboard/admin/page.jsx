@@ -36,6 +36,7 @@ import ExamCardRatesPage from "@/components/admin/exam-rates-tab";
 import AdminUsersManagement from "@/components/admin/UsersData";
 import AdminWithdrawals from "@/components/admin/withdrawal-requests-tab";
 import AirtimeToCashRatesPage from "@/components/admin/airtime-to-cash-rates-tab";
+import BulkSmsRate from "@/components/admin/bulksms-rates-tab";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("transactions");
@@ -213,6 +214,7 @@ export default function AdminPage() {
                   <SelectItem value="airtime-cash">
                     Airtime2Cash-Rates
                   </SelectItem>
+                  <SelectItem value="bulksms">bulksms-Rates</SelectItem>
                   <SelectItem value="pending-requests">
                     Pending Requests
                   </SelectItem>
@@ -239,6 +241,7 @@ export default function AdminPage() {
                 <TabsTrigger value="airtime-cash">
                   Airtime2Cash Rates
                 </TabsTrigger>
+                <TabsTrigger value="bulksms">bulksms Rates</TabsTrigger>
                 <TabsTrigger value="pending-requests">
                   Pending Requests
                 </TabsTrigger>
@@ -274,6 +277,9 @@ export default function AdminPage() {
             </TabsContent>
             <TabsContent value="airtime-cash" className="mt-8">
               <AirtimeToCashRatesPage />
+            </TabsContent>
+            <TabsContent value="bulksms" className="mt-8">
+              <BulkSmsRate />
             </TabsContent>
             <TabsContent value="pending-requests" className="mt-8">
               <PendingRequestsTab />
