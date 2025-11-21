@@ -86,6 +86,10 @@ export default function LegalPolicies() {
                           <li>Airtime and data purchase</li>
                           <li>Cable TV subscription</li>
                           <li>Sports betting account funding</li>
+                          <li>Electricity Bill Payment</li>
+                          <li>Exam Scratch Card Purchase</li>
+                          <li>Airtime to Cash Conversion</li>
+                          <li>Bulk SMS</li>
                           <li>Wallet funding and withdrawal via Kora</li>
                         </ul>
                       </section>
@@ -145,9 +149,9 @@ export default function LegalPolicies() {
 
                           <p>
                             <strong>5.2 Service Transactions:</strong> All
-                            purchases (airtime, data, cable TV, betting funding)
-                            are processed instantly upon successful payment from
-                            your wallet balance.
+                            purchases (airtime, data, cable TV, betting funding,
+                            etc) are processed instantly upon successful payment
+                            from your wallet balance.
                           </p>
 
                           <p>
@@ -377,8 +381,9 @@ export default function LegalPolicies() {
 
                           <p>
                             <strong>4.1 Service Providers:</strong> Third-party
-                            payment processors (Kora), API providers (eBills),
-                            and cloud hosting services for operational purposes.
+                            payment processors (Kora), API providers (VTU
+                            Africa), and cloud hosting services for operational
+                            purposes.
                           </p>
 
                           <p>

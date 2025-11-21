@@ -36,7 +36,7 @@ export default function Hero() {
             className="text-normal max-w-xl mx-auto lg:w-full mb-8"
           >
             Trade gift cards, purchase airtime & data, subscribe your cable TV &
-            Electricity Bill, fund your sports betting account,send bulk sms,
+            Electricity Bill, fund your sports betting account, send bulk sms,
             and more, all at amazing rates through a secure, responsive system.
           </motion.p>
 
