@@ -117,7 +117,8 @@ export default function WalletSummary() {
               <Button
                 size="lg"
                 className="bg-accent hover:bg-accent/80 text-accent-foreground w-full"
-                onClick={() => setFundingDialogOpen(true)}
+                // onClick={() => setFundingDialogOpen(true)}
+                disabled
               >
                 <ArrowUpRight className="mr-2 h-5 w-5" />
                 Fund Wallet
