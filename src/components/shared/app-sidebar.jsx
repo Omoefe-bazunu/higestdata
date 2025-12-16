@@ -20,6 +20,7 @@ import {
   Settings2,
   Mails,
   Ticket,
+  Speaker,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -59,6 +60,11 @@ const navItems = [
     href: "/dashboard/exam-cards",
     label: "Exam Scratch Cards",
     icon: School,
+  },
+  {
+    href: "/dashboard/smm-order",
+    label: "SMM Boost",
+    icon: Speaker,
   },
   {
     href: "/dashboard/kyc",

@@ -324,28 +324,57 @@ export default function AdminRatesDashboard() {
     }
   };
 
-  const initializeTvPlans = () => {
+  const initializeTvPlans = async () => {
     setIsFetching(true);
-    const provider = selectedTvProvider;
-    const source = CABLE_PLANS[provider] || [];
+    const provider = selectedTvProvider; // 'dstv', 'gotv', or 'startimes'
 
-    const plans = {};
-    source.forEach((p) => {
-      const profit = Math.round(p.basePrice * 0.03);
-      plans[p.id] = {
-        name: p.name,
-        basePrice: p.basePrice,
-        profit,
-        finalPrice: p.basePrice + profit,
-      };
-    });
+    try {
+      const res = await fetch(
+        `https://higestdata-proxy.onrender.com/api/ebills/tv-variations?service_id=${provider}`
+      );
+      const json = await res.json();
 
-    setTvRates((prev) => ({
-      ...prev,
-      [provider]: { name: provider.toUpperCase(), plans },
-    }));
-    toast({ title: "Success", description: `${provider} plans loaded` });
-    setIsFetching(false);
+      if (!json.data || !Array.isArray(json.data)) {
+        throw new Error("Invalid response from provider");
+      }
+
+      const plans = {};
+      json.data.forEach((p) => {
+        // Handle various possible price keys from Ebills
+        const basePrice = parseFloat(p.amount || p.price || 0);
+        const profit = 100; // Default profit
+
+        // Handle missing name keys (variation_name, name, or description)
+        const planName =
+          p.name || p.variation_name || p.description || "Unnamed Plan";
+
+        plans[p.variation_id] = {
+          name: planName,
+          basePrice: basePrice,
+          profit,
+          finalPrice: basePrice + profit,
+        };
+      });
+
+      setTvRates((prev) => ({
+        ...prev,
+        [provider]: { name: provider.toUpperCase(), plans },
+      }));
+
+      toast({
+        title: "Success",
+        description: `${provider.toUpperCase()} plans loaded from Ebills`,
+      });
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch plans",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFetching(false);
+    }
   };
 
   // Update functions (airtime, data, tv) - unchanged logic
@@ -706,12 +735,13 @@ export default function AdminRatesDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {/* Inside <TabsContent value="tv"> -> <TableBody> */}
                   {Object.entries(tvRates[selectedTvProvider]?.plans || {}).map(
                     ([id, p]) => (
                       <TableRow key={id}>
                         <TableCell>
                           <Input
-                            value={p.name}
+                            value={p.name || ""}
                             onChange={(e) =>
                               updateTv(
                                 selectedTvProvider,
@@ -725,7 +755,7 @@ export default function AdminRatesDashboard() {
                         <TableCell>
                           <Input
                             type="number"
-                            value={p.basePrice}
+                            value={p.basePrice || 0}
                             onChange={(e) =>
                               updateTv(
                                 selectedTvProvider,
@@ -740,7 +770,7 @@ export default function AdminRatesDashboard() {
                         <TableCell>
                           <Input
                             type="number"
-                            value={p.profit}
+                            value={p.profit || 0}
                             onChange={(e) =>
                               updateTv(
                                 selectedTvProvider,
@@ -752,7 +782,9 @@ export default function AdminRatesDashboard() {
                             className="w-32"
                           />
                         </TableCell>
-                        <TableCell>₦{p.finalPrice?.toLocaleString()}</TableCell>
+                        <TableCell>
+                          ₦{(p.finalPrice || 0).toLocaleString()}
+                        </TableCell>
                         <TableCell>
                           <Button
                             variant="ghost"

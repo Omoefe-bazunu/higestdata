@@ -38,6 +38,7 @@ import AdminUsersManagement from "@/components/admin/UsersData";
 import AdminWithdrawals from "@/components/admin/withdrawal-requests-tab";
 import AirtimeToCashRatesPage from "@/components/admin/airtime-to-cash-rates-tab";
 import BulkSmsRate from "@/components/admin/bulksms-rates-tab";
+import SmmAdmin from "@/components/admin/smm-admin";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("transactions");
@@ -46,6 +47,11 @@ export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // --- FIX START: Add state for userToken ---
+  const [userToken, setUserToken] = useState("");
+  // --- FIX END ---
+
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
@@ -57,6 +63,9 @@ export default function AdminPage() {
         router.push("/login");
       } else {
         setCheckingAuth(false);
+        // --- FIX START: Get the token when user is confirmed ---
+        user.getIdToken().then((token) => setUserToken(token));
+        // --- FIX END ---
       }
     }
   }, [user, authLoading, router]);
@@ -223,6 +232,7 @@ export default function AdminPage() {
                     Withdrawal Requests
                   </SelectItem>
                   <SelectItem value="bulk-email">Bulk Email</SelectItem>
+                  <SelectItem value="smm-rates">SMM Rates</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -251,6 +261,7 @@ export default function AdminPage() {
                   Withdrawal Requests
                 </TabsTrigger>
                 <TabsTrigger value="bulk-email">Bulk Email</TabsTrigger>
+                <TabsTrigger value="smm-rates">SMM Rates</TabsTrigger>
               </TabsList>
             </div>
 
@@ -290,11 +301,13 @@ export default function AdminPage() {
             <TabsContent value="withdrawal-requests" className="mt-8">
               <AdminWithdrawals />
             </TabsContent>
-            <TabsContent value="withdrawal-requests" className="mt-8">
-              <AdminWithdrawals />
-            </TabsContent>
             <TabsContent value="bulk-email" className="mt-8">
               <NewsletterSender />
+            </TabsContent>
+            <TabsContent value="smm-rates" className="mt-8">
+              {/* --- FIX START: Now userToken is defined and passed --- */}
+              <SmmAdmin userToken={userToken} />
+              {/* --- FIX END --- */}
             </TabsContent>
           </Tabs>
         </div>

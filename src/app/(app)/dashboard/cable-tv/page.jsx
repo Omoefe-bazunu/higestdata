@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CheckCircle } from "lucide-react";
-import { Loader, AlertTriangle, Wallet, Tv } from "lucide-react";
+import { Loader, AlertTriangle, Wallet, Tv, UserCheck } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -44,6 +44,8 @@ function CableTVForm({ user, router }) {
   const [isFetchingPlans, setIsFetchingPlans] = useState(false);
   const [showInsufficientModal, setShowInsufficientModal] = useState(false);
   const { toast } = useToast();
+  const [customerName, setCustomerName] = useState(""); // NEW STATE
+  const [isVerifying, setIsVerifying] = useState(false); // NEW STATE
 
   useEffect(() => {
     if (user) {
@@ -55,6 +57,11 @@ function CableTVForm({ user, router }) {
   useEffect(() => {
     if (provider) fetchTVPlans(provider);
   }, [provider]);
+
+  // Reset name when provider or number changes
+  useEffect(() => {
+    setCustomerName("");
+  }, [provider, smartCardNumber]);
 
   const fetchWalletBalance = async () => {
     const snap = await getDoc(doc(firestore, "users", user.uid));
@@ -90,6 +97,44 @@ function CableTVForm({ user, router }) {
       setTvPlans(plans);
     }
     setIsFetchingPlans(false);
+  };
+
+  // === NEW: VERIFY FUNCTION ===
+  const verifySmartCard = async () => {
+    if (!provider || !smartCardNumber || smartCardNumber.length < 9) return;
+
+    setIsVerifying(true);
+    try {
+      const token = await getAuth().currentUser.getIdToken();
+      const res = await fetch(
+        "https://higestdata-proxy.onrender.com/api/cabletv/verify",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ service: provider, smartNo: smartCardNumber }),
+        }
+      );
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setCustomerName(data.customerName);
+        toast({ title: "Verified", description: data.customerName });
+      } else {
+        setCustomerName("");
+        toast({
+          title: "Invalid",
+          description: "Could not verify smartcard number",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const getAmount = () => tvPlans.find((p) => p.id === plan)?.price || 0;
@@ -191,7 +236,7 @@ function CableTVForm({ user, router }) {
           </Select>
         </div>
 
-        <div className="space-y-2">
+        {/* <div className="space-y-2">
           <Label>Smart Card / IUC Number *</Label>
           <Input
             value={smartCardNumber}
@@ -199,6 +244,39 @@ function CableTVForm({ user, router }) {
             placeholder="Enter your smart card number"
             required
           />
+        </div> */}
+
+        {/* UPDATED: Smart Card Input with Verify */}
+        <div className="space-y-2">
+          <Label>Smart Card / IUC Number *</Label>
+          <div className="flex gap-2">
+            <Input
+              value={smartCardNumber}
+              onChange={(e) => setSmartCardNumber(e.target.value)}
+              placeholder="Enter number"
+              required
+              className="flex-1"
+              onBlur={verifySmartCard} // Verify on blur
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={verifySmartCard}
+              disabled={isVerifying || !smartCardNumber}
+            >
+              {isVerifying ? (
+                <Loader className="animate-spin h-4 w-4" />
+              ) : (
+                "Verify"
+              )}
+            </Button>
+          </div>
+          {customerName && (
+            <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 p-2 rounded">
+              <UserCheck className="h-4 w-4" />
+              <span className="font-medium">{customerName}</span>
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -238,16 +316,13 @@ function CableTVForm({ user, router }) {
             </p>
           </div>
         )}
-
-        <Button type="submit" className="w-full" disabled={isDisabled()}>
-          {isSubmitting ? (
-            <>
-              <Loader className="mr-2 h-4 w-4 animate-spin" />
-              Subscribing...
-            </>
-          ) : (
-            "Subscribe Now"
-          )}
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={isDisabled() || (provider !== "startimes" && !customerName)}
+        >
+          {/* Note: I added a check to ensure name is verified before submitting (optional) */}
+          {isSubmitting ? "Processing..." : "Subscribe Now"}
         </Button>
       </form>
 
