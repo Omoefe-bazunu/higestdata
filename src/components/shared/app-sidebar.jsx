@@ -31,6 +31,11 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/dashboard/transactions", label: "Transactions", icon: Repeat },
   { href: "/dashboard/gift-cards", label: "Gift Cards", icon: Gift },
+  {
+    href: "/dashboard/gift-cards/transactions",
+    label: "Gift Cards Negotiate",
+    icon: Gift,
+  },
   // { href: "/dashboard/crypto", label: "Crypto Trade", icon: Bitcoin },
   { href: "/dashboard/buy-airtime", label: "Airtime & Data", icon: RadioTower },
   { href: "/dashboard/cable-tv", label: "Cable Tv", icon: Tv },

@@ -17,24 +17,20 @@ import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 
-// VTU Africa betting service codes
-const VTU_AFRICA_BETTING_SERVICES = [
+const EBILLS_BETTING_SERVICES = [
+  { id: "1xbet", name: "1xBet" },
+  { id: "bangbet", name: "BangBet" },
   { id: "bet9ja", name: "Bet9ja" },
   { id: "betking", name: "BetKing" },
-  { id: "1xbet", name: "1XBet" },
-  { id: "nairabet", name: "NairaBet" },
-  { id: "betbiga", name: "BetBiga" },
-  { id: "merrybet", name: "MerryBet" },
-  { id: "sportybet", name: "SportyBet" },
-  { id: "naijabet", name: "NaijaBet" },
-  { id: "betway", name: "Betway" },
-  { id: "bangbet", name: "BangBet" },
-  { id: "melbet", name: "MelBet" },
-  { id: "livescorebet", name: "LiveScoreBet" },
-  { id: "naira-million", name: "Naira-Million" },
+  { id: "betland", name: "BetLand" },
+  { id: "betlion", name: "BetLion" },
+  { id: "betway", name: "BetWay" },
   { id: "cloudbet", name: "CloudBet" },
-  { id: "paripesa", name: "Paripesa" },
-  { id: "mylottohub", name: "MylottoHub" },
+  { id: "livescorebet", name: "LiveScoreBet" },
+  { id: "merrybet", name: "MerryBet" },
+  { id: "naijabet", name: "NaijaBet" },
+  { id: "nairabet", name: "NairaBet" },
+  { id: "supabet", name: "SupaBet" },
 ];
 
 export default function BettingRatesTab() {
@@ -236,7 +232,7 @@ export default function BettingRatesTab() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
-              {VTU_AFRICA_BETTING_SERVICES.map((provider) => (
+              {EBILLS_BETTING_SERVICES.map((provider) => (
                 <div
                   key={provider.id}
                   className="p-2 border rounded text-center text-sm"

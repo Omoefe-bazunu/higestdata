@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const ADMIN_EMAIL = "highestdatafintechsolutions@gmail.com";
+const ADMINEMAIL = "highestdatafintechsolutions@gmail.com";
 
 export async function POST(request) {
   try {
@@ -93,7 +93,7 @@ export async function POST(request) {
 
     await resend.emails.send({
       from: `${companyName} <info@highestdata.com.ng>`,
-      to: ADMIN_EMAIL,
+      to: ADMINEMAIL,
       subject: adminSubject,
       html: adminHtml,
     });

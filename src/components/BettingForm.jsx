@@ -40,24 +40,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-// VTU Africa betting service codes - updated to match API documentation
-const VTU_AFRICA_BETTING_SERVICES = [
+const BETTING_SERVICES = [
+  { id: "1xbet", name: "1xBet" },
+  { id: "bangbet", name: "BangBet" },
   { id: "bet9ja", name: "Bet9ja" },
   { id: "betking", name: "BetKing" },
-  { id: "1xbet", name: "1XBet" },
-  { id: "nairabet", name: "NairaBet" },
-  { id: "betbiga", name: "BetBiga" },
-  { id: "merrybet", name: "MerryBet" },
-  { id: "sportybet", name: "SportyBet" },
-  { id: "naijabet", name: "NaijaBet" },
-  { id: "betway", name: "Betway" },
-  { id: "bangbet", name: "BangBet" },
-  { id: "melbet", name: "MelBet" },
-  { id: "livescorebet", name: "LiveScoreBet" },
-  { id: "naira-million", name: "Naira-Million" },
+  { id: "betland", name: "BetLand" },
+  { id: "betlion", name: "BetLion" },
+  { id: "betway", name: "BetWay" },
   { id: "cloudbet", name: "CloudBet" },
-  { id: "paripesa", name: "Paripesa" },
-  { id: "mylottohub", name: "MylottoHub" },
+  { id: "livescorebet", name: "LiveScoreBet" },
+  { id: "merrybet", name: "MerryBet" },
+  { id: "naijabet", name: "NaijaBet" },
+  { id: "nairabet", name: "NairaBet" },
+  { id: "supabet", name: "SupaBet" },
 ];
 
 function BettingForm({ user, router }) {
@@ -446,7 +442,7 @@ function BettingForm({ user, router }) {
               <SelectValue placeholder="Choose betting provider" />
             </SelectTrigger>
             <SelectContent>
-              {VTU_AFRICA_BETTING_SERVICES.map((betting) => (
+              {BETTING_SERVICES.map((betting) => (
                 <SelectItem key={betting.id} value={betting.id}>
                   {betting.name}
                 </SelectItem>
@@ -707,8 +703,8 @@ export default function BettingPage() {
               Supported Platforms
             </h3>
             <p className="text-muted-foreground mb-4">
-              Fund your accounts on Bet9ja, BetKing, 1XBet, SportyBet, MerryBet,
-              and 12+ more betting platforms via VTU Africa.
+              Fund your accounts on Bet9ja, BetKing, 1xBet, BetWay, MerryBet,
+              NairaBet, and other top platforms instantly.
             </p>
             <ul className="space-y-2 text-sm">
               <li className="flex items-center gap-2">
