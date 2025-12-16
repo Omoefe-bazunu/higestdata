@@ -41,19 +41,19 @@ import {
 } from "@/components/ui/dialog";
 
 const BETTING_SERVICES = [
-  { id: "1xbet", name: "1xBet" },
-  { id: "bangbet", name: "BangBet" },
-  { id: "bet9ja", name: "Bet9ja" },
-  { id: "betking", name: "BetKing" },
-  { id: "betland", name: "BetLand" },
-  { id: "betlion", name: "BetLion" },
-  { id: "betway", name: "BetWay" },
-  { id: "cloudbet", name: "CloudBet" },
-  { id: "livescorebet", name: "LiveScoreBet" },
-  { id: "merrybet", name: "MerryBet" },
-  { id: "naijabet", name: "NaijaBet" },
-  { id: "nairabet", name: "NairaBet" },
-  { id: "supabet", name: "SupaBet" },
+  { id: "1xBet", name: "1xBet" }, // Capital 'B'
+  { id: "BangBet", name: "BangBet" }, // Capital 'B'
+  { id: "Bet9ja", name: "Bet9ja" }, // Capital 'B'
+  { id: "BetKing", name: "BetKing" }, // Capital 'K'
+  { id: "BetLand", name: "BetLand" }, // Capital 'L'
+  { id: "BetLion", name: "BetLion" }, // Capital 'L'
+  { id: "BetWay", name: "BetWay" }, // Capital 'W'
+  { id: "CloudBet", name: "CloudBet" },
+  { id: "LiveScoreBet", name: "LiveScoreBet" },
+  { id: "MerryBet", name: "MerryBet" },
+  { id: "NaijaBet", name: "NaijaBet" },
+  { id: "NairaBet", name: "NairaBet" },
+  { id: "SupaBet", name: "SupaBet" },
 ];
 
 function BettingForm({ user, router }) {
