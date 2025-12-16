@@ -110,7 +110,8 @@ export default function AppSidebar({ onLinkClick }) {
         </div>
       )}
 
-      <nav className="flex-1 px-4 py-4 mt-4">
+      {/* Added overflow-y-auto here to enable vertical scrolling */}
+      <nav className="flex-1 px-4 py-4 mt-4 overflow-y-auto">
         <ul className="space-y-2">
           {navItems
             .filter((item) => !item.admin)
