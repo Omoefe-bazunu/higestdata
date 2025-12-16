@@ -28,6 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import AllTransactionsTab from "@/components/admin/all-transactions-tab";
 import ElectricityRatesForm from "@/components/admin/electricity-bill-rates-tab";
 // import CryptoSettingsTab from "@/components/admin/crypto-settings-tab";
+import NewsletterSender from "@/components/admin/newsletter-sender";
 import GiftCardRatesTab from "@/components/admin/gift-card-rates-tab";
 import AirtimeDataRatesTab from "@/components/admin/airtime-data-rates-tab";
 import PendingRequestsTab from "@/components/admin/pending-requests-tab";
@@ -221,6 +222,7 @@ export default function AdminPage() {
                   <SelectItem value="withdrawal-requests">
                     Withdrawal Requests
                   </SelectItem>
+                  <SelectItem value="bulk-email">Bulk Email</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -248,6 +250,7 @@ export default function AdminPage() {
                 <TabsTrigger value="withdrawal-requests">
                   Withdrawal Requests
                 </TabsTrigger>
+                <TabsTrigger value="bulk-email">Bulk Email</TabsTrigger>
               </TabsList>
             </div>
 
@@ -286,6 +289,12 @@ export default function AdminPage() {
             </TabsContent>
             <TabsContent value="withdrawal-requests" className="mt-8">
               <AdminWithdrawals />
+            </TabsContent>
+            <TabsContent value="withdrawal-requests" className="mt-8">
+              <AdminWithdrawals />
+            </TabsContent>
+            <TabsContent value="bulk-email" className="mt-8">
+              <NewsletterSender />
             </TabsContent>
           </Tabs>
         </div>
