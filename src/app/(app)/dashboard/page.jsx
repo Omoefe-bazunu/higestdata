@@ -20,25 +20,33 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle } from "lucide-react";
 
+// Helper function to get the greeting based on the time of day
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good Morning";
+  if (hour < 16) return "Good Afternoon";
+  if (hour < 21) return "Good Evening";
+  return "Good Night";
+};
+
 export default function DashboardPage() {
-  // Retrieve user and the global loading state from the AuthContext
   const { user, loading: authLoading } = useAuth();
   const [userData, setUserData] = useState(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const router = useRouter();
 
+  // Call the greeting function
+  const greeting = getGreeting();
+
   useEffect(() => {
-    // Wait until the AuthContext finishes checking the session state
     if (authLoading) return;
 
-    // If Auth is loaded and no user is found, redirect to login
     if (!user) {
       router.replace("/login");
       return;
     }
 
-    // If Auth is loaded and user is found, fetch user data
     async function fetchUserData() {
       try {
         const ref = doc(firestore, "users", user.uid);
@@ -48,7 +56,6 @@ export default function DashboardPage() {
           const data = snap.data();
           setUserData(data);
 
-          // Check if user is verified
           if (!data.isVerified) {
             setShowVerificationModal(true);
           }
@@ -65,18 +72,14 @@ export default function DashboardPage() {
     fetchUserData();
   }, [user, authLoading, router]);
 
-  // Function to recheck verification status
   const recheckVerification = async () => {
     if (!user) return;
-
     try {
       const ref = doc(firestore, "users", user.uid);
       const snap = await getDoc(ref);
-
       if (snap.exists()) {
         const data = snap.data();
         setUserData(data);
-
         if (data.isVerified) {
           setShowVerificationModal(false);
         }
@@ -86,14 +89,12 @@ export default function DashboardPage() {
     }
   };
 
-  // Recheck verification when window gains focus
   useEffect(() => {
     const handleFocus = () => {
       if (showVerificationModal) {
         recheckVerification();
       }
     };
-
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
   }, [showVerificationModal, user]);
@@ -116,7 +117,6 @@ export default function DashboardPage() {
 
   return (
     <>
-      {/* Verification Modal - Cannot be closed */}
       <Dialog open={showVerificationModal} onOpenChange={() => {}}>
         <DialogContent
           className="sm:max-w-md"
@@ -161,7 +161,6 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Dashboard Content - Blurred when not verified */}
       <div
         className={showVerificationModal ? "pointer-events-none blur-sm" : ""}
       >
@@ -170,14 +169,16 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
                 <h1 className="text-3xl font-bold font-headline">
-                  Welcome back, {userData.name.split(" ")[0]}!
+                  {/* UPDATED GREETING HERE */}
+                  {greeting}, {userData.name.split(" ")[0]}!
                 </h1>
                 <p className="text-muted-foreground">
-                  Here's a summary of your account today.
+                  {new Date().getHours() < 12
+                    ? "Wish you the best experience with our services"
+                    : "Here's a summary of your account today."}
                 </p>
               </div>
 
-              {/* Verification Status Badge */}
               {userData.isVerified ? (
                 <Badge
                   variant="default"
