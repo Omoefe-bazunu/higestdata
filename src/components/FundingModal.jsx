@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Dialog,
@@ -22,6 +22,16 @@ export default function FundingModal({ open, onOpenChange }) {
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [scriptLoaded, setScriptLoaded] = useState(false);
+
+  // Ref to track if component is mounted (to avoid state update errors)
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   // 1. Load Safe Haven Script dynamically
   useEffect(() => {
@@ -66,7 +76,13 @@ export default function FundingModal({ open, onOpenChange }) {
         throw new Error("Payment gateway failed to load. Please refresh.");
       }
 
-      const checkout = window.SafeHavenCheckout({
+      // === CRITICAL FIX FOR MOBILE ===
+      // We MUST close our modal here. If we leave it open, it traps focus
+      // and prevents the user from clicking buttons in the Checkout iframe.
+      onOpenChange(false);
+      setAmount(""); // Reset for next time
+
+      window.SafeHavenCheckout({
         environment: config.environment,
         clientId: config.clientId,
         referenceCode: config.referenceCode,
@@ -76,28 +92,26 @@ export default function FundingModal({ open, onOpenChange }) {
         settlementAccount: config.settlementAccount,
         // Callbacks
         onClose: () => {
-          setLoading(false);
-          toast.info("Payment cancelled");
+          // Modal is already closed, just notify user
+          toast.info("Payment flow cancelled");
         },
-        // FIX: Removed 'async' keyword here
         callback: (response) => {
           console.log("Checkout Callback:", response);
-          // Call the verification function without 'await' here
-          // The library doesn't need to wait for your verification
-          verifyTransaction(config.referenceCode);
+          // Run verification (Modal is closed, so we rely on Toasts)
+          verifyTransaction(config.referenceCode, token);
         },
       });
     } catch (err) {
       console.error(err);
       toast.error(err.message);
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
   };
 
-  const verifyTransaction = async (reference) => {
+  // Helper to verify (Independent of Component State)
+  const verifyTransaction = async (reference, token) => {
     try {
-      toast.loading("Verifying payment...");
-      const token = await user.getIdToken();
+      toast.loading("Verifying payment...", { id: "verify-toast" });
 
       const res = await fetch(`${API_URL}/api/funding/verify`, {
         method: "POST",
@@ -111,19 +125,17 @@ export default function FundingModal({ open, onOpenChange }) {
       const data = await res.json();
 
       if (data.success) {
-        toast.dismiss();
+        toast.dismiss("verify-toast");
         toast.success("Wallet credited successfully!");
-        setAmount("");
-        onOpenChange(false); // Close modal
       } else {
-        toast.dismiss();
+        toast.dismiss("verify-toast");
         toast.error(data.error || "Verification failed");
       }
     } catch (error) {
-      toast.dismiss();
-      toast.error("Could not verify payment. Please contact support.");
-    } finally {
-      setLoading(false);
+      toast.dismiss("verify-toast");
+      toast.error(
+        "Could not verify payment. Please refresh or contact support."
+      );
     }
   };
 
