@@ -228,9 +228,9 @@ export default function AdminPage() {
                   <SelectItem value="pending-requests">
                     Pending Requests
                   </SelectItem>
-                  <SelectItem value="withdrawal-requests">
+                  {/* <SelectItem value="withdrawal-requests">
                     Withdrawal Requests
-                  </SelectItem>
+                  </SelectItem> */}
                   <SelectItem value="bulk-email">Bulk Email</SelectItem>
                   <SelectItem value="smm-rates">SMM Rates</SelectItem>
                 </SelectContent>
@@ -257,9 +257,9 @@ export default function AdminPage() {
                 <TabsTrigger value="pending-requests">
                   Pending Requests
                 </TabsTrigger>
-                <TabsTrigger value="withdrawal-requests">
+                {/* <TabsTrigger value="withdrawal-requests">
                   Withdrawal Requests
-                </TabsTrigger>
+                </TabsTrigger> */}
                 <TabsTrigger value="bulk-email">Bulk Email</TabsTrigger>
                 <TabsTrigger value="smm-rates">SMM Rates</TabsTrigger>
               </TabsList>
