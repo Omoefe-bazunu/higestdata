@@ -45,8 +45,8 @@ export default function BuyAirtimePage() {
       <div>
         <h1 className="text-3xl font-bold font-headline">Buy Airtime & Data</h1>
         <p className="text-muted-foreground">
-          Instantly top up airtime or data plans via VTU Africa. Fast, easy, and
-          reliable.
+          Instantly top up airtime or data plans via Ebills.africa. Fast, easy,
+          and reliable.
         </p>
       </div>
       <Card className="overflow-hidden">
@@ -61,7 +61,7 @@ export default function BuyAirtimePage() {
                 <CardHeader className="px-0">
                   <CardTitle>Buy Airtime</CardTitle>
                   <CardDescription>
-                    Enter details to top up airtime via VTU Africa.
+                    Enter details to top up airtime via Ebills.africa.
                   </CardDescription>
                 </CardHeader>
                 <PurchaseForm type="Airtime" user={user} router={router} />
@@ -70,7 +70,7 @@ export default function BuyAirtimePage() {
                 <CardHeader className="px-0">
                   <CardTitle>Buy Data</CardTitle>
                   <CardDescription>
-                    Choose a data plan that suits you via VTU Africa.
+                    Choose a data plan that suits you via Ebills.africa.
                   </CardDescription>
                 </CardHeader>
                 <PurchaseForm type="Data" user={user} router={router} />
@@ -87,11 +87,11 @@ export default function BuyAirtimePage() {
               />
             </div>
             <h3 className="text-xl font-semibold mb-4 text-secondary-foreground">
-              Seamlessly Connected with VTU Africa
+              Seamlessly Connected with Ebills.africa
             </h3>
             <p className="text-muted-foreground mb-4">
-              Stay online with instant airtime and data recharges powered by VTU
-              Africa.
+              Stay online with instant airtime and data recharges powered by
+              Ebills.africa
             </p>
             <ul className="space-y-2 text-sm">
               <li className="flex items-center gap-2">
@@ -108,7 +108,7 @@ export default function BuyAirtimePage() {
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Powered by VTU Africa API</span>
+                <span>Powered by Ebills.africa API</span>
               </li>
             </ul>
           </div>

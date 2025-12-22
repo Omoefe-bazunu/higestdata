@@ -10,25 +10,16 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Save,
-  PlusCircle,
-  Trash2,
-  X,
-  Settings,
-  ChevronDown,
-  ChevronRight,
-  Tag,
-} from "lucide-react";
+import { PlusCircle, Trash2, X, Settings, Tag, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   collection,
   getDocs,
-  setDoc,
   deleteDoc,
   doc,
   writeBatch,
   getDoc,
+  addDoc,
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { firestore } from "@/lib/firebaseConfig";
@@ -49,16 +40,12 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 
-// Default configurations to initialize DB if empty
-const DEFAULT_CURRENCIES = ["USD", "EUR", "GBP", "CAD"];
-const DEFAULT_TYPES = ["Physical", "E-code"];
-const DEFAULT_LIMITS = [
-  { id: "l1", min: 10, max: 100 },
-  { id: "l2", min: 101, max: 500 },
-];
-
 export default function GiftCardRatesTab() {
-  const [rates, setRates] = useState([]);
+  // --- State ---
+  const [rates, setRates] = useState({});
+  const [cards, setCards] = useState([]);
+
+  // Start with empty arrays - NO defaults
   const [currencies, setCurrencies] = useState([]);
   const [cardTypes, setCardTypes] = useState([]);
   const [globalLimits, setGlobalLimits] = useState([]);
@@ -68,12 +55,10 @@ export default function GiftCardRatesTab() {
   const [saving, setSaving] = useState(false);
   const [showConfigDialog, setShowConfigDialog] = useState(false);
 
-  // Config State for Dialog
+  // Config Dialog State
   const [tempCurrencies, setTempCurrencies] = useState([]);
   const [tempTypes, setTempTypes] = useState([]);
   const [tempLimits, setTempLimits] = useState([]);
-
-  // Inputs for Config
   const [newCurrencyInput, setNewCurrencyInput] = useState("");
   const [newTypeInput, setNewTypeInput] = useState("");
   const [newLimitMin, setNewLimitMin] = useState("");
@@ -89,48 +74,74 @@ export default function GiftCardRatesTab() {
     try {
       setLoading(true);
 
-      // 1. Fetch Configs (Currencies, Types, Limits)
-      const configRefs = [
+      // 1. Fetch Configs
+      const [currDoc, typeDoc, limitDoc] = await Promise.all([
         getDoc(doc(firestore, "config", "currencies")),
         getDoc(doc(firestore, "config", "card_types")),
         getDoc(doc(firestore, "config", "global_limits")),
-      ];
+      ]);
 
-      const [currDoc, typeDoc, limitDoc] = await Promise.all(configRefs);
-
+      // If document exists, use data. If not, use empty array.
       const loadedCurrencies = currDoc.exists()
-        ? currDoc.data().list
-        : DEFAULT_CURRENCIES;
-      const loadedTypes = typeDoc.exists()
-        ? typeDoc.data().list
-        : DEFAULT_TYPES;
-      const loadedLimits = limitDoc.exists()
-        ? limitDoc.data().list
-        : DEFAULT_LIMITS;
+        ? currDoc.data().list || []
+        : [];
+      const loadedTypes = typeDoc.exists() ? typeDoc.data().list || [] : [];
+      const loadedLimits = limitDoc.exists() ? limitDoc.data().list || [] : [];
 
       setCurrencies(loadedCurrencies);
       setCardTypes(loadedTypes);
       setGlobalLimits(loadedLimits);
 
-      // Initialize temp states for the modal
+      // Initialize Temp State for the modal
       setTempCurrencies(loadedCurrencies);
       setTempTypes(loadedTypes);
       setTempLimits(loadedLimits);
 
-      // 2. Fetch Gift Cards
+      // 2. Fetch Cards
       const snapshot = await getDocs(collection(firestore, "giftCardRates"));
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        name: doc.data().name || doc.id,
-        // structure: rates[limitId][typeId][currency] = { rate: 0, tag: "" }
-        rates: doc.data().rates || {},
-      }));
-      setRates(data);
+
+      const cardList = [];
+      const nestedRates = {};
+
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const cardId = docSnap.id;
+
+        cardList.push({ id: cardId, name: data.name || cardId });
+
+        // Initialize nested structure
+        nestedRates[cardId] = {};
+
+        // Parse rates if they exist
+        if (Array.isArray(data.rates)) {
+          data.rates.forEach((r) => {
+            // Match rate to a global limit by Value (Min/Max), not ID
+            const matchingLimit = loadedLimits.find(
+              (l) => l.min === r.min && l.max === r.max
+            );
+
+            if (matchingLimit) {
+              const lid = matchingLimit.id;
+              if (!nestedRates[cardId][lid]) nestedRates[cardId][lid] = {};
+              if (!nestedRates[cardId][lid][r.cardType])
+                nestedRates[cardId][lid][r.cardType] = {};
+
+              nestedRates[cardId][lid][r.cardType][r.currency] = {
+                rate: r.rate,
+                tag: r.rateTag || "",
+              };
+            }
+          });
+        }
+      });
+
+      setCards(cardList);
+      setRates(nestedRates);
     } catch (err) {
       console.error(err);
       toast({
         title: "Error",
-        description: "Failed to load settings.",
+        description: "Failed to load data.",
         variant: "destructive",
       });
     } finally {
@@ -138,8 +149,7 @@ export default function GiftCardRatesTab() {
     }
   };
 
-  // --- Configuration Management ---
-
+  // --- Configuration Logic ---
   const addConfigItem = (list, setList, item) => {
     if (!item || list.includes(item)) return;
     setList([...list, item]);
@@ -174,6 +184,7 @@ export default function GiftCardRatesTab() {
     setSaving(true);
     try {
       const batch = writeBatch(firestore);
+      // We save "list" field. If doc doesn't exist, set() creates it.
       batch.set(doc(firestore, "config", "currencies"), {
         list: tempCurrencies,
       });
@@ -184,20 +195,18 @@ export default function GiftCardRatesTab() {
 
       await batch.commit();
 
-      // Update local state
       setCurrencies(tempCurrencies);
       setCardTypes(tempTypes);
       setGlobalLimits(tempLimits);
       setShowConfigDialog(false);
+      toast({ title: "Settings Saved", description: "Configuration updated." });
 
-      toast({
-        title: "Settings Saved",
-        description: "Global configurations updated.",
-      });
+      // Refresh to ensure IDs match
+      fetchData();
     } catch (err) {
       toast({
         title: "Error",
-        description: "Failed to save configs",
+        description: "Failed to save config.",
         variant: "destructive",
       });
     } finally {
@@ -205,30 +214,35 @@ export default function GiftCardRatesTab() {
     }
   };
 
-  // --- Card Management ---
-
-  const handleAddCard = () => {
+  // --- Card Logic ---
+  const handleAddCard = async () => {
     if (!newCardName.trim()) return;
-    const id = newCardName.toLowerCase().replace(/\s+/g, "-");
-
-    if (rates.some((r) => r.id === id)) {
+    try {
+      const docRef = await addDoc(collection(firestore, "giftCardRates"), {
+        name: newCardName,
+        rates: [],
+      });
+      setCards((prev) => [{ id: docRef.id, name: newCardName }, ...prev]);
+      setRates((prev) => ({ ...prev, [docRef.id]: {} }));
+      setNewCardName("");
+      toast({ title: "Added", description: "Card added." });
+    } catch (e) {
       toast({
-        title: "Duplicate",
-        description: "Card exists.",
+        title: "Error",
+        description: "Failed to add card.",
         variant: "destructive",
       });
-      return;
     }
-
-    setRates((prev) => [{ id, name: newCardName, rates: {} }, ...prev]);
-    setNewCardName("");
-    toast({ title: "Added", description: "Remember to save changes." });
   };
 
   const handleDeleteCard = async (id) => {
+    if (!confirm("Delete this card and all its rates?")) return;
     try {
       await deleteDoc(doc(firestore, "giftCardRates", id));
-      setRates((prev) => prev.filter((r) => r.id !== id));
+      setCards((prev) => prev.filter((c) => c.id !== id));
+      const newRates = { ...rates };
+      delete newRates[id];
+      setRates(newRates);
       toast({ title: "Deleted" });
     } catch {
       toast({
@@ -239,47 +253,31 @@ export default function GiftCardRatesTab() {
     }
   };
 
-  // --- Rate Updates ---
-
+  // --- Rate Logic ---
   const updateRateData = (cardId, limitId, type, currency, field, value) => {
-    setRates((prevRates) =>
-      prevRates.map((card) => {
-        if (card.id !== cardId) return card;
+    setRates((prev) => {
+      const cardRates = { ...(prev[cardId] || {}) };
+      if (!cardRates[limitId]) cardRates[limitId] = {};
+      if (!cardRates[limitId][type]) cardRates[limitId][type] = {};
+      if (!cardRates[limitId][type][currency])
+        cardRates[limitId][type][currency] = { rate: 0, tag: "" };
 
-        const newRates = { ...card.rates };
-        if (!newRates[limitId]) newRates[limitId] = {};
-        if (!newRates[limitId][type]) newRates[limitId][type] = {};
-        if (!newRates[limitId][type][currency])
-          newRates[limitId][type][currency] = { rate: 0, tag: "" };
-
-        if (field === "rate") {
-          const num = parseFloat(value);
-          newRates[limitId][type][currency].rate = isNaN(num) ? 0 : num;
-        } else {
-          newRates[limitId][type][currency].tag = value;
-        }
-
-        return { ...card, rates: newRates };
-      })
-    );
+      if (field === "rate") {
+        cardRates[limitId][type][currency].rate =
+          value === "" ? "" : parseFloat(value);
+      } else {
+        cardRates[limitId][type][currency].tag = value;
+      }
+      return { ...prev, [cardId]: cardRates };
+    });
   };
 
-  const handleSaveRates = async () => {
+  const handleSaveAll = async () => {
     const user = getAuth().currentUser;
     if (!user) {
       toast({
         title: "Auth Error",
-        description: "Login required.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // CRITICAL: Prevent saving if data hasn't loaded to avoid wiping the DB
-    if (loading || rates.length === 0) {
-      toast({
-        title: "Wait",
-        description: "Please wait for data to load before saving.",
+        description: "Please login.",
         variant: "destructive",
       });
       return;
@@ -289,49 +287,64 @@ export default function GiftCardRatesTab() {
     try {
       const batch = writeBatch(firestore);
 
-      rates.forEach((card) => {
-        const ref = doc(firestore, "giftCardRates", card.id);
+      cards.forEach((card) => {
+        const cardRef = doc(firestore, "giftCardRates", card.id);
+        const cardData = rates[card.id] || {};
+        const rateArray = [];
 
-        // Use { merge: true } to prevent accidental erasures of other fields
-        // and ensure we are only updating the 'name' and specific 'rates' matrix.
-        batch.set(
-          ref,
-          {
-            name: card.name,
-            rates: card.rates,
-            lastUpdated: new Date().toISOString(), // Good for debugging
-            updatedBy: user.email,
-          },
-          { merge: true }
-        );
+        globalLimits.forEach((limit) => {
+          const limitData = cardData[limit.id];
+          if (!limitData) return;
+
+          cardTypes.forEach((type) => {
+            const typeData = limitData[type];
+            if (!typeData) return;
+
+            currencies.forEach((curr) => {
+              const data = typeData[curr];
+              if (data && data.rate > 0) {
+                rateArray.push({
+                  min: limit.min,
+                  max: limit.max,
+                  cardType: type,
+                  currency: curr,
+                  rate: parseFloat(data.rate),
+                  rateTag: data.tag || "Fast",
+                });
+              }
+            });
+          });
+        });
+
+        batch.update(cardRef, {
+          rates: rateArray,
+          lastUpdated: new Date().toISOString(),
+          updatedBy: user.email,
+        });
       });
 
       await batch.commit();
-      toast({ title: "Saved", description: "All rates updated successfully." });
+      toast({ title: "Published", description: "Rates are live." });
     } catch (err) {
-      console.error("Save Rates Error:", err);
+      console.error("Save Error:", err);
       toast({
         title: "Error",
-        description: "Failed to save rates: " + err.message,
+        description: "Save failed.",
         variant: "destructive",
       });
     } finally {
       setSaving(false);
     }
   };
-  // --- Render Helpers ---
 
-  const getRateValue = (card, limitId, type, cur, field) => {
-    return (
-      card.rates?.[limitId]?.[type]?.[cur]?.[field] ||
-      (field === "rate" ? 0 : "")
-    );
+  const getRateValue = (cardId, limitId, type, cur, field) => {
+    return rates[cardId]?.[limitId]?.[type]?.[cur]?.[field] ?? "";
   };
 
   if (loading)
     return (
-      <div className="p-4">
-        <Skeleton className="h-48 w-full" />
+      <div className="p-8">
+        <Skeleton className="h-64 w-full" />
       </div>
     );
 
@@ -340,9 +353,7 @@ export default function GiftCardRatesTab() {
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle>Gift Card Rate Matrix</CardTitle>
-          <CardDescription>
-            Manage global settings and set rates per Limit, Type, and Currency.
-          </CardDescription>
+          <CardDescription>Manage rates live.</CardDescription>
         </div>
         <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
           <DialogTrigger asChild>
@@ -354,43 +365,39 @@ export default function GiftCardRatesTab() {
             <DialogHeader>
               <DialogTitle>Global Configuration</DialogTitle>
               <DialogDescription>
-                Define Limits, Card Types, and Currencies applicable to ALL
-                cards.
+                Define your Limits, Types, and Currencies here.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-6 py-4">
-              {/* Global Limits */}
+              {/* Limits */}
               <div className="border p-4 rounded-md space-y-3">
-                <h3 className="font-semibold flex items-center">
-                  Global Limits (Range)
-                </h3>
+                <h3 className="font-semibold">Limits (Range)</h3>
                 <div className="flex gap-2 items-end">
-                  <div className="grid gap-1.5">
-                    <span className="text-xs">Min</span>
-                    <Input
-                      type="number"
-                      className="w-24"
-                      value={newLimitMin}
-                      onChange={(e) => setNewLimitMin(e.target.value)}
-                      placeholder="0"
-                    />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <span className="text-xs">Max</span>
-                    <Input
-                      type="number"
-                      className="w-24"
-                      value={newLimitMax}
-                      onChange={(e) => setNewLimitMax(e.target.value)}
-                      placeholder="100"
-                    />
-                  </div>
+                  <Input
+                    type="number"
+                    className="w-24"
+                    value={newLimitMin}
+                    onChange={(e) => setNewLimitMin(e.target.value)}
+                    placeholder="Min"
+                  />
+                  <Input
+                    type="number"
+                    className="w-24"
+                    value={newLimitMax}
+                    onChange={(e) => setNewLimitMax(e.target.value)}
+                    placeholder="Max"
+                  />
                   <Button size="sm" onClick={addLimit}>
                     <PlusCircle className="h-4 w-4" />
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {tempLimits.length === 0 && (
+                    <span className="text-sm text-muted-foreground">
+                      No limits set. Add one above.
+                    </span>
+                  )}
                   {tempLimits.map((l) => (
                     <Badge
                       key={l.id}
@@ -399,7 +406,7 @@ export default function GiftCardRatesTab() {
                     >
                       {l.min} - {l.max}
                       <X
-                        className="h-3 w-3 cursor-pointer text-muted-foreground hover:text-red-500"
+                        className="h-3 w-3 cursor-pointer hover:text-red-500"
                         onClick={() => removeLimit(l.id)}
                       />
                     </Badge>
@@ -407,16 +414,14 @@ export default function GiftCardRatesTab() {
                 </div>
               </div>
 
-              {/* Global Types */}
+              {/* Types */}
               <div className="border p-4 rounded-md space-y-3">
-                <h3 className="font-semibold">
-                  Card Types (e.g., Physical, E-code)
-                </h3>
+                <h3 className="font-semibold">Card Types</h3>
                 <div className="flex gap-2">
                   <Input
                     value={newTypeInput}
                     onChange={(e) => setNewTypeInput(e.target.value)}
-                    placeholder="New Type"
+                    placeholder="e.g. Physical"
                   />
                   <Button
                     size="sm"
@@ -429,9 +434,14 @@ export default function GiftCardRatesTab() {
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {tempTypes.length === 0 && (
+                    <span className="text-sm text-muted-foreground">
+                      No types set.
+                    </span>
+                  )}
                   {tempTypes.map((t) => (
                     <Badge key={t} variant="outline" className="gap-2">
-                      {t}
+                      {t}{" "}
                       <X
                         className="h-3 w-3 cursor-pointer hover:text-red-500"
                         onClick={() =>
@@ -443,7 +453,7 @@ export default function GiftCardRatesTab() {
                 </div>
               </div>
 
-              {/* Global Currencies */}
+              {/* Currencies */}
               <div className="border p-4 rounded-md space-y-3">
                 <h3 className="font-semibold">Currencies</h3>
                 <div className="flex gap-2">
@@ -468,9 +478,14 @@ export default function GiftCardRatesTab() {
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {tempCurrencies.length === 0 && (
+                    <span className="text-sm text-muted-foreground">
+                      No currencies set.
+                    </span>
+                  )}
                   {tempCurrencies.map((c) => (
                     <Badge key={c} className="gap-2 bg-slate-800">
-                      {c}
+                      {c}{" "}
                       <X
                         className="h-3 w-3 cursor-pointer hover:text-red-400"
                         onClick={() =>
@@ -495,10 +510,9 @@ export default function GiftCardRatesTab() {
       </CardHeader>
 
       <CardContent>
-        {/* Add New Card */}
         <div className="flex gap-2 mb-6">
           <Input
-            placeholder="New Gift Card Name (e.g., Apple iTunes)"
+            placeholder="New Gift Card Name"
             value={newCardName}
             onChange={(e) => setNewCardName(e.target.value)}
           />
@@ -507,10 +521,9 @@ export default function GiftCardRatesTab() {
           </Button>
         </div>
 
-        {/* Cards List */}
         <div className="space-y-4">
           <Accordion type="single" collapsible className="w-full space-y-2">
-            {rates.map((card) => (
+            {cards.map((card) => (
               <AccordionItem
                 key={card.id}
                 value={card.id}
@@ -530,11 +543,16 @@ export default function GiftCardRatesTab() {
                 </div>
 
                 <AccordionContent className="pt-2 pb-4">
-                  {/* The Rate Matrix */}
                   <div className="space-y-6">
                     {globalLimits.length === 0 && (
-                      <div className="text-center text-muted-foreground py-4">
-                        No limits defined in Global Settings.
+                      <div className="text-center text-muted-foreground py-12 border-2 border-dashed rounded-lg bg-white">
+                        <p>No limits defined yet.</p>
+                        <Button
+                          variant="link"
+                          onClick={() => setShowConfigDialog(true)}
+                        >
+                          Open Global Settings to add Limits.
+                        </Button>
                       </div>
                     )}
 
@@ -551,6 +569,11 @@ export default function GiftCardRatesTab() {
                         </div>
 
                         <div className="p-4 grid gap-6">
+                          {cardTypes.length === 0 && (
+                            <div className="text-sm text-muted-foreground">
+                              No card types defined in settings.
+                            </div>
+                          )}
                           {cardTypes.map((type) => (
                             <div
                               key={type}
@@ -560,6 +583,11 @@ export default function GiftCardRatesTab() {
                                 {type}
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {currencies.length === 0 && (
+                                  <div className="text-sm text-muted-foreground">
+                                    No currencies defined in settings.
+                                  </div>
+                                )}
                                 {currencies.map((cur) => (
                                   <div
                                     key={cur}
@@ -579,7 +607,7 @@ export default function GiftCardRatesTab() {
                                         className="h-7 text-sm"
                                         placeholder="0.00"
                                         value={getRateValue(
-                                          card,
+                                          card.id,
                                           limit.id,
                                           type,
                                           cur,
@@ -601,9 +629,9 @@ export default function GiftCardRatesTab() {
                                       <Tag className="h-3 w-3 text-muted-foreground" />
                                       <Input
                                         className="h-7 text-xs"
-                                        placeholder="Tag (e.g. Slow)"
+                                        placeholder="Tag"
                                         value={getRateValue(
-                                          card,
+                                          card.id,
                                           limit.id,
                                           type,
                                           cur,
@@ -639,10 +667,16 @@ export default function GiftCardRatesTab() {
         <div className="sticky bottom-4 flex justify-end mt-6 bg-white/90 p-4 border rounded shadow-xl backdrop-blur-sm z-10">
           <Button
             size="lg"
-            onClick={handleSaveRates}
-            disabled={saving || loading} // Added loading check here
+            onClick={handleSaveAll}
+            disabled={saving || loading}
           >
-            {saving ? "Saving..." : "Save All Changes"}
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
+              </>
+            ) : (
+              "Save All Changes"
+            )}
           </Button>
         </div>
       </CardContent>
