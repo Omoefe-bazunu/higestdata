@@ -12,18 +12,22 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, ShieldCheck, Lock } from "lucide-react";
+import { Loader2, ShieldCheck, Lock, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 export default function FundingModal({ open, onOpenChange }) {
   const { user } = useAuth();
-  const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [virtualAccount, setVirtualAccount] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [bvn, setBvn] = useState("");
+  const [phone, setPhone] = useState(user?.phoneNumber || "");
+  const [email, setEmail] = useState(user?.email || "");
+  const [copied, setCopied] = useState(false);
 
-  // Ref to track if component is mounted (to avoid state update errors)
+  // Ref to track if component is mounted
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -33,110 +37,75 @@ export default function FundingModal({ open, onOpenChange }) {
     };
   }, []);
 
-  // 1. Load Safe Haven Script dynamically
+  // Fetch VA on open
   useEffect(() => {
-    if (open && !scriptLoaded) {
-      const script = document.createElement("script");
-      script.src = "https://checkout.safehavenmfb.com/assets/checkout.min.js";
-      script.async = true;
-      script.onload = () => setScriptLoaded(true);
-      document.body.appendChild(script);
+    if (open) {
+      fetchVirtualAccount();
     }
-  }, [open, scriptLoaded]);
+  }, [open]);
 
-  const handlePayment = async () => {
-    if (!amount || isNaN(amount) || amount < 100) {
-      toast.error("Minimum amount is ₦100");
-      return;
-    }
-
+  const fetchVirtualAccount = async () => {
     setLoading(true);
-
     try {
-      // 1. Get Config from Backend
       const token = await user.getIdToken();
-      const initRes = await fetch(`${API_URL}/api/funding/initialize`, {
-        method: "POST",
+      const res = await fetch(`${API_URL}/api/virtual-account`, {
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ amount }),
       });
-
-      const initData = await initRes.json();
-
-      if (!initRes.ok)
-        throw new Error(initData.error || "Initialization failed");
-
-      const config = initData.config;
-
-      // 2. Initialize Safe Haven Checkout
-      if (typeof window.SafeHavenCheckout === "undefined") {
-        throw new Error("Payment gateway failed to load. Please refresh.");
+      const data = await res.json();
+      if (data.success) {
+        setVirtualAccount(data.data);
+        setShowForm(false);
+      } else {
+        setShowForm(true);
       }
-
-      // === CRITICAL FIX FOR MOBILE ===
-      // We MUST close our modal here. If we leave it open, it traps focus
-      // and prevents the user from clicking buttons in the Checkout iframe.
-      onOpenChange(false);
-      setAmount(""); // Reset for next time
-
-      window.SafeHavenCheckout({
-        environment: config.environment,
-        clientId: config.clientId,
-        referenceCode: config.referenceCode,
-        currency: config.currency,
-        amount: config.amount,
-        customer: config.customer,
-        settlementAccount: config.settlementAccount,
-        // Callbacks
-        onClose: () => {
-          // Modal is already closed, just notify user
-          toast.info("Payment flow cancelled");
-        },
-        callback: (response) => {
-          console.log("Checkout Callback:", response);
-          // Run verification (Modal is closed, so we rely on Toasts)
-          verifyTransaction(config.referenceCode, token);
-        },
-      });
     } catch (err) {
-      console.error(err);
-      toast.error(err.message);
+      toast.error("Failed to load account details");
+    } finally {
       if (isMounted.current) setLoading(false);
     }
   };
 
-  // Helper to verify (Independent of Component State)
-  const verifyTransaction = async (reference, token) => {
-    try {
-      toast.loading("Verifying payment...", { id: "verify-toast" });
+  const handleCreate = async () => {
+    if (!bvn || bvn.length !== 11) {
+      toast.error("Please enter a valid 11-digit BVN");
+      return;
+    }
+    if (!phone || !email) {
+      toast.error("Phone and email are required");
+      return;
+    }
 
-      const res = await fetch(`${API_URL}/api/funding/verify`, {
+    setLoading(true);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`${API_URL}/api/virtual-account/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ reference }),
+        body: JSON.stringify({ bvn, phoneNumber: phone, emailAddress: email }),
       });
-
       const data = await res.json();
-
       if (data.success) {
-        toast.dismiss("verify-toast");
-        toast.success("Wallet credited successfully!");
+        toast.success("Account created! Refreshing...");
+        fetchVirtualAccount(); // Reload to show VA
       } else {
-        toast.dismiss("verify-toast");
-        toast.error(data.error || "Verification failed");
+        toast.error(data.error || "Creation failed");
       }
-    } catch (error) {
-      toast.dismiss("verify-toast");
-      toast.error(
-        "Could not verify payment. Please refresh or contact support."
-      );
+    } catch (err) {
+      toast.error("Failed to create account");
+    } finally {
+      if (isMounted.current) setLoading(false);
     }
+  };
+
+  const copyAccountNumber = () => {
+    navigator.clipboard.writeText(virtualAccount.accountNumber);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -145,45 +114,91 @@ export default function FundingModal({ open, onOpenChange }) {
         <DialogHeader>
           <DialogTitle className="text-center">Fund Wallet</DialogTitle>
           <DialogDescription className="text-center">
-            Enter amount to deposit via Bank Transfer or Card
+            Transfer to your dedicated account. Funds auto-credit to wallet.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          <div className="space-y-2">
-            <Label>Amount (₦)</Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">
-                ₦
-              </span>
-              <Input
-                type="number"
-                placeholder="1000"
-                className="pl-8 text-lg"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
+          {loading ? (
+            <div className="flex justify-center">
+              <Loader2 className="h-8 w-8 animate-spin" />
             </div>
-            <p className="text-xs text-muted-foreground text-right">
-              Min: ₦100
-            </p>
-          </div>
-
-          <Button
-            className="w-full h-12 text-base"
-            onClick={handlePayment}
-            disabled={loading || !scriptLoaded}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Processing...
-              </>
-            ) : (
-              <>
-                <Lock className="mr-2 h-4 w-4" /> Secure Checkout
-              </>
-            )}
-          </Button>
+          ) : virtualAccount ? (
+            <div className="space-y-4 bg-muted/50 p-4 rounded-lg">
+              <div className="space-y-1">
+                <Label>Account Name</Label>
+                <p className="font-medium">{virtualAccount.accountName}</p>
+              </div>
+              <div className="space-y-1">
+                <Label>Account Number</Label>
+                <div className="flex items-center gap-2">
+                  <p className="font-mono text-lg">
+                    {virtualAccount.accountNumber}
+                  </p>
+                  <Button variant="ghost" size="sm" onClick={copyAccountNumber}>
+                    {copied ? (
+                      <Check className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Bank</Label>
+                <p>
+                  {virtualAccount.bankName} ({virtualAccount.bankCode})
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Transfer any amount. Wallet updates automatically via webhook.
+              </p>
+            </div>
+          ) : showForm ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>BVN (11 digits)</Label>
+                <Input
+                  type="text"
+                  maxLength={11}
+                  placeholder="12345678901"
+                  value={bvn}
+                  onChange={(e) => setBvn(e.target.value.replace(/\D/g, ""))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Phone Number</Label>
+                <Input
+                  type="tel"
+                  placeholder="08012345678"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  placeholder="example@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <Button
+                className="w-full"
+                onClick={handleCreate}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                Generate Account
+              </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                Your details are secure and used only for KYC verification.
+              </p>
+            </div>
+          ) : null}
 
           <div className="flex justify-center items-center gap-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded">
             <ShieldCheck className="h-4 w-4 text-green-600" />
