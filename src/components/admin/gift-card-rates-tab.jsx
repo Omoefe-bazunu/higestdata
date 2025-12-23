@@ -10,7 +10,15 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Trash2, X, Settings, Tag, Loader2 } from "lucide-react";
+import {
+  PlusCircle,
+  Trash2,
+  X,
+  Settings,
+  Tag,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   collection,
@@ -20,6 +28,7 @@ import {
   writeBatch,
   getDoc,
   addDoc,
+  setDoc,
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { firestore } from "@/lib/firebaseConfig";
@@ -39,17 +48,13 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function GiftCardRatesTab() {
-  // --- State ---
   const [rates, setRates] = useState({});
   const [cards, setCards] = useState([]);
-
-  // Start with empty arrays - NO defaults
   const [currencies, setCurrencies] = useState([]);
   const [cardTypes, setCardTypes] = useState([]);
-  const [globalLimits, setGlobalLimits] = useState([]);
-
   const [newCardName, setNewCardName] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -58,9 +63,13 @@ export default function GiftCardRatesTab() {
   // Config Dialog State
   const [tempCurrencies, setTempCurrencies] = useState([]);
   const [tempTypes, setTempTypes] = useState([]);
-  const [tempLimits, setTempLimits] = useState([]);
   const [newCurrencyInput, setNewCurrencyInput] = useState("");
   const [newTypeInput, setNewTypeInput] = useState("");
+
+  // Card-specific limits dialog
+  const [showLimitsDialog, setShowLimitsDialog] = useState(false);
+  const [activeLimitsCardId, setActiveLimitsCardId] = useState(null);
+  const [tempCardLimits, setTempCardLimits] = useState([]);
   const [newLimitMin, setNewLimitMin] = useState("");
   const [newLimitMax, setNewLimitMax] = useState("");
 
@@ -74,30 +83,23 @@ export default function GiftCardRatesTab() {
     try {
       setLoading(true);
 
-      // 1. Fetch Configs
-      const [currDoc, typeDoc, limitDoc] = await Promise.all([
+      // Fetch global configs (currencies and types only)
+      const [currDoc, typeDoc] = await Promise.all([
         getDoc(doc(firestore, "config", "currencies")),
         getDoc(doc(firestore, "config", "card_types")),
-        getDoc(doc(firestore, "config", "global_limits")),
       ]);
 
-      // If document exists, use data. If not, use empty array.
       const loadedCurrencies = currDoc.exists()
-        ? currDoc.data().list || []
+        ? currDoc.data()?.list || []
         : [];
-      const loadedTypes = typeDoc.exists() ? typeDoc.data().list || [] : [];
-      const loadedLimits = limitDoc.exists() ? limitDoc.data().list || [] : [];
+      const loadedTypes = typeDoc.exists() ? typeDoc.data()?.list || [] : [];
 
       setCurrencies(loadedCurrencies);
       setCardTypes(loadedTypes);
-      setGlobalLimits(loadedLimits);
-
-      // Initialize Temp State for the modal
       setTempCurrencies(loadedCurrencies);
       setTempTypes(loadedTypes);
-      setTempLimits(loadedLimits);
 
-      // 2. Fetch Cards
+      // Fetch Cards with their card-specific limits
       const snapshot = await getDocs(collection(firestore, "giftCardRates"));
 
       const cardList = [];
@@ -107,16 +109,43 @@ export default function GiftCardRatesTab() {
         const data = docSnap.data();
         const cardId = docSnap.id;
 
-        cardList.push({ id: cardId, name: data.name || cardId });
+        // Get card-specific limits with validation
+        const cardLimits = Array.isArray(data.limits) ? data.limits : [];
 
-        // Initialize nested structure
+        // Validate and clean limits
+        const validLimits = cardLimits.filter((l) => {
+          return (
+            l &&
+            typeof l.id === "string" &&
+            typeof l.min === "number" &&
+            typeof l.max === "number" &&
+            l.min < l.max
+          );
+        });
+
+        cardList.push({
+          id: cardId,
+          name: data.name || cardId,
+          limits: validLimits,
+        });
+
         nestedRates[cardId] = {};
 
-        // Parse rates if they exist
+        // Parse rates safely
         if (Array.isArray(data.rates)) {
           data.rates.forEach((r) => {
-            // Match rate to a global limit by Value (Min/Max), not ID
-            const matchingLimit = loadedLimits.find(
+            // Validate rate object
+            if (
+              !r ||
+              typeof r.rate !== "number" ||
+              !r.cardType ||
+              !r.currency
+            ) {
+              return;
+            }
+
+            // Match rate to a card-specific limit by Value (Min/Max)
+            const matchingLimit = validLimits.find(
               (l) => l.min === r.min && l.max === r.max
             );
 
@@ -138,10 +167,10 @@ export default function GiftCardRatesTab() {
       setCards(cardList);
       setRates(nestedRates);
     } catch (err) {
-      console.error(err);
+      console.error("Fetch Error:", err);
       toast({
         title: "Error",
-        description: "Failed to load data.",
+        description: "Failed to load data. Please refresh the page.",
         variant: "destructive",
       });
     } finally {
@@ -149,64 +178,58 @@ export default function GiftCardRatesTab() {
     }
   };
 
-  // --- Configuration Logic ---
+  // Global Config Logic (Currencies & Types only)
   const addConfigItem = (list, setList, item) => {
-    if (!item || list.includes(item)) return;
-    setList([...list, item]);
+    const trimmedItem = typeof item === "string" ? item.trim() : item;
+    if (!trimmedItem || list.includes(trimmedItem)) return;
+    setList([...list, trimmedItem]);
   };
 
   const removeConfigItem = (list, setList, item) => {
     setList(list.filter((i) => i !== item));
   };
 
-  const addLimit = () => {
-    const min = parseFloat(newLimitMin);
-    const max = parseFloat(newLimitMax);
-    if (isNaN(min) || isNaN(max) || min >= max) {
-      toast({
-        title: "Invalid Range",
-        description: "Min must be less than Max",
-        variant: "destructive",
-      });
-      return;
-    }
-    const newLimit = { id: `limit_${Date.now()}`, min, max };
-    setTempLimits([...tempLimits, newLimit]);
-    setNewLimitMin("");
-    setNewLimitMax("");
-  };
-
-  const removeLimit = (id) => {
-    setTempLimits(tempLimits.filter((l) => l.id !== id));
-  };
-
   const saveConfigs = async () => {
     setSaving(true);
     try {
       const batch = writeBatch(firestore);
-      // We save "list" field. If doc doesn't exist, set() creates it.
-      batch.set(doc(firestore, "config", "currencies"), {
-        list: tempCurrencies,
-      });
-      batch.set(doc(firestore, "config", "card_types"), { list: tempTypes });
-      batch.set(doc(firestore, "config", "global_limits"), {
-        list: tempLimits,
-      });
+
+      // Use setDoc to create if not exists
+      batch.set(
+        doc(firestore, "config", "currencies"),
+        {
+          list: tempCurrencies,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      batch.set(
+        doc(firestore, "config", "card_types"),
+        {
+          list: tempTypes,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
 
       await batch.commit();
 
       setCurrencies(tempCurrencies);
       setCardTypes(tempTypes);
-      setGlobalLimits(tempLimits);
       setShowConfigDialog(false);
-      toast({ title: "Settings Saved", description: "Configuration updated." });
+      toast({
+        title: "Settings Saved",
+        description: "Configuration updated successfully.",
+      });
 
-      // Refresh to ensure IDs match
-      fetchData();
+      // Refresh data to ensure consistency
+      await fetchData();
     } catch (err) {
+      console.error("Save Config Error:", err);
       toast({
         title: "Error",
-        description: "Failed to save config.",
+        description: "Failed to save configuration. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -214,46 +237,243 @@ export default function GiftCardRatesTab() {
     }
   };
 
-  // --- Card Logic ---
-  const handleAddCard = async () => {
-    if (!newCardName.trim()) return;
-    try {
-      const docRef = await addDoc(collection(firestore, "giftCardRates"), {
-        name: newCardName,
-        rates: [],
+  // Card-Specific Limits Logic
+  const openLimitsDialog = (cardId) => {
+    const card = cards.find((c) => c.id === cardId);
+    setActiveLimitsCardId(cardId);
+    setTempCardLimits([...(card?.limits || [])]);
+    setNewLimitMin("");
+    setNewLimitMax("");
+    setShowLimitsDialog(true);
+  };
+
+  const addCardLimit = () => {
+    const min = parseFloat(newLimitMin);
+    const max = parseFloat(newLimitMax);
+
+    if (isNaN(min) || isNaN(max)) {
+      toast({
+        title: "Invalid Input",
+        description: "Please enter valid numbers for Min and Max.",
+        variant: "destructive",
       });
-      setCards((prev) => [{ id: docRef.id, name: newCardName }, ...prev]);
-      setRates((prev) => ({ ...prev, [docRef.id]: {} }));
-      setNewCardName("");
-      toast({ title: "Added", description: "Card added." });
-    } catch (e) {
+      return;
+    }
+
+    if (min >= max) {
+      toast({
+        title: "Invalid Range",
+        description: "Min must be less than Max.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check for overlapping ranges
+    const hasOverlap = tempCardLimits.some((l) => {
+      return (
+        (min >= l.min && min < l.max) ||
+        (max > l.min && max <= l.max) ||
+        (min <= l.min && max >= l.max)
+      );
+    });
+
+    if (hasOverlap) {
+      toast({
+        title: "Overlapping Range",
+        description: "This range overlaps with an existing limit.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newLimit = {
+      id: `limit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      min,
+      max,
+    };
+
+    setTempCardLimits(
+      [...tempCardLimits, newLimit].sort((a, b) => a.min - b.min)
+    );
+    setNewLimitMin("");
+    setNewLimitMax("");
+  };
+
+  const removeCardLimit = (limitId) => {
+    // Check if limit is being used
+    const cardData = rates[activeLimitsCardId] || {};
+    const limitHasRates =
+      cardData[limitId] && Object.keys(cardData[limitId]).length > 0;
+
+    if (limitHasRates) {
+      if (
+        !confirm(
+          "This limit has rates configured. Deleting it will remove all associated rates. Continue?"
+        )
+      ) {
+        return;
+      }
+    }
+
+    setTempCardLimits(tempCardLimits.filter((l) => l.id !== limitId));
+  };
+
+  const saveCardLimits = async () => {
+    if (!activeLimitsCardId) return;
+
+    setSaving(true);
+    try {
+      const cardRef = doc(firestore, "giftCardRates", activeLimitsCardId);
+      const cardDoc = await getDoc(cardRef);
+
+      if (!cardDoc.exists()) {
+        throw new Error("Card not found");
+      }
+
+      // Get existing rates
+      const existingRates = cardDoc.data()?.rates || [];
+
+      // Filter out rates for removed limits
+      const updatedRates = existingRates.filter((rate) => {
+        return tempCardLimits.some(
+          (limit) => limit.min === rate.min && limit.max === rate.max
+        );
+      });
+
+      // Update card document
+      await setDoc(
+        cardRef,
+        {
+          limits: tempCardLimits,
+          rates: updatedRates,
+          limitsUpdatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      // Update local state
+      setCards(
+        cards.map((c) =>
+          c.id === activeLimitsCardId ? { ...c, limits: tempCardLimits } : c
+        )
+      );
+
+      // Clean up rates state for removed limits
+      const oldLimits =
+        cards.find((c) => c.id === activeLimitsCardId)?.limits || [];
+      const removedLimitIds = oldLimits
+        .filter(
+          (oldLimit) =>
+            !tempCardLimits.find((newLimit) => newLimit.id === oldLimit.id)
+        )
+        .map((l) => l.id);
+
+      if (removedLimitIds.length > 0) {
+        setRates((prev) => {
+          const cardRates = { ...(prev[activeLimitsCardId] || {}) };
+          removedLimitIds.forEach((lid) => delete cardRates[lid]);
+          return { ...prev, [activeLimitsCardId]: cardRates };
+        });
+      }
+
+      setShowLimitsDialog(false);
+      toast({
+        title: "Limits Saved",
+        description: "Card limits updated successfully.",
+      });
+    } catch (err) {
+      console.error("Save Limits Error:", err);
       toast({
         title: "Error",
-        description: "Failed to add card.",
+        description: "Failed to save limits. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Card Logic
+  const handleAddCard = async () => {
+    const trimmedName = newCardName.trim();
+    if (!trimmedName) {
+      toast({
+        title: "Invalid Name",
+        description: "Please enter a card name.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check for duplicate names
+    if (cards.some((c) => c.name.toLowerCase() === trimmedName.toLowerCase())) {
+      toast({
+        title: "Duplicate Card",
+        description: "A card with this name already exists.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const docRef = await addDoc(collection(firestore, "giftCardRates"), {
+        name: trimmedName,
+        rates: [],
+        limits: [],
+        createdAt: new Date().toISOString(),
+      });
+
+      setCards((prev) => [
+        { id: docRef.id, name: trimmedName, limits: [] },
+        ...prev,
+      ]);
+      setRates((prev) => ({ ...prev, [docRef.id]: {} }));
+      setNewCardName("");
+      toast({
+        title: "Card Added",
+        description: `${trimmedName} has been added.`,
+      });
+    } catch (err) {
+      console.error("Add Card Error:", err);
+      toast({
+        title: "Error",
+        description: "Failed to add card. Please try again.",
         variant: "destructive",
       });
     }
   };
 
   const handleDeleteCard = async (id) => {
-    if (!confirm("Delete this card and all its rates?")) return;
+    const card = cards.find((c) => c.id === id);
+    if (
+      !confirm(
+        `Delete "${card?.name}" and all its rates? This action cannot be undone.`
+      )
+    )
+      return;
+
     try {
       await deleteDoc(doc(firestore, "giftCardRates", id));
       setCards((prev) => prev.filter((c) => c.id !== id));
       const newRates = { ...rates };
       delete newRates[id];
       setRates(newRates);
-      toast({ title: "Deleted" });
-    } catch {
+      toast({
+        title: "Card Deleted",
+        description: "The card has been removed.",
+      });
+    } catch (err) {
+      console.error("Delete Card Error:", err);
       toast({
         title: "Error",
-        description: "Delete failed.",
+        description: "Failed to delete card. Please try again.",
         variant: "destructive",
       });
     }
   };
 
-  // --- Rate Logic ---
+  // Rate Logic
   const updateRateData = (cardId, limitId, type, currency, field, value) => {
     setRates((prev) => {
       const cardRates = { ...(prev[cardId] || {}) };
@@ -263,8 +483,8 @@ export default function GiftCardRatesTab() {
         cardRates[limitId][type][currency] = { rate: 0, tag: "" };
 
       if (field === "rate") {
-        cardRates[limitId][type][currency].rate =
-          value === "" ? "" : parseFloat(value);
+        const numValue = value === "" ? "" : parseFloat(value);
+        cardRates[limitId][type][currency].rate = numValue;
       } else {
         cardRates[limitId][type][currency].tag = value;
       }
@@ -276,8 +496,23 @@ export default function GiftCardRatesTab() {
     const user = getAuth().currentUser;
     if (!user) {
       toast({
-        title: "Auth Error",
-        description: "Please login.",
+        title: "Authentication Required",
+        description: "Please log in to save changes.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate that there's something to save
+    const hasRates = cards.some((card) => {
+      const cardData = rates[card.id] || {};
+      return Object.keys(cardData).length > 0;
+    });
+
+    if (!hasRates) {
+      toast({
+        title: "No Changes",
+        description: "Please add some rates before saving.",
         variant: "destructive",
       });
       return;
@@ -286,13 +521,15 @@ export default function GiftCardRatesTab() {
     setSaving(true);
     try {
       const batch = writeBatch(firestore);
+      let updatedCount = 0;
 
       cards.forEach((card) => {
         const cardRef = doc(firestore, "giftCardRates", card.id);
         const cardData = rates[card.id] || {};
         const rateArray = [];
+        const cardLimits = card.limits || [];
 
-        globalLimits.forEach((limit) => {
+        cardLimits.forEach((limit) => {
           const limitData = cardData[limit.id];
           if (!limitData) return;
 
@@ -302,7 +539,7 @@ export default function GiftCardRatesTab() {
 
             currencies.forEach((curr) => {
               const data = typeData[curr];
-              if (data && data.rate > 0) {
+              if (data && typeof data.rate === "number" && data.rate > 0) {
                 rateArray.push({
                   min: limit.min,
                   max: limit.max,
@@ -316,20 +553,36 @@ export default function GiftCardRatesTab() {
           });
         });
 
-        batch.update(cardRef, {
-          rates: rateArray,
-          lastUpdated: new Date().toISOString(),
-          updatedBy: user.email,
-        });
+        if (rateArray.length > 0) {
+          batch.update(cardRef, {
+            rates: rateArray,
+            lastUpdated: new Date().toISOString(),
+            updatedBy: user.email || user.uid,
+          });
+          updatedCount++;
+        }
       });
 
+      if (updatedCount === 0) {
+        toast({
+          title: "No Valid Rates",
+          description: "Please enter valid rates before saving.",
+          variant: "destructive",
+        });
+        setSaving(false);
+        return;
+      }
+
       await batch.commit();
-      toast({ title: "Published", description: "Rates are live." });
-    } catch (err) {
-      console.error("Save Error:", err);
       toast({
-        title: "Error",
-        description: "Save failed.",
+        title: "Changes Published",
+        description: `${updatedCount} card(s) updated successfully. Rates are now live.`,
+      });
+    } catch (err) {
+      console.error("Save All Error:", err);
+      toast({
+        title: "Save Failed",
+        description: "An error occurred while saving. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -353,7 +606,9 @@ export default function GiftCardRatesTab() {
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle>Gift Card Rate Matrix</CardTitle>
-          <CardDescription>Manage rates live.</CardDescription>
+          <CardDescription>
+            Manage rates with card-specific limits.
+          </CardDescription>
         </div>
         <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
           <DialogTrigger asChild>
@@ -365,55 +620,11 @@ export default function GiftCardRatesTab() {
             <DialogHeader>
               <DialogTitle>Global Configuration</DialogTitle>
               <DialogDescription>
-                Define your Limits, Types, and Currencies here.
+                Define card types and currencies. Limits are set per card.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-6 py-4">
-              {/* Limits */}
-              <div className="border p-4 rounded-md space-y-3">
-                <h3 className="font-semibold">Limits (Range)</h3>
-                <div className="flex gap-2 items-end">
-                  <Input
-                    type="number"
-                    className="w-24"
-                    value={newLimitMin}
-                    onChange={(e) => setNewLimitMin(e.target.value)}
-                    placeholder="Min"
-                  />
-                  <Input
-                    type="number"
-                    className="w-24"
-                    value={newLimitMax}
-                    onChange={(e) => setNewLimitMax(e.target.value)}
-                    placeholder="Max"
-                  />
-                  <Button size="sm" onClick={addLimit}>
-                    <PlusCircle className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {tempLimits.length === 0 && (
-                    <span className="text-sm text-muted-foreground">
-                      No limits set. Add one above.
-                    </span>
-                  )}
-                  {tempLimits.map((l) => (
-                    <Badge
-                      key={l.id}
-                      variant="secondary"
-                      className="px-3 py-1 gap-2"
-                    >
-                      {l.min} - {l.max}
-                      <X
-                        className="h-3 w-3 cursor-pointer hover:text-red-500"
-                        onClick={() => removeLimit(l.id)}
-                      />
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
               {/* Types */}
               <div className="border p-4 rounded-md space-y-3">
                 <h3 className="font-semibold">Card Types</h3>
@@ -422,6 +633,13 @@ export default function GiftCardRatesTab() {
                     value={newTypeInput}
                     onChange={(e) => setNewTypeInput(e.target.value)}
                     placeholder="e.g. Physical"
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addConfigItem(tempTypes, setTempTypes, newTypeInput);
+                        setNewTypeInput("");
+                      }
+                    }}
                   />
                   <Button
                     size="sm"
@@ -459,9 +677,22 @@ export default function GiftCardRatesTab() {
                 <div className="flex gap-2">
                   <Input
                     value={newCurrencyInput}
-                    onChange={(e) => setNewCurrencyInput(e.target.value)}
+                    onChange={(e) =>
+                      setNewCurrencyInput(e.target.value.toUpperCase())
+                    }
                     placeholder="USD"
                     className="uppercase"
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addConfigItem(
+                          tempCurrencies,
+                          setTempCurrencies,
+                          newCurrencyInput.toUpperCase()
+                        );
+                        setNewCurrencyInput("");
+                      }
+                    }}
                   />
                   <Button
                     size="sm"
@@ -515,11 +746,26 @@ export default function GiftCardRatesTab() {
             placeholder="New Gift Card Name"
             value={newCardName}
             onChange={(e) => setNewCardName(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAddCard();
+              }
+            }}
           />
           <Button onClick={handleAddCard} disabled={saving}>
             <PlusCircle className="mr-2 h-4 w-4" /> Add Card
           </Button>
         </div>
+
+        {cards.length === 0 && (
+          <Alert className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              No gift cards added yet. Add a card above to get started.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="space-y-4">
           <Accordion type="single" collapsible className="w-full space-y-2">
@@ -531,32 +777,52 @@ export default function GiftCardRatesTab() {
               >
                 <div className="flex items-center justify-between py-2">
                   <AccordionTrigger className="hover:no-underline py-2">
-                    <span className="font-bold text-lg">{card.name}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-lg">{card.name}</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {card.limits?.length || 0} Limits
+                      </Badge>
+                    </div>
                   </AccordionTrigger>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeleteCard(card.id)}
-                  >
-                    <Trash2 className="h-4 w-4 text-red-400" />
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openLimitsDialog(card.id);
+                      }}
+                    >
+                      <Settings className="h-4 w-4 mr-1" /> Limits
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteCard(card.id);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 text-red-400" />
+                    </Button>
+                  </div>
                 </div>
 
                 <AccordionContent className="pt-2 pb-4">
                   <div className="space-y-6">
-                    {globalLimits.length === 0 && (
+                    {(!card.limits || card.limits.length === 0) && (
                       <div className="text-center text-muted-foreground py-12 border-2 border-dashed rounded-lg bg-white">
-                        <p>No limits defined yet.</p>
+                        <p>No limits defined for this card yet.</p>
                         <Button
                           variant="link"
-                          onClick={() => setShowConfigDialog(true)}
+                          onClick={() => openLimitsDialog(card.id)}
                         >
-                          Open Global Settings to add Limits.
+                          Click here to add limits
                         </Button>
                       </div>
                     )}
 
-                    {globalLimits.map((limit) => (
+                    {card.limits?.map((limit) => (
                       <div
                         key={limit.id}
                         className="border rounded-md bg-white overflow-hidden shadow-sm"
@@ -571,7 +837,8 @@ export default function GiftCardRatesTab() {
                         <div className="p-4 grid gap-6">
                           {cardTypes.length === 0 && (
                             <div className="text-sm text-muted-foreground">
-                              No card types defined in settings.
+                              No card types defined. Add them in Global
+                              Settings.
                             </div>
                           )}
                           {cardTypes.map((type) => (
@@ -585,7 +852,8 @@ export default function GiftCardRatesTab() {
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 {currencies.length === 0 && (
                                   <div className="text-sm text-muted-foreground">
-                                    No currencies defined in settings.
+                                    No currencies defined. Add them in Global
+                                    Settings.
                                   </div>
                                 )}
                                 {currencies.map((cur) => (
@@ -606,6 +874,8 @@ export default function GiftCardRatesTab() {
                                         type="number"
                                         className="h-7 text-sm"
                                         placeholder="0.00"
+                                        step="0.01"
+                                        min="0"
                                         value={getRateValue(
                                           card.id,
                                           limit.id,
@@ -630,6 +900,7 @@ export default function GiftCardRatesTab() {
                                       <Input
                                         className="h-7 text-xs"
                                         placeholder="Tag"
+                                        maxLength={20}
                                         value={getRateValue(
                                           card.id,
                                           limit.id,
@@ -664,22 +935,127 @@ export default function GiftCardRatesTab() {
           </Accordion>
         </div>
 
-        <div className="sticky bottom-4 flex justify-end mt-6 bg-white/90 p-4 border rounded shadow-xl backdrop-blur-sm z-10">
-          <Button
-            size="lg"
-            onClick={handleSaveAll}
-            disabled={saving || loading}
-          >
-            {saving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
-              </>
-            ) : (
-              "Save All Changes"
-            )}
-          </Button>
-        </div>
+        {cards.length > 0 && (
+          <div className="sticky bottom-4 flex justify-end mt-6 bg-white/90 p-4 border rounded shadow-xl backdrop-blur-sm z-10">
+            <Button
+              size="lg"
+              onClick={handleSaveAll}
+              disabled={saving || loading}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
+                </>
+              ) : (
+                "Save All Changes"
+              )}
+            </Button>
+          </div>
+        )}
       </CardContent>
+
+      {/* Card-Specific Limits Dialog */}
+      <Dialog open={showLimitsDialog} onOpenChange={setShowLimitsDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              Manage Limits -{" "}
+              {cards.find((c) => c.id === activeLimitsCardId)?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Define value ranges for this specific card.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="border p-4 rounded-md space-y-3">
+              <h3 className="font-semibold">Add Limit Range</h3>
+              <div className="flex gap-2 items-end">
+                <div className="space-y-1 flex-1">
+                  <label className="text-xs text-muted-foreground">Min</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newLimitMin}
+                    onChange={(e) => setNewLimitMin(e.target.value)}
+                    placeholder="0"
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addCardLimit();
+                      }
+                    }}
+                  />
+                </div>
+                <div className="space-y-1 flex-1">
+                  <label className="text-xs text-muted-foreground">Max</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newLimitMax}
+                    onChange={(e) => setNewLimitMax(e.target.value)}
+                    placeholder="100"
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addCardLimit();
+                      }
+                    }}
+                  />
+                </div>
+                <Button size="sm" onClick={addCardLimit}>
+                  <PlusCircle className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="space-y-2 mt-4">
+                <h4 className="text-sm font-medium">Current Limits</h4>
+                {tempCardLimits.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No limits set. Add one above.
+                  </p>
+                )}
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {tempCardLimits.map((l) => (
+                    <div
+                      key={l.id}
+                      className="flex items-center justify-between p-2 border rounded bg-slate-50"
+                    >
+                      <span className="font-medium">
+                        {l.min} - {l.max}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeCardLimit(l.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowLimitsDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={saveCardLimits}
+                disabled={saving}
+              >
+                {saving ? "Saving..." : "Save Limits"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
