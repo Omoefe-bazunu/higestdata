@@ -10,15 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  PlusCircle,
-  Trash2,
-  X,
-  Settings,
-  Tag,
-  Loader2,
-  AlertCircle,
-} from "lucide-react";
+import { PlusCircle, Trash2, X, Settings, Tag, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   collection,
@@ -28,7 +20,6 @@ import {
   writeBatch,
   getDoc,
   addDoc,
-  setDoc,
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { firestore } from "@/lib/firebaseConfig";
@@ -48,7 +39,6 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function GiftCardRatesTab() {
   const [rates, setRates] = useState({});
@@ -90,9 +80,9 @@ export default function GiftCardRatesTab() {
       ]);
 
       const loadedCurrencies = currDoc.exists()
-        ? currDoc.data()?.list || []
+        ? currDoc.data().list || []
         : [];
-      const loadedTypes = typeDoc.exists() ? typeDoc.data()?.list || [] : [];
+      const loadedTypes = typeDoc.exists() ? typeDoc.data().list || [] : [];
 
       setCurrencies(loadedCurrencies);
       setCardTypes(loadedTypes);
@@ -109,43 +99,20 @@ export default function GiftCardRatesTab() {
         const data = docSnap.data();
         const cardId = docSnap.id;
 
-        // Get card-specific limits with validation
-        const cardLimits = Array.isArray(data.limits) ? data.limits : [];
-
-        // Validate and clean limits
-        const validLimits = cardLimits.filter((l) => {
-          return (
-            l &&
-            typeof l.id === "string" &&
-            typeof l.min === "number" &&
-            typeof l.max === "number" &&
-            l.min < l.max
-          );
-        });
+        // Get card-specific limits
+        const cardLimits = data.limits || [];
 
         cardList.push({
           id: cardId,
           name: data.name || cardId,
-          limits: validLimits,
+          limits: cardLimits,
         });
 
         nestedRates[cardId] = {};
 
-        // Parse rates safely
         if (Array.isArray(data.rates)) {
           data.rates.forEach((r) => {
-            // Validate rate object
-            if (
-              !r ||
-              typeof r.rate !== "number" ||
-              !r.cardType ||
-              !r.currency
-            ) {
-              return;
-            }
-
-            // Match rate to a card-specific limit by Value (Min/Max)
-            const matchingLimit = validLimits.find(
+            const matchingLimit = cardLimits.find(
               (l) => l.min === r.min && l.max === r.max
             );
 
@@ -167,10 +134,10 @@ export default function GiftCardRatesTab() {
       setCards(cardList);
       setRates(nestedRates);
     } catch (err) {
-      console.error("Fetch Error:", err);
+      console.error(err);
       toast({
         title: "Error",
-        description: "Failed to load data. Please refresh the page.",
+        description: "Failed to load data.",
         variant: "destructive",
       });
     } finally {
@@ -180,9 +147,8 @@ export default function GiftCardRatesTab() {
 
   // Global Config Logic (Currencies & Types only)
   const addConfigItem = (list, setList, item) => {
-    const trimmedItem = typeof item === "string" ? item.trim() : item;
-    if (!trimmedItem || list.includes(trimmedItem)) return;
-    setList([...list, trimmedItem]);
+    if (!item || list.includes(item)) return;
+    setList([...list, item]);
   };
 
   const removeConfigItem = (list, setList, item) => {
@@ -193,43 +159,23 @@ export default function GiftCardRatesTab() {
     setSaving(true);
     try {
       const batch = writeBatch(firestore);
-
-      // Use setDoc to create if not exists
-      batch.set(
-        doc(firestore, "config", "currencies"),
-        {
-          list: tempCurrencies,
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
-
-      batch.set(
-        doc(firestore, "config", "card_types"),
-        {
-          list: tempTypes,
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
+      batch.set(doc(firestore, "config", "currencies"), {
+        list: tempCurrencies,
+      });
+      batch.set(doc(firestore, "config", "card_types"), { list: tempTypes });
 
       await batch.commit();
 
       setCurrencies(tempCurrencies);
       setCardTypes(tempTypes);
       setShowConfigDialog(false);
-      toast({
-        title: "Settings Saved",
-        description: "Configuration updated successfully.",
-      });
+      toast({ title: "Settings Saved", description: "Configuration updated." });
 
-      // Refresh data to ensure consistency
-      await fetchData();
+      fetchData();
     } catch (err) {
-      console.error("Save Config Error:", err);
       toast({
         title: "Error",
-        description: "Failed to save configuration. Please try again.",
+        description: "Failed to save config.",
         variant: "destructive",
       });
     } finally {
@@ -241,82 +187,29 @@ export default function GiftCardRatesTab() {
   const openLimitsDialog = (cardId) => {
     const card = cards.find((c) => c.id === cardId);
     setActiveLimitsCardId(cardId);
-    setTempCardLimits([...(card?.limits || [])]);
-    setNewLimitMin("");
-    setNewLimitMax("");
+    setTempCardLimits(card?.limits || []);
     setShowLimitsDialog(true);
   };
 
   const addCardLimit = () => {
     const min = parseFloat(newLimitMin);
     const max = parseFloat(newLimitMax);
-
-    if (isNaN(min) || isNaN(max)) {
-      toast({
-        title: "Invalid Input",
-        description: "Please enter valid numbers for Min and Max.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (min >= max) {
+    if (isNaN(min) || isNaN(max) || min >= max) {
       toast({
         title: "Invalid Range",
-        description: "Min must be less than Max.",
+        description: "Min must be less than Max",
         variant: "destructive",
       });
       return;
     }
-
-    // Check for overlapping ranges
-    const hasOverlap = tempCardLimits.some((l) => {
-      return (
-        (min >= l.min && min < l.max) ||
-        (max > l.min && max <= l.max) ||
-        (min <= l.min && max >= l.max)
-      );
-    });
-
-    if (hasOverlap) {
-      toast({
-        title: "Overlapping Range",
-        description: "This range overlaps with an existing limit.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const newLimit = {
-      id: `limit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      min,
-      max,
-    };
-
-    setTempCardLimits(
-      [...tempCardLimits, newLimit].sort((a, b) => a.min - b.min)
-    );
+    const newLimit = { id: `limit_${Date.now()}`, min, max };
+    setTempCardLimits([...tempCardLimits, newLimit]);
     setNewLimitMin("");
     setNewLimitMax("");
   };
 
-  const removeCardLimit = (limitId) => {
-    // Check if limit is being used
-    const cardData = rates[activeLimitsCardId] || {};
-    const limitHasRates =
-      cardData[limitId] && Object.keys(cardData[limitId]).length > 0;
-
-    if (limitHasRates) {
-      if (
-        !confirm(
-          "This limit has rates configured. Deleting it will remove all associated rates. Continue?"
-        )
-      ) {
-        return;
-      }
-    }
-
-    setTempCardLimits(tempCardLimits.filter((l) => l.id !== limitId));
+  const removeCardLimit = (id) => {
+    setTempCardLimits(tempCardLimits.filter((l) => l.id !== id));
   };
 
   const saveCardLimits = async () => {
@@ -325,32 +218,11 @@ export default function GiftCardRatesTab() {
     setSaving(true);
     try {
       const cardRef = doc(firestore, "giftCardRates", activeLimitsCardId);
-      const cardDoc = await getDoc(cardRef);
-
-      if (!cardDoc.exists()) {
-        throw new Error("Card not found");
-      }
-
-      // Get existing rates
-      const existingRates = cardDoc.data()?.rates || [];
-
-      // Filter out rates for removed limits
-      const updatedRates = existingRates.filter((rate) => {
-        return tempCardLimits.some(
-          (limit) => limit.min === rate.min && limit.max === rate.max
-        );
-      });
-
-      // Update card document
-      await setDoc(
-        cardRef,
-        {
+      await writeBatch(firestore)
+        .update(cardRef, {
           limits: tempCardLimits,
-          rates: updatedRates,
-          limitsUpdatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
+        })
+        .commit();
 
       // Update local state
       setCards(
@@ -359,10 +231,10 @@ export default function GiftCardRatesTab() {
         )
       );
 
-      // Clean up rates state for removed limits
-      const oldLimits =
-        cards.find((c) => c.id === activeLimitsCardId)?.limits || [];
-      const removedLimitIds = oldLimits
+      // Clear rates for removed limits
+      const removedLimitIds = (
+        cards.find((c) => c.id === activeLimitsCardId)?.limits || []
+      )
         .filter(
           (oldLimit) =>
             !tempCardLimits.find((newLimit) => newLimit.id === oldLimit.id)
@@ -383,10 +255,10 @@ export default function GiftCardRatesTab() {
         description: "Card limits updated successfully.",
       });
     } catch (err) {
-      console.error("Save Limits Error:", err);
+      console.error(err);
       toast({
         title: "Error",
-        description: "Failed to save limits. Please try again.",
+        description: "Failed to save limits.",
         variant: "destructive",
       });
     } finally {
@@ -396,78 +268,42 @@ export default function GiftCardRatesTab() {
 
   // Card Logic
   const handleAddCard = async () => {
-    const trimmedName = newCardName.trim();
-    if (!trimmedName) {
-      toast({
-        title: "Invalid Name",
-        description: "Please enter a card name.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Check for duplicate names
-    if (cards.some((c) => c.name.toLowerCase() === trimmedName.toLowerCase())) {
-      toast({
-        title: "Duplicate Card",
-        description: "A card with this name already exists.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!newCardName.trim()) return;
     try {
       const docRef = await addDoc(collection(firestore, "giftCardRates"), {
-        name: trimmedName,
+        name: newCardName,
         rates: [],
         limits: [],
-        createdAt: new Date().toISOString(),
       });
-
       setCards((prev) => [
-        { id: docRef.id, name: trimmedName, limits: [] },
+        { id: docRef.id, name: newCardName, limits: [] },
         ...prev,
       ]);
       setRates((prev) => ({ ...prev, [docRef.id]: {} }));
       setNewCardName("");
-      toast({
-        title: "Card Added",
-        description: `${trimmedName} has been added.`,
-      });
-    } catch (err) {
-      console.error("Add Card Error:", err);
+      toast({ title: "Added", description: "Card added." });
+    } catch (e) {
       toast({
         title: "Error",
-        description: "Failed to add card. Please try again.",
+        description: "Failed to add card.",
         variant: "destructive",
       });
     }
   };
 
   const handleDeleteCard = async (id) => {
-    const card = cards.find((c) => c.id === id);
-    if (
-      !confirm(
-        `Delete "${card?.name}" and all its rates? This action cannot be undone.`
-      )
-    )
-      return;
-
+    if (!confirm("Delete this card and all its rates?")) return;
     try {
       await deleteDoc(doc(firestore, "giftCardRates", id));
       setCards((prev) => prev.filter((c) => c.id !== id));
       const newRates = { ...rates };
       delete newRates[id];
       setRates(newRates);
-      toast({
-        title: "Card Deleted",
-        description: "The card has been removed.",
-      });
-    } catch (err) {
-      console.error("Delete Card Error:", err);
+      toast({ title: "Deleted" });
+    } catch {
       toast({
         title: "Error",
-        description: "Failed to delete card. Please try again.",
+        description: "Delete failed.",
         variant: "destructive",
       });
     }
@@ -483,8 +319,8 @@ export default function GiftCardRatesTab() {
         cardRates[limitId][type][currency] = { rate: 0, tag: "" };
 
       if (field === "rate") {
-        const numValue = value === "" ? "" : parseFloat(value);
-        cardRates[limitId][type][currency].rate = numValue;
+        cardRates[limitId][type][currency].rate =
+          value === "" ? "" : parseFloat(value);
       } else {
         cardRates[limitId][type][currency].tag = value;
       }
@@ -496,23 +332,8 @@ export default function GiftCardRatesTab() {
     const user = getAuth().currentUser;
     if (!user) {
       toast({
-        title: "Authentication Required",
-        description: "Please log in to save changes.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate that there's something to save
-    const hasRates = cards.some((card) => {
-      const cardData = rates[card.id] || {};
-      return Object.keys(cardData).length > 0;
-    });
-
-    if (!hasRates) {
-      toast({
-        title: "No Changes",
-        description: "Please add some rates before saving.",
+        title: "Auth Error",
+        description: "Please login.",
         variant: "destructive",
       });
       return;
@@ -521,7 +342,6 @@ export default function GiftCardRatesTab() {
     setSaving(true);
     try {
       const batch = writeBatch(firestore);
-      let updatedCount = 0;
 
       cards.forEach((card) => {
         const cardRef = doc(firestore, "giftCardRates", card.id);
@@ -539,7 +359,7 @@ export default function GiftCardRatesTab() {
 
             currencies.forEach((curr) => {
               const data = typeData[curr];
-              if (data && typeof data.rate === "number" && data.rate > 0) {
+              if (data && data.rate > 0) {
                 rateArray.push({
                   min: limit.min,
                   max: limit.max,
@@ -553,36 +373,20 @@ export default function GiftCardRatesTab() {
           });
         });
 
-        if (rateArray.length > 0) {
-          batch.update(cardRef, {
-            rates: rateArray,
-            lastUpdated: new Date().toISOString(),
-            updatedBy: user.email || user.uid,
-          });
-          updatedCount++;
-        }
-      });
-
-      if (updatedCount === 0) {
-        toast({
-          title: "No Valid Rates",
-          description: "Please enter valid rates before saving.",
-          variant: "destructive",
+        batch.update(cardRef, {
+          rates: rateArray,
+          lastUpdated: new Date().toISOString(),
+          updatedBy: user.email,
         });
-        setSaving(false);
-        return;
-      }
+      });
 
       await batch.commit();
-      toast({
-        title: "Changes Published",
-        description: `${updatedCount} card(s) updated successfully. Rates are now live.`,
-      });
+      toast({ title: "Published", description: "Rates are live." });
     } catch (err) {
-      console.error("Save All Error:", err);
+      console.error("Save Error:", err);
       toast({
-        title: "Save Failed",
-        description: "An error occurred while saving. Please try again.",
+        title: "Error",
+        description: "Save failed.",
         variant: "destructive",
       });
     } finally {
@@ -633,13 +437,6 @@ export default function GiftCardRatesTab() {
                     value={newTypeInput}
                     onChange={(e) => setNewTypeInput(e.target.value)}
                     placeholder="e.g. Physical"
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addConfigItem(tempTypes, setTempTypes, newTypeInput);
-                        setNewTypeInput("");
-                      }
-                    }}
                   />
                   <Button
                     size="sm"
@@ -677,22 +474,9 @@ export default function GiftCardRatesTab() {
                 <div className="flex gap-2">
                   <Input
                     value={newCurrencyInput}
-                    onChange={(e) =>
-                      setNewCurrencyInput(e.target.value.toUpperCase())
-                    }
+                    onChange={(e) => setNewCurrencyInput(e.target.value)}
                     placeholder="USD"
                     className="uppercase"
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addConfigItem(
-                          tempCurrencies,
-                          setTempCurrencies,
-                          newCurrencyInput.toUpperCase()
-                        );
-                        setNewCurrencyInput("");
-                      }
-                    }}
                   />
                   <Button
                     size="sm"
@@ -746,26 +530,11 @@ export default function GiftCardRatesTab() {
             placeholder="New Gift Card Name"
             value={newCardName}
             onChange={(e) => setNewCardName(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleAddCard();
-              }
-            }}
           />
           <Button onClick={handleAddCard} disabled={saving}>
             <PlusCircle className="mr-2 h-4 w-4" /> Add Card
           </Button>
         </div>
-
-        {cards.length === 0 && (
-          <Alert className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              No gift cards added yet. Add a card above to get started.
-            </AlertDescription>
-          </Alert>
-        )}
 
         <div className="space-y-4">
           <Accordion type="single" collapsible className="w-full space-y-2">
@@ -788,20 +557,14 @@ export default function GiftCardRatesTab() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openLimitsDialog(card.id);
-                      }}
+                      onClick={() => openLimitsDialog(card.id)}
                     >
                       <Settings className="h-4 w-4 mr-1" /> Limits
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteCard(card.id);
-                      }}
+                      onClick={() => handleDeleteCard(card.id)}
                     >
                       <Trash2 className="h-4 w-4 text-red-400" />
                     </Button>
@@ -837,8 +600,7 @@ export default function GiftCardRatesTab() {
                         <div className="p-4 grid gap-6">
                           {cardTypes.length === 0 && (
                             <div className="text-sm text-muted-foreground">
-                              No card types defined. Add them in Global
-                              Settings.
+                              No card types defined in settings.
                             </div>
                           )}
                           {cardTypes.map((type) => (
@@ -852,8 +614,7 @@ export default function GiftCardRatesTab() {
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 {currencies.length === 0 && (
                                   <div className="text-sm text-muted-foreground">
-                                    No currencies defined. Add them in Global
-                                    Settings.
+                                    No currencies defined in settings.
                                   </div>
                                 )}
                                 {currencies.map((cur) => (
@@ -874,8 +635,6 @@ export default function GiftCardRatesTab() {
                                         type="number"
                                         className="h-7 text-sm"
                                         placeholder="0.00"
-                                        step="0.01"
-                                        min="0"
                                         value={getRateValue(
                                           card.id,
                                           limit.id,
@@ -900,7 +659,6 @@ export default function GiftCardRatesTab() {
                                       <Input
                                         className="h-7 text-xs"
                                         placeholder="Tag"
-                                        maxLength={20}
                                         value={getRateValue(
                                           card.id,
                                           limit.id,
@@ -935,23 +693,21 @@ export default function GiftCardRatesTab() {
           </Accordion>
         </div>
 
-        {cards.length > 0 && (
-          <div className="sticky bottom-4 flex justify-end mt-6 bg-white/90 p-4 border rounded shadow-xl backdrop-blur-sm z-10">
-            <Button
-              size="lg"
-              onClick={handleSaveAll}
-              disabled={saving || loading}
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
-                </>
-              ) : (
-                "Save All Changes"
-              )}
-            </Button>
-          </div>
-        )}
+        <div className="sticky bottom-4 flex justify-end mt-6 bg-white/90 p-4 border rounded shadow-xl backdrop-blur-sm z-10">
+          <Button
+            size="lg"
+            onClick={handleSaveAll}
+            disabled={saving || loading}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
+              </>
+            ) : (
+              "Save All Changes"
+            )}
+          </Button>
+        </div>
       </CardContent>
 
       {/* Card-Specific Limits Dialog */}
@@ -975,32 +731,18 @@ export default function GiftCardRatesTab() {
                   <label className="text-xs text-muted-foreground">Min</label>
                   <Input
                     type="number"
-                    step="0.01"
                     value={newLimitMin}
                     onChange={(e) => setNewLimitMin(e.target.value)}
                     placeholder="0"
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addCardLimit();
-                      }
-                    }}
                   />
                 </div>
                 <div className="space-y-1 flex-1">
                   <label className="text-xs text-muted-foreground">Max</label>
                   <Input
                     type="number"
-                    step="0.01"
                     value={newLimitMax}
                     onChange={(e) => setNewLimitMax(e.target.value)}
                     placeholder="100"
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addCardLimit();
-                      }
-                    }}
                   />
                 </div>
                 <Button size="sm" onClick={addCardLimit}>
@@ -1015,7 +757,7 @@ export default function GiftCardRatesTab() {
                     No limits set. Add one above.
                   </p>
                 )}
-                <div className="space-y-2 max-h-60 overflow-y-auto">
+                <div className="space-y-2">
                   {tempCardLimits.map((l) => (
                     <div
                       key={l.id}
