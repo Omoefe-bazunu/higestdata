@@ -710,7 +710,7 @@ export default function GiftCardRatesTab() {
         </div>
       </CardContent>
 
-      {/* Card-Specific Limits Dialog */}
+      {/* Card-Specific Limits Dialog - NOW WITH SCROLLABLE LIMIT LIST */}
       <Dialog open={showLimitsDialog} onOpenChange={setShowLimitsDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -757,7 +757,7 @@ export default function GiftCardRatesTab() {
                     No limits set. Add one above.
                   </p>
                 )}
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                   {tempCardLimits.map((l) => (
                     <div
                       key={l.id}
