@@ -1,32 +1,32 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Home,
   Repeat,
   Gift,
-  ShieldCheck,
   RadioTower,
   CreditCard,
   LogOut,
   Settings,
-  Bitcoin,
   X,
   Tv,
   UtilityPole,
   School,
   Shield,
-  Settings2,
   Mails,
   Ticket,
   Speaker,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import { useAuth } from "@/contexts/AuthContext";
 import { IoPersonCircle } from "react-icons/io5";
+// Import Firebase for notification tracking
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { firestore } from "@/lib/firebaseConfig";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
@@ -37,7 +37,6 @@ const navItems = [
     label: "Gift Cards Negotiate",
     icon: Gift,
   },
-  // { href: "/dashboard/crypto", label: "Crypto Trade", icon: Bitcoin },
   { href: "/dashboard/buy-airtime", label: "Airtime & Data", icon: RadioTower },
   { href: "/dashboard/cable-tv", label: "Cable Tv", icon: Tv },
   { href: "/dashboard/betting", label: "Betting Funding", icon: CreditCard },
@@ -71,7 +70,6 @@ const navItems = [
     label: "KYC status",
     icon: Shield,
   },
-
   {
     href: "/dashboard/profile",
     label: "Your Profile",
@@ -82,12 +80,30 @@ const navItems = [
 export default function AppSidebar({ onLinkClick }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const [negotiationCount, setNegotiationCount] = useState(0);
 
   const isActive = (href) => pathname === href;
 
+  // Real-time listener for negotiating status
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(
+      collection(firestore, "giftCardSubmissions"),
+      where("userId", "==", user.uid),
+      where("status", "==", "negotiating")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setNegotiationCount(snapshot.docs.length);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
   return (
     <aside className="h-full w-full flex flex-col bg-card border-r">
-      {/* Mobile Header - only show when it's mobile sidebar */}
+      {/* Mobile Header */}
       {onLinkClick && (
         <div className="flex justify-between items-center p-4 border-b md:hidden">
           <div className="flex items-center gap-2">
@@ -110,7 +126,6 @@ export default function AppSidebar({ onLinkClick }) {
         </div>
       )}
 
-      {/* Added overflow-y-auto here to enable vertical scrolling */}
       <nav className="flex-1 px-4 py-4 mt-4 overflow-y-auto">
         <ul className="space-y-2">
           {navItems
@@ -120,17 +135,25 @@ export default function AppSidebar({ onLinkClick }) {
                 <Link href={href} onClick={onLinkClick}>
                   <Button
                     variant={isActive(href) ? "secondary" : "ghost"}
-                    className="w-full justify-start"
+                    className="w-full justify-start relative flex items-center"
                   >
-                    <Icon className="mr-2 h-4 w-4" />
-                    {label}
+                    <Icon className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="flex-1 text-left truncate">{label}</span>
+
+                    {/* Red Notification Badge */}
+                    {label === "Gift Cards Negotiate" &&
+                      negotiationCount > 0 && (
+                        <span className="ml-auto bg-red-600 text-white text-[10px] font-bold h-5 w-5 flex items-center justify-center rounded-full animate-in fade-in zoom-in">
+                          {negotiationCount}
+                        </span>
+                      )}
                   </Button>
                 </Link>
               </li>
             ))}
         </ul>
       </nav>
-      {/* This section is to allow users make changes to personla data or logout. Its not needed for now cuz there's already a sign out in the navbar */}
+
       <div className="mt-auto p-4 border-t hidden">
         <Button
           variant="ghost"
