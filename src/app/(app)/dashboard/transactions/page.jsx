@@ -79,6 +79,11 @@ function TransactionDetailsModal({ transaction }) {
     </div>
   );
 
+  // Check if transaction is positive (funding or credit)
+  const isPositive = ["funding", "credit"].includes(
+    transaction.type?.toLowerCase()
+  );
+
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -104,37 +109,20 @@ function TransactionDetailsModal({ transaction }) {
             <div className="space-y-2">
               <DetailRow label="Transaction ID" value={transaction.id} />
               <DetailRow label="Description" value={transaction.description} />
-              {/* <DetailRow
-                label="Amount"
-                value={`₦${Math.abs(transaction.amount).toLocaleString()}`}
-                className={
-                  transaction.type === "credit"
-                    ? "text-green-600"
-                    : "text-red-600"
-                }
-              /> */}
               <DetailRow
                 label="Amount"
-                value={`₦${(
+                value={`${isPositive ? "+" : "-"}₦${(
                   transaction.amountCharged ||
                   transaction.amountToVTU ||
                   Math.abs(transaction.amount) ||
                   0
                 ).toLocaleString()}`}
-                className={
-                  transaction.type === "credit"
-                    ? "text-green-600"
-                    : "text-red-600"
-                }
+                className={isPositive ? "text-green-600" : "text-red-600"}
               />
               <DetailRow
                 label="Type"
                 value={transaction.type?.toUpperCase()}
-                className={
-                  transaction.type === "credit"
-                    ? "text-green-600"
-                    : "text-red-600"
-                }
+                className={isPositive ? "text-green-600" : "text-red-600"}
               />
               <DetailRow
                 label="Status"
@@ -445,66 +433,69 @@ export default function TransactionsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                transactions.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell className="font-medium">
-                      {tx.description}
-                    </TableCell>
-                    <TableCell>
-                      {(() => {
-                        const date = tx.createdAt || tx.date;
-                        if (!date) return "N/A";
-                        try {
-                          if (date.toDate)
-                            return date.toDate().toLocaleDateString();
-                          if (date.seconds)
-                            return new Date(
-                              date.seconds * 1000
-                            ).toLocaleDateString();
-                          return new Date(date).toLocaleDateString();
-                        } catch {
-                          return String(date);
-                        }
-                      })()}
-                    </TableCell>
-                    <TableCell>
-                      <span
+                transactions.map((tx) => {
+                  // Check if transaction is positive (funding or credit)
+                  const isPositive = ["funding", "credit"].includes(
+                    tx.type?.toLowerCase()
+                  );
+
+                  return (
+                    <TableRow key={tx.id}>
+                      <TableCell className="font-medium">
+                        {tx.description}
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const date = tx.createdAt || tx.date;
+                          if (!date) return "N/A";
+                          try {
+                            if (date.toDate)
+                              return date.toDate().toLocaleDateString();
+                            if (date.seconds)
+                              return new Date(
+                                date.seconds * 1000
+                              ).toLocaleDateString();
+                            return new Date(date).toLocaleDateString();
+                          } catch {
+                            return String(date);
+                          }
+                        })()}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={cn(
+                            "capitalize",
+                            isPositive ? "text-green-600" : "text-red-600"
+                          )}
+                        >
+                          {tx.type}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusBadgeVariant(tx.status)}>
+                          {formatStatus(tx.status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell
                         className={cn(
-                          "capitalize",
-                          tx.type === "credit"
-                            ? "text-green-600"
-                            : "text-red-600"
+                          "text-right font-semibold",
+                          isPositive ? "text-green-600" : "text-foreground"
                         )}
                       >
-                        {tx.type}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getStatusBadgeVariant(tx.status)}>
-                        {formatStatus(tx.status)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell
-                      className={cn(
-                        "text-right font-semibold",
-                        tx.type === "credit"
-                          ? "text-green-600"
-                          : "text-foreground"
-                      )}
-                    >
-                      {tx.type === "credit" ? "+" : "-"}₦
-                      {(
-                        tx.amountCharged ||
-                        tx.amountToVTU ||
-                        Math.abs(tx.amount) ||
-                        0
-                      ).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <TransactionDetailsModal transaction={tx} />
-                    </TableCell>
-                  </TableRow>
-                ))
+                        {isPositive ? "+" : "-"}₦
+                        {(
+                          tx.amountCharged ||
+                          tx.amountToVTU ||
+                          Math.abs(tx.amount) ||
+                          0
+                        ).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <TransactionDetailsModal transaction={tx} />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

@@ -87,10 +87,15 @@ export default function RecentTransactions() {
   };
 
   const getDescription = (tx) => {
-    return (
-      tx.description ||
-      `${tx.type === "credit" ? "Wallet Funding" : "Purchase"}`
-    );
+    // Check if transaction is positive (funding or credit)
+    const isPositive = ["funding", "credit"].includes(tx.type?.toLowerCase());
+
+    return tx.description || (isPositive ? "Wallet Funding" : "Purchase");
+  };
+
+  // Check if transaction is positive (funding or credit)
+  const isPositiveTransaction = (tx) => {
+    return ["funding", "credit"].includes(tx.type?.toLowerCase());
   };
 
   return (
@@ -124,49 +129,51 @@ export default function RecentTransactions() {
               No transactions yet
             </p>
           ) : (
-            transactions.map((tx) => (
-              <li key={tx.id} className="flex items-center gap-4">
-                <div
-                  className={cn(
-                    "flex items-center justify-center w-10 h-10 rounded-full",
-                    tx.type === "credit"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
-                  )}
-                >
-                  {tx.type === "credit" ? (
-                    <ArrowDownLeft className="h-5 w-5" />
-                  ) : (
-                    <ArrowUpRight className="h-5 w-5" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium">{getDescription(tx)}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatDate(tx.createdAt)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p
+            transactions.map((tx) => {
+              const isPositive = isPositiveTransaction(tx);
+
+              return (
+                <li key={tx.id} className="flex items-center gap-4">
+                  <div
                     className={cn(
-                      "font-semibold",
-                      tx.type === "credit"
-                        ? "text-green-600"
-                        : "text-foreground"
+                      "flex items-center justify-center w-10 h-10 rounded-full",
+                      isPositive
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
                     )}
                   >
-                    {tx.type === "credit" ? "+" : "-"}₦
-                    {getDisplayAmount(tx).toLocaleString()}
-                  </p>
-                  <Badge
-                    variant={getStatusBadgeVariant(tx.status)}
-                    className="mt-1"
-                  >
-                    {tx.status || "Pending"}
-                  </Badge>
-                </div>
-              </li>
-            ))
+                    {isPositive ? (
+                      <ArrowDownLeft className="h-5 w-5" />
+                    ) : (
+                      <ArrowUpRight className="h-5 w-5" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium">{getDescription(tx)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDate(tx.createdAt)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p
+                      className={cn(
+                        "font-semibold",
+                        isPositive ? "text-green-600" : "text-foreground"
+                      )}
+                    >
+                      {isPositive ? "+" : "-"}₦
+                      {getDisplayAmount(tx).toLocaleString()}
+                    </p>
+                    <Badge
+                      variant={getStatusBadgeVariant(tx.status)}
+                      className="mt-1"
+                    >
+                      {tx.status || "Pending"}
+                    </Badge>
+                  </div>
+                </li>
+              );
+            })
           )}
         </ul>
       </CardContent>
