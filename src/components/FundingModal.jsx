@@ -415,6 +415,9 @@ export default function FundingModal({ open, onOpenChange }) {
       <div className="bg-green-50 text-green-700 p-3 rounded-md text-xs flex gap-2">
         <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
         <p>OTP sent! Please check the phone number linked to your BVN.</p>
+        <p className="text-orange-500 text-sm">
+          Re-enter the OTP and click the button again if it fails.
+        </p>
       </div>
       <div className="space-y-2">
         <Label>Enter OTP</Label>
