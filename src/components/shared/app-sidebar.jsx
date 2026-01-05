@@ -65,11 +65,11 @@ const navItems = [
     label: "SMM Boost",
     icon: Speaker,
   },
-  {
-    href: "/dashboard/kyc",
-    label: "KYC status",
-    icon: Shield,
-  },
+  // {
+  //   href: "/dashboard/kyc",
+  //   label: "KYC status",
+  //   icon: Shield,
+  // },
   {
     href: "/dashboard/profile",
     label: "Your Profile",
