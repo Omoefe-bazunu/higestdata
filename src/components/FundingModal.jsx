@@ -134,7 +134,7 @@ export default function FundingModal({ open, onOpenChange }) {
     } catch (error) {
       toast.dismiss("verify-toast");
       toast.error(
-        "Could not verify payment. Please refresh or contact support."
+        "Could not verify payment. Please refresh or contact support.",
       );
     }
   };
@@ -184,11 +184,6 @@ export default function FundingModal({ open, onOpenChange }) {
               </>
             )}
           </Button>
-
-          <div className="flex justify-center items-center gap-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-            <ShieldCheck className="h-4 w-4 text-green-600" />
-            <span>Secured by Safe Haven MFB</span>
-          </div>
         </div>
       </DialogContent>
     </Dialog>

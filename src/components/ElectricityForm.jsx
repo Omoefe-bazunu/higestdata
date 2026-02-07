@@ -93,7 +93,7 @@ function ElectricityForm({ user, router }) {
               }
             }
           });
-        }
+        },
       );
 
       return () => unsubscribe();
@@ -119,7 +119,7 @@ function ElectricityForm({ user, router }) {
   const fetchElectricityRates = async () => {
     try {
       const ratesDoc = await getDoc(
-        doc(firestore, "settings", "electricityRates")
+        doc(firestore, "settings", "electricityRates"),
       );
       if (ratesDoc.exists()) {
         const data = ratesDoc.data();
@@ -155,7 +155,7 @@ function ElectricityForm({ user, router }) {
             meterNo: meterNumber,
             metertype: meterType,
           }),
-        }
+        },
       );
 
       const result = await response.json();
@@ -295,7 +295,7 @@ function ElectricityForm({ user, router }) {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(transactionPayload),
-        }
+        },
       );
 
       const result = await response.json();
@@ -597,8 +597,7 @@ export default function ElectricityPage() {
           Pay Electricity Bills
         </h1>
         <p className="text-muted-foreground">
-          Purchase electricity units instantly via VTU Africa. Fast, secure, and
-          reliable.
+          Purchase electricity units instantly. Fast, secure, and reliable.
         </p>
       </div>
 
@@ -626,12 +625,12 @@ export default function ElectricityPage() {
             </h3>
             <p className="text-muted-foreground mb-4">
               Pay bills for Ikeja, Eko, Kano, Portharcourt, Jos, Ibadan, and
-              more through our VTU Africa integration.
+              more.
             </p>
             <ul className="space-y-2 text-sm">
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Instant meter crediting via VTU Africa</span>
+                <span>Instant meter crediting </span>
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />

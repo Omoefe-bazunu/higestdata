@@ -170,7 +170,7 @@ function ExamCardForm({ user, router }) {
             });
             setIsFirstLoad(false);
           }
-        }
+        },
       );
 
       return () => unsubscribe();
@@ -233,7 +233,7 @@ function ExamCardForm({ user, router }) {
             product_code: productCode,
             quantity: parseInt(quantity),
           }),
-        }
+        },
       );
 
       const result = await response.json();
@@ -282,7 +282,7 @@ function ExamCardForm({ user, router }) {
             profilecode: profileCode,
             product_code: productCode,
           }),
-        }
+        },
       );
 
       const result = await response.json();
@@ -408,7 +408,7 @@ function ExamCardForm({ user, router }) {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(transactionPayload),
-        }
+        },
       );
 
       const result = await response.json();
@@ -893,8 +893,7 @@ export default function ExamCardsPage() {
               Available Exam Cards
             </h3>
             <p className="text-muted-foreground mb-4">
-              Purchase WAEC, NECO, NABTEB, and JAMB cards through our VTU Africa
-              integration.
+              Purchase WAEC, NECO, NABTEB, and JAMB cards through.
             </p>
             <ul className="space-y-3 text-sm">
               <li className="flex items-center gap-3">

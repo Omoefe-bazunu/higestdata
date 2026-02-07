@@ -58,7 +58,7 @@ export default function WalletSummary() {
         console.error("Error fetching wallet balance:", error);
         toast.error("Failed to load wallet balance");
         setLoading(false);
-      }
+      },
     );
 
     // Subscribe to recent transactions
@@ -66,7 +66,7 @@ export default function WalletSummary() {
       firestore,
       "users",
       user.uid,
-      "transactions"
+      "transactions",
     );
     const q = query(transactionsRef, orderBy("createdAt", "desc"), limit(5));
 
@@ -81,7 +81,7 @@ export default function WalletSummary() {
       },
       (error) => {
         console.error("Error fetching transactions:", error);
-      }
+      },
     );
 
     return () => {

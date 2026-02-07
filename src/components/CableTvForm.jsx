@@ -71,7 +71,7 @@ function CableTVForm({ user, router }) {
             rates[k].name ||
             { gotv: "GOtv", dstv: "DStv", startimes: "Startimes" }[k] ||
             k.toUpperCase(),
-        }))
+        })),
       );
     }
   };
@@ -128,7 +128,7 @@ function CableTVForm({ user, router }) {
             variation: plan,
             ref,
           }),
-        }
+        },
       );
 
       const data = await res.json();

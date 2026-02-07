@@ -127,7 +127,7 @@ function BettingForm({ user, router }) {
             }
           }
         });
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -193,7 +193,7 @@ function BettingForm({ user, router }) {
             service: provider,
             userid: customerId,
           }),
-        }
+        },
       );
 
       const result = await response.json();
@@ -346,7 +346,7 @@ function BettingForm({ user, router }) {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(transactionData),
-        }
+        },
       );
 
       const result = await response.json();
@@ -559,7 +559,7 @@ function BettingForm({ user, router }) {
             </div>
             <p className="text-xs text-muted-foreground">
               ₦{getBettingAmount().toLocaleString()} will be credited to your
-              betting account via VTU Africa.{" "}
+              betting account.{" "}
               {getServiceCharge() > 0 &&
                 "Service charge will be deducted from your wallet."}
             </p>
@@ -675,8 +675,8 @@ export default function BettingPage() {
           Fund Your Betting Accounts
         </h1>
         <p className="text-muted-foreground">
-          Top up your favorite betting platforms instantly via VTU Africa. Fast,
-          secure, and reliable.
+          Top up your favorite betting platforms instantly. Fast, secure, and
+          reliable.
         </p>
       </div>
 
@@ -722,10 +722,6 @@ export default function BettingPage() {
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-primary" />
                 <span>Account verification before funding</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Powered by VTU Africa API</span>
               </li>
             </ul>
           </div>
