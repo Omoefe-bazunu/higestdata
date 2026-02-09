@@ -42,7 +42,7 @@ export default function AboutUs() {
   return (
     <section className="bg-blue-950 text-primary">
       {/* ================= About + Hero ================= */}
-      <div className="max-w-7xl mx-auto px-6 lg:px-12 py-20">
+      <div className="max-w-7xl mx-auto px-6 lg:px-12 py-28">
         <motion.div
           initial={{ opacity: 0, y: -30 }}
           animate={{ opacity: 1, y: 0 }}

@@ -103,7 +103,7 @@ export default function AdminRatesDashboard() {
       // Fetch fresh plans from Ebills via our backend proxy
       // Note: We convert provider to lowercase for the API call
       const res = await fetch(
-        `https://higestdata-proxy.onrender.com/api/ebills/variations?service_id=${provider.toLowerCase()}`
+        `https://higestdata-proxy.onrender.com/api/ebills/variations?service_id=${provider.toLowerCase()}`,
       );
       const json = await res.json();
 
@@ -158,7 +158,7 @@ export default function AdminRatesDashboard() {
 
     try {
       const res = await fetch(
-        `https://higestdata-proxy.onrender.com/api/ebills/tv-variations?service_id=${provider}`
+        `https://higestdata-proxy.onrender.com/api/ebills/tv-variations?service_id=${provider}`,
       );
       const json = await res.json();
 
@@ -225,8 +225,8 @@ export default function AdminRatesDashboard() {
               field === "basePrice"
                 ? Number(val) + (p[prov]?.plans?.[id]?.profit || 0)
                 : field === "profit"
-                ? (p[prov]?.plans?.[id]?.basePrice || 0) + Number(val)
-                : p[prov]?.plans?.[id]?.finalPrice,
+                  ? (p[prov]?.plans?.[id]?.basePrice || 0) + Number(val)
+                  : p[prov]?.plans?.[id]?.finalPrice,
           },
         },
       },
@@ -246,8 +246,8 @@ export default function AdminRatesDashboard() {
               field === "basePrice"
                 ? Number(val) + (p[prov]?.plans?.[id]?.profit || 0)
                 : field === "profit"
-                ? (p[prov]?.plans?.[id]?.basePrice || 0) + Number(val)
-                : p[prov]?.plans?.[id]?.finalPrice,
+                  ? (p[prov]?.plans?.[id]?.basePrice || 0) + Number(val)
+                  : p[prov]?.plans?.[id]?.finalPrice,
           },
         },
       },
@@ -308,17 +308,17 @@ export default function AdminRatesDashboard() {
       setDoc(
         doc(firestore, "settings", "airtimeRates"),
         { rates: airtimeRates },
-        { merge: true }
+        { merge: true },
       ),
       setDoc(
         doc(firestore, "settings", "dataRates"),
         { rates: dataRates },
-        { merge: true }
+        { merge: true },
       ),
       setDoc(
         doc(firestore, "settings", "tvRates"),
         { rates: tvRates },
-        { merge: true }
+        { merge: true },
       ),
     ]);
     toast({ title: "Saved", description: "All rates updated" });
@@ -336,8 +336,7 @@ export default function AdminRatesDashboard() {
     <div className="space-y-6 p-4">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold">VTU Rates Management</h1>
-          <p className="text-muted-foreground">Airtime • Data • Cable TV</p>
+          <h1 className="text-xl font-bold">VTU Rates Management</h1>
         </div>
         <Button onClick={saveAll} disabled={isSaving}>
           {isSaving ? "Saving..." : "Save All"}
@@ -446,7 +445,7 @@ export default function AdminRatesDashboard() {
                 </TableHeader>
                 <TableBody>
                   {Object.entries(
-                    dataRates[selectedDataProvider]?.plans || {}
+                    dataRates[selectedDataProvider]?.plans || {},
                   ).map(([id, p]) => (
                     <TableRow key={id}>
                       <TableCell>
@@ -457,7 +456,7 @@ export default function AdminRatesDashboard() {
                               selectedDataProvider,
                               id,
                               "name",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                         />
@@ -471,7 +470,7 @@ export default function AdminRatesDashboard() {
                               selectedDataProvider,
                               id,
                               "basePrice",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           className="w-32"
@@ -486,7 +485,7 @@ export default function AdminRatesDashboard() {
                               selectedDataProvider,
                               id,
                               "profit",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           className="w-32"
@@ -575,7 +574,7 @@ export default function AdminRatesDashboard() {
                                 selectedTvProvider,
                                 id,
                                 "name",
-                                e.target.value
+                                e.target.value,
                               )
                             }
                           />
@@ -589,7 +588,7 @@ export default function AdminRatesDashboard() {
                                 selectedTvProvider,
                                 id,
                                 "basePrice",
-                                e.target.value
+                                e.target.value,
                               )
                             }
                             className="w-32"
@@ -604,7 +603,7 @@ export default function AdminRatesDashboard() {
                                 selectedTvProvider,
                                 id,
                                 "profit",
-                                e.target.value
+                                e.target.value,
                               )
                             }
                             className="w-32"
@@ -623,7 +622,7 @@ export default function AdminRatesDashboard() {
                           </Button>
                         </TableCell>
                       </TableRow>
-                    )
+                    ),
                   )}
                 </TableBody>
               </Table>

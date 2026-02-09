@@ -131,8 +131,8 @@ export default function BettingRatesTab() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold">Betting Service Rates</h2>
-          <p className="text-muted-foreground">
+          <h2 className="text-xl font-bold">Betting Service Rates</h2>
+          <p className="text-muted-foreground text-sm">
             Configure service charges for betting account funding via VTU Africa
           </p>
         </div>
@@ -322,7 +322,7 @@ export default function BettingRatesTab() {
                 {bettingRate.chargeType === "percentage"
                   ? `${bettingRate.serviceCharge}%`
                   : `₦${parseFloat(
-                      bettingRate.serviceCharge || 0
+                      bettingRate.serviceCharge || 0,
                     ).toLocaleString()}`}
               </Badge>
             </div>

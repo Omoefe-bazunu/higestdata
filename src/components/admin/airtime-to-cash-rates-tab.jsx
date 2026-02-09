@@ -87,7 +87,7 @@ export default function AirtimeToCashRatesPage() {
     try {
       setIsLoading(true);
       const ratesDoc = await getDoc(
-        doc(firestore, "settings", "airtimeToCashRates")
+        doc(firestore, "settings", "airtimeToCashRates"),
       );
 
       if (ratesDoc.exists()) {
@@ -163,7 +163,7 @@ export default function AirtimeToCashRatesPage() {
       for (const [networkId, networkRate] of Object.entries(rates)) {
         if (!networkRate.rate || networkRate.rate < 0 || networkRate.rate > 1) {
           throw new Error(
-            `Invalid rate for ${networkId}. Must be between 0 and 1.`
+            `Invalid rate for ${networkId}. Must be between 0 and 1.`,
           );
         }
       }
@@ -174,7 +174,7 @@ export default function AirtimeToCashRatesPage() {
           ...rates,
           updatedAt: serverTimestamp(),
         },
-        { merge: true }
+        { merge: true },
       );
 
       toast({
@@ -224,12 +224,12 @@ export default function AirtimeToCashRatesPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold">Airtime to Cash Rates</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl font-bold">Airtime to Cash Rates</h1>
+          <p className="text-muted-foreground text-sm">
             Configure conversion rates for airtime to cash services (VTU Africa)
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-col">
           <Button
             onClick={resetToDefaults}
             variant="outline"
@@ -436,7 +436,7 @@ export default function AirtimeToCashRatesPage() {
                   ? (
                       (Object.values(rates).reduce(
                         (sum, rate) => sum + (rate.rate || 0),
-                        0
+                        0,
                       ) /
                         Object.keys(rates).length) *
                       100
@@ -461,7 +461,7 @@ export default function AirtimeToCashRatesPage() {
                 {Object.keys(rates).length > 0
                   ? (
                       Math.max(
-                        ...Object.values(rates).map((rate) => rate.rate || 0)
+                        ...Object.values(rates).map((rate) => rate.rate || 0),
                       ) * 100
                     ).toFixed(0) + "%"
                   : "0%"}
@@ -475,7 +475,7 @@ export default function AirtimeToCashRatesPage() {
                 {Object.keys(rates).length > 0
                   ? (
                       Math.min(
-                        ...Object.values(rates).map((rate) => rate.rate || 0)
+                        ...Object.values(rates).map((rate) => rate.rate || 0),
                       ) * 100
                     ).toFixed(0) + "%"
                   : "0%"}

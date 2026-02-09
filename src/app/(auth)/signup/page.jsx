@@ -28,6 +28,7 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
+  const [acceptedPolicies, setAcceptedPolicies] = useState(false); // New state for checkbox
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -85,7 +86,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center mt-12">
+    <div className="relative min-h-screen flex items-center justify-center mt-20">
       {/* Background Image */}
       <Image
         src="https://images.unsplash.com/photo-1556742400-b5f0e1a6bfcf?ixlib=rb-4.0.3&auto=format&fit=crop&w=1950&q=80"
@@ -161,7 +162,34 @@ export default function SignupPage() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            {/* Policies Checkbox */}
+            <div className="flex items-center space-x-2 py-2">
+              <input
+                type="checkbox"
+                id="policies"
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                checked={acceptedPolicies}
+                onChange={(e) => setAcceptedPolicies(e.target.checked)}
+              />
+              <Label
+                htmlFor="policies"
+                className="text-sm font-normal cursor-pointer"
+              >
+                I accept the{" "}
+                <Link
+                  href="/policies"
+                  className="text-blue-600 underline hover:text-blue-800"
+                >
+                  terms and policies
+                </Link>
+              </Label>
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading || !acceptedPolicies}
+            >
               {loading ? "Creating account..." : "Create an account"}
             </Button>
           </form>

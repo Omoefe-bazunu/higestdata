@@ -3,7 +3,6 @@ import Hero from "@/components/home/hero/Hero";
 import HowItWorks from "@/components/home/howitworks/How-it-works";
 import WhyChooseUs from "@/components/home/why-choose-us/Whychooseus";
 import Testimonials from "@/components/Testimonials";
-import DisclaimerBanner from "@/components/DisclaimerBanner"; // import banner
 import React from "react";
 
 export default function page() {
@@ -14,9 +13,6 @@ export default function page() {
       <HowItWorks />
       <FAQs />
       <Testimonials />
-
-      {/* Floating Disclaimer Banner */}
-      <DisclaimerBanner />
     </div>
   );
 }

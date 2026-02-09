@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProviderWrapper } from "@/contexts/AuthProviderWrapper";
 import ClientLayoutWrapper from "@/components/shared/client-layout-wrapper";
-import { FaWhatsapp } from "react-icons/fa";
+import Script from "next/script"; // Import Script component
 
 export const metadata = {
   title: "Highest Data",
@@ -23,26 +23,21 @@ export default function RootLayout({ children }) {
         <AuthProviderWrapper>
           <ClientLayoutWrapper>{children}</ClientLayoutWrapper>
           <Toaster />
-
-          {/* ✅ Floating WhatsApp Icon with Hover Tooltip */}
-          <div className="fixed bottom-6 right-6 z-50 group">
-            {/* Tooltip */}
-            <div className="absolute bottom-16 right-0 mb-2 px-3 py-2 bg-gray-800 text-white text-sm rounded-lg shadow-lg opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300 pointer-events-none whitespace-nowrap">
-              Chat live with support on WhatsApp
-            </div>
-
-            {/* WhatsApp Icon */}
-            <a
-              href="https://wa.me/2347038911469"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-xl flex items-center justify-center transition-transform duration-300 hover:scale-110"
-              aria-label="Chat with us on WhatsApp"
-            >
-              <FaWhatsapp className="text-3xl" />
-            </a>
-          </div>
         </AuthProviderWrapper>
+
+        {/* ✅ Smartsupp Live Chat Integration */}
+        <Script id="smartsupp-chat" strategy="afterInteractive">
+          {`
+            var _smartsupp = _smartsupp || {};
+            _smartsupp.key = '6456ce9dd4d0875e98086283706bb7147cb179d3';
+            window.smartsupp||(function(d) {
+              var s,c,o=smartsupp=function(){ o._.push(arguments)};o._=[];
+              s=d.getElementsByTagName('script')[0];c=d.createElement('script');
+              c.type='text/javascript';c.charset='utf-8';c.async=true;
+              c.src='https://www.smartsuppchat.com/loader.js?';s.parentNode.insertBefore(c,s);
+            })(document);
+          `}
+        </Script>
       </body>
     </html>
   );

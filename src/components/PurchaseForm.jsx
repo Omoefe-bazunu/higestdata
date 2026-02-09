@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
-import { doc, getDoc, onSnapshot, collection } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader, AlertTriangle, Wallet } from "lucide-react";
+import {
+  Loader,
+  AlertTriangle,
+  Wallet,
+  CreditCard,
+  ArrowRight,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -24,6 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 
 function PurchaseForm({ type, user, router }) {
@@ -69,7 +76,7 @@ function PurchaseForm({ type, user, router }) {
         Object.keys(rates).map((k) => ({
           id: k,
           name: rates[k].name || k,
-        }))
+        })),
       );
     }
   };
@@ -164,7 +171,7 @@ function PurchaseForm({ type, user, router }) {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(body),
-        }
+        },
       );
 
       const data = await res.json();
@@ -189,162 +196,218 @@ function PurchaseForm({ type, user, router }) {
 
   return (
     <>
-      <div className="bg-primary/5 p-4 rounded-lg mb-6">
-        <div className="flex items-center gap-2 mb-2">
-          <Wallet className="h-4 w-4" />
-          <span className="text-sm font-medium">Wallet Balance</span>
+      {/* Wallet Balance Card */}
+      <div className="relative overflow-hidden bg-blue-950 rounded-xl p-5 mb-8 shadow-md border border-blue-900">
+        <div className="absolute top-[-20%] right-[-5%] opacity-10">
+          <Wallet className="h-24 w-24 text-white" />
         </div>
-        <p className="text-2xl font-bold">₦{walletBalance.toLocaleString()}</p>
+        <div className="relative z-10 flex flex-col gap-1">
+          <div className="flex items-center gap-2 text-blue-200">
+            <CreditCard className="h-4 w-4" />
+            <span className="text-xs font-semibold uppercase tracking-wider">
+              Available Balance
+            </span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-sm font-medium text-orange-400">₦</span>
+            <span className="text-3xl font-bold text-white tracking-tight">
+              {walletBalance.toLocaleString()}
+            </span>
+          </div>
+        </div>
       </div>
 
       {getWalletDeduction() > walletBalance && getWalletDeduction() > 0 && (
-        <Alert variant="destructive" className="mb-6">
+        <Alert
+          variant="destructive"
+          className="mb-6 bg-red-50 border-red-200 text-red-800"
+        >
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Insufficient Balance</AlertTitle>
-          <AlertDescription>
-            Required ₦{getWalletDeduction().toLocaleString()} • Balance ₦
-            {walletBalance.toLocaleString()}
+          <AlertTitle className="font-bold">Insufficient Balance</AlertTitle>
+          <AlertDescription className="text-xs">
+            Deduction: ₦{getWalletDeduction().toLocaleString()} • Please fund
+            your wallet to continue.
           </AlertDescription>
         </Alert>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Network/Provider */}
-        <div className="space-y-2">
-          <Label>Network *</Label>
-          <Select value={network} onValueChange={setNetwork}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select network" />
-            </SelectTrigger>
-            <SelectContent>
-              {type === "Airtime"
-                ? Object.keys(airtimeRates).map((n) => (
-                    <SelectItem key={n} value={n}>
-                      {airtimeRates[n].name || n}
-                    </SelectItem>
-                  ))
-                : dataProviders.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Phone */}
-        <div className="space-y-2">
-          <Label>Phone Number *</Label>
-          <Input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="08012345678"
-            required
-          />
-        </div>
-
-        {/* Airtime Amount */}
-        {type === "Airtime" && (
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="grid grid-cols-1 gap-5">
+          {/* Network Selector */}
           <div className="space-y-2">
-            <Label>Amount (₦) *</Label>
-            <Input
-              type="number"
-              min="50"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              required
-            />
-            {network && amount && (
-              <p className="text-xs text-muted-foreground">
-                You pay ₦{getWalletDeduction().toFixed(2)} • Receive ₦
-                {parseFloat(amount).toLocaleString()} (
-                {airtimeRates[network]?.discountPercentage || 0}% discount)
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Data Plan */}
-        {type === "Data" && (
-          <div className="space-y-2">
-            <Label>Data Plan *</Label>
-            <Select value={dataPlan} onValueChange={setDataPlan}>
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    isFetchingPlans ? "Loading plans..." : "Choose plan"
-                  }
-                />
+            <Label className="text-blue-950 font-semibold">
+              Select Provider
+            </Label>
+            <Select value={network} onValueChange={setNetwork}>
+              <SelectTrigger className="h-12 border-slate-200 focus:ring-blue-950 transition-all">
+                <SelectValue placeholder="Select network" />
               </SelectTrigger>
               <SelectContent>
-                {isFetchingPlans ? (
-                  <div className="p-4 text-center">
-                    <Loader className="h-4 w-4 animate-spin mx-auto" />
-                  </div>
-                ) : dataPlans.length === 0 ? (
-                  <div className="p-4 text-center text-muted-foreground">
-                    No plans available
-                  </div>
-                ) : (
-                  dataPlans.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.display}
-                    </SelectItem>
-                  ))
-                )}
+                {type === "Airtime"
+                  ? Object.keys(airtimeRates).map((n) => (
+                      <SelectItem key={n} value={n}>
+                        {airtimeRates[n].name || n}
+                      </SelectItem>
+                    ))
+                  : dataProviders.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
               </SelectContent>
             </Select>
           </div>
-        )}
 
-        {/* Charge Summary */}
-        {getWalletDeduction() > 0 && (
-          <div className="bg-muted p-4 rounded-lg">
-            <p className="font-semibold">
-              Amount to be deducted: ₦{getWalletDeduction().toLocaleString()}
-            </p>
+          {/* Phone Number Input */}
+          <div className="space-y-2">
+            <Label className="text-blue-950 font-semibold">
+              Recipient Phone Number
+            </Label>
+            <Input
+              type="tel"
+              className="h-12 border-slate-200 focus:ring-blue-950"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="e.g. 08012345678"
+              required
+            />
           </div>
-        )}
 
-        <Button type="submit" className="w-full" disabled={isDisabled()}>
+          {/* Airtime Amount */}
+          {type === "Airtime" && (
+            <div className="space-y-2">
+              <Label className="text-blue-950 font-semibold">
+                Amount (Min ₦50)
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">
+                  ₦
+                </span>
+                <Input
+                  type="number"
+                  min="50"
+                  className="h-12 pl-8 border-slate-200 focus:ring-blue-950"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  required
+                />
+              </div>
+              {network && amount && (
+                <div className="flex justify-between items-center px-1">
+                  <p className="text-xs text-slate-500 italic">
+                    You pay:{" "}
+                    <span className="font-bold text-blue-950">
+                      ₦{getWalletDeduction().toLocaleString()}
+                    </span>
+                  </p>
+                  <p className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold uppercase">
+                    Save {airtimeRates[network]?.discountPercentage || 0}%
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Data Plan Selector */}
+          {type === "Data" && (
+            <div className="space-y-2">
+              <Label className="text-blue-950 font-semibold">
+                Choose Data Plan
+              </Label>
+              <Select value={dataPlan} onValueChange={setDataPlan}>
+                <SelectTrigger className="h-12 border-slate-200">
+                  <SelectValue
+                    placeholder={
+                      isFetchingPlans
+                        ? "Fetching available bundles..."
+                        : "Select a plan"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {isFetchingPlans ? (
+                    <div className="p-4 text-center">
+                      <Loader className="h-5 w-5 animate-spin mx-auto text-orange-400" />
+                    </div>
+                  ) : dataPlans.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground">
+                      {network
+                        ? "No plans found for this network"
+                        : "Please select a network first"}
+                    </div>
+                  ) : (
+                    dataPlans.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.display}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+
+        {/* Action Button */}
+        <Button
+          type="submit"
+          className="w-full h-14 text-lg font-bold bg-blue-950 hover:bg-blue-900 shadow-lg shadow-blue-950/20 transition-all active:scale-[0.98]"
+          disabled={isDisabled()}
+        >
           {isSubmitting ? (
-            <>
-              <Loader className="mr-2 h-4 w-4 animate-spin" />
-              Processing...
-            </>
+            <div className="flex items-center gap-2">
+              <Loader className="h-5 w-5 animate-spin" />
+              <span>Processing Transaction...</span>
+            </div>
           ) : (
-            `Buy ${type}`
+            <div className="flex items-center gap-2">
+              <span>Purchase {type}</span>
+              <ArrowRight className="h-5 w-5" />
+            </div>
           )}
         </Button>
       </form>
 
+      {/* Insufficient Balance Modal */}
       <Dialog
         open={showInsufficientModal}
         onOpenChange={setShowInsufficientModal}
       >
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="text-orange-500" />
-              Insufficient Balance
+            <div className="mx-auto bg-orange-100 p-3 rounded-full mb-4">
+              <AlertTriangle className="h-8 w-8 text-orange-500" />
+            </div>
+            <DialogTitle className="text-center text-2xl font-bold text-blue-950">
+              Low Wallet Balance
             </DialogTitle>
-            <DialogDescription>
-              Required: ₦{getWalletDeduction().toLocaleString()} • Available: ₦
-              {walletBalance.toLocaleString()}
+            <DialogDescription className="text-center text-slate-500 text-base">
+              This transaction requires{" "}
+              <span className="font-bold text-blue-950">
+                ₦{getWalletDeduction().toLocaleString()}
+              </span>
+              , but you only have{" "}
+              <span className="font-bold text-orange-500">
+                ₦{walletBalance.toLocaleString()}
+              </span>
+              .
             </DialogDescription>
           </DialogHeader>
-          <div className="flex gap-3 mt-4">
+          <DialogFooter className="flex-col sm:flex-row gap-3 mt-4">
             <Button
               variant="outline"
+              className="w-full border-slate-200"
               onClick={() => setShowInsufficientModal(false)}
             >
               Cancel
             </Button>
-            <Button onClick={() => router.push("/dashboard/wallet")}>
-              Fund Wallet
+            <Button
+              className="w-full bg-blue-950 hover:bg-blue-900"
+              onClick={() => router.push("/dashboard/wallet")}
+            >
+              Top up Wallet
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

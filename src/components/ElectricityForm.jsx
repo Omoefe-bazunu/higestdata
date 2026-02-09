@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, onSnapshot, collection } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
+import Link from "next/link";
 import {
   Card,
-  CardContent,
   CardHeader,
   CardTitle,
   CardDescription,
@@ -22,7 +22,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckCircle, Loader, AlertTriangle, Wallet, Zap } from "lucide-react";
+import {
+  CheckCircle,
+  Loader,
+  AlertTriangle,
+  Wallet,
+  Zap,
+  ChevronLeft,
+  CreditCard,
+  ArrowRight,
+  UserCheck,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -31,9 +41,9 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 
-// Updated electricity providers to match VTU Africa service IDs
 const ELECTRICITY_PROVIDERS = [
   { id: "ikeja-electric", name: "Ikeja (IKEDC)" },
   { id: "eko-electric", name: "Eko (EKEDC)" },
@@ -76,8 +86,6 @@ function ElectricityForm({ user, router }) {
     if (user) {
       fetchWalletBalance();
       fetchElectricityRates();
-
-      // Listen for transaction updates
       const unsubscribe = onSnapshot(
         collection(firestore, "users", user.uid, "transactions"),
         (snapshot) => {
@@ -86,8 +94,8 @@ function ElectricityForm({ user, router }) {
               const txn = change.doc.data();
               if (txn.type === "electricity" && txn.status === "success") {
                 toast({
-                  title: "Electricity Purchase Successful!",
-                  description: `₦${txn.amountToVTU?.toLocaleString()} electricity units purchased successfully.`,
+                  title: "Purchase Successful!",
+                  description: `₦${txn.amountToVTU?.toLocaleString()} units purchased.`,
                 });
                 fetchWalletBalance();
               }
@@ -95,7 +103,6 @@ function ElectricityForm({ user, router }) {
           });
         },
       );
-
       return () => unsubscribe();
     }
   }, [user]);
@@ -103,16 +110,9 @@ function ElectricityForm({ user, router }) {
   const fetchWalletBalance = async () => {
     try {
       const userDoc = await getDoc(doc(firestore, "users", user.uid));
-      if (userDoc.exists()) {
-        setWalletBalance(userDoc.data().walletBalance || 0);
-      }
+      if (userDoc.exists()) setWalletBalance(userDoc.data().walletBalance || 0);
     } catch (error) {
-      console.error("Error fetching wallet balance:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load wallet balance",
-        variant: "destructive",
-      });
+      console.error(error);
     }
   };
 
@@ -121,14 +121,12 @@ function ElectricityForm({ user, router }) {
       const ratesDoc = await getDoc(
         doc(firestore, "settings", "electricityRates"),
       );
-      if (ratesDoc.exists()) {
-        const data = ratesDoc.data();
+      if (ratesDoc.exists())
         setElectricityRates({
-          serviceCharge: data.serviceCharge || 0,
+          serviceCharge: ratesDoc.data().serviceCharge || 0,
         });
-      }
     } catch (error) {
-      console.error("Error fetching electricity rates:", error);
+      console.error(error);
     }
   };
 
@@ -137,11 +135,7 @@ function ElectricityForm({ user, router }) {
     setIsVerifying(true);
     try {
       const auth = getAuth();
-      const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error("User not authenticated");
-
-      const token = await currentUser.getIdToken(true);
-
+      const token = await auth.currentUser.getIdToken(true);
       const response = await fetch(
         "https://higestdata-proxy.onrender.com/api/electricity/verify",
         {
@@ -157,9 +151,7 @@ function ElectricityForm({ user, router }) {
           }),
         },
       );
-
       const result = await response.json();
-
       if (result.success) {
         setMeterVerified(true);
         setCustomerDetails(result.data);
@@ -179,43 +171,29 @@ function ElectricityForm({ user, router }) {
     } catch (error) {
       setMeterVerified(false);
       setCustomerDetails(null);
-      toast({
-        title: "Verification Error",
-        description: "Unable to verify meter. Please try again.",
-        variant: "destructive",
-      });
     } finally {
       setIsVerifying(false);
     }
   };
 
-  const getElectricityAmount = () => {
-    return parseFloat(amount || 0);
-  };
-
-  const getServiceCharge = () => {
-    const electricityAmount = getElectricityAmount();
-    const serviceCharge = parseFloat(electricityRates.serviceCharge) || 0;
-    return (electricityAmount * serviceCharge) / 100;
-  };
-
-  const getTotalAmount = () => {
-    return getElectricityAmount() + getServiceCharge();
-  };
+  const getElectricityAmount = () => parseFloat(amount || 0);
+  const getServiceCharge = () =>
+    (getElectricityAmount() *
+      (parseFloat(electricityRates.serviceCharge) || 0)) /
+    100;
+  const getTotalAmount = () => getElectricityAmount() + getServiceCharge();
 
   const isSubmitDisabled = () => {
-    const electricityAmount = getElectricityAmount();
-    const totalAmount = getTotalAmount();
+    const eAmt = getElectricityAmount();
     return (
       !isAuthenticated ||
       !provider ||
       !meterNumber ||
       !meterType ||
       !meterVerified ||
-      !electricityAmount ||
-      electricityAmount < 1000 ||
-      electricityAmount > 100000 ||
-      walletBalance < totalAmount ||
+      eAmt < 1000 ||
+      eAmt > 100000 ||
+      walletBalance < getTotalAmount() ||
       isSubmitting ||
       isVerifying
     );
@@ -223,69 +201,15 @@ function ElectricityForm({ user, router }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!isAuthenticated) {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to continue.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const electricityAmount = getElectricityAmount();
-    const totalAmount = getTotalAmount();
-
-    if (!electricityAmount || electricityAmount <= 0) {
-      toast({
-        title: "Invalid Amount",
-        description: "Please enter a valid amount (₦1000–₦100,000).",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (electricityAmount < 1000 || electricityAmount > 100000) {
-      toast({
-        title: "Amount Out of Range",
-        description: "Amount must be between ₦1000 and ₦100,000.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (walletBalance < totalAmount) {
+    if (walletBalance < getTotalAmount()) {
       setShowInsufficientModal(true);
       return;
     }
-
-    if (!meterVerified) {
-      toast({
-        title: "Meter Not Verified",
-        description: "Please verify your meter number before proceeding.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsSubmitting(true);
-
     try {
       const auth = getAuth();
-      const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error("User not authenticated");
-
-      const token = await currentUser.getIdToken(true);
-      const ref = `ELEC_${currentUser.uid}_${Date.now()}`;
-
-      const transactionPayload = {
-        service: provider,
-        meterNo: meterNumber,
-        metertype: meterType,
-        amount: electricityAmount,
-        ref: ref,
-      };
-
+      const token = await auth.currentUser.getIdToken(true);
+      const ref = `ELEC_${auth.currentUser.uid}_${Date.now()}`;
       const response = await fetch(
         "https://higestdata-proxy.onrender.com/api/electricity/purchase",
         {
@@ -294,39 +218,34 @@ function ElectricityForm({ user, router }) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(transactionPayload),
+          body: JSON.stringify({
+            service: provider,
+            meterNo: meterNumber,
+            metertype: meterType,
+            amount: getElectricityAmount(),
+            ref,
+          }),
         },
       );
-
       const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Transaction failed");
-      }
-
+      if (!response.ok) throw new Error(result.error || "Transaction failed");
       if (result.success) {
         toast({
           title: "Success!",
-          description: `₦${electricityAmount.toLocaleString()} electricity purchase successful!`,
+          description: "Electricity purchase successful!",
         });
-
-        // Reset form
         setProvider("");
         setMeterNumber("");
         setMeterType("");
         setAmount("");
         setMeterVerified(false);
         setCustomerDetails(null);
-
         fetchWalletBalance();
-      } else {
-        throw new Error(result.error || "Transaction failed");
       }
     } catch (error) {
-      console.error("Transaction error:", error);
       toast({
-        title: "Transaction Failed",
-        description: error.message || "Please try again.",
+        title: "Failed",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -336,166 +255,171 @@ function ElectricityForm({ user, router }) {
 
   return (
     <>
-      <div className="bg-primary/5 p-4 rounded-lg mb-6">
-        <div className="flex items-center gap-2 mb-2">
-          <Wallet className="h-4 w-4" />
-          <span className="text-sm font-medium">Wallet Balance</span>
+      <div className="relative overflow-hidden bg-blue-950 rounded-xl p-5 mb-8 shadow-md border border-blue-900">
+        <div className="absolute top-[-20%] right-[-5%] opacity-10">
+          <Wallet className="h-24 w-24 text-white" />
         </div>
-        <p className="text-2xl font-bold">₦{walletBalance.toLocaleString()}</p>
+        <div className="relative z-10 flex flex-col gap-1">
+          <div className="flex items-center gap-2 text-blue-300">
+            <CreditCard className="h-4 w-4" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-blue-300">
+              Wallet Balance
+            </span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-sm font-medium text-orange-400">₦</span>
+            <span className="text-3xl font-bold text-white tracking-tight">
+              {walletBalance.toLocaleString()}
+            </span>
+          </div>
+        </div>
       </div>
 
       {getTotalAmount() > walletBalance && getElectricityAmount() > 0 && (
-        <Alert variant="destructive" className="mb-6">
+        <Alert
+          variant="destructive"
+          className="mb-6 bg-red-50 border-red-200 text-red-800 font-medium"
+        >
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Insufficient Balance</AlertTitle>
-          <AlertDescription>
-            Your wallet balance (₦{walletBalance.toLocaleString()}) is less than
-            the required amount (₦{getTotalAmount().toLocaleString()}). Please
-            fund your wallet to proceed.
+          <AlertTitle className="font-bold">Insufficient Balance</AlertTitle>
+          <AlertDescription className="text-xs">
+            Required: ₦{getTotalAmount().toLocaleString()}
           </AlertDescription>
         </Alert>
       )}
 
-      {meterVerified && customerDetails && (
-        <Alert className="mb-6">
-          <CheckCircle className="h-4 w-4 text-green-500" />
-          <AlertTitle>Meter Verified</AlertTitle>
-          <AlertDescription>
-            Meter details verified successfully. You can proceed with payment.
-          </AlertDescription>
-        </Alert>
-      )}
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-blue-950 font-semibold">Provider</Label>
+            <Select value={provider} onValueChange={setProvider}>
+              <SelectTrigger className="h-12 border-slate-200">
+                <SelectValue placeholder="Select DisCo" />
+              </SelectTrigger>
+              <SelectContent>
+                {ELECTRICITY_PROVIDERS.map((prov) => (
+                  <SelectItem key={prov.id} value={prov.id}>
+                    {prov.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="provider">Electricity Provider *</Label>
-          <Select value={provider} onValueChange={setProvider} required>
-            <SelectTrigger id="provider">
-              <SelectValue placeholder="Select provider" />
-            </SelectTrigger>
-            <SelectContent>
-              {ELECTRICITY_PROVIDERS.map((prov) => (
-                <SelectItem key={prov.id} value={prov.id}>
-                  {prov.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="space-y-2">
+            <Label className="text-blue-950 font-semibold">Meter Type</Label>
+            <Select value={meterType} onValueChange={setMeterType}>
+              <SelectTrigger className="h-12 border-slate-200">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent>
+                {METER_TYPES.map((type) => (
+                  <SelectItem key={type.id} value={type.id}>
+                    {type.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="meterNumber">Meter/Account Number *</Label>
+          <Label className="text-blue-950 font-semibold">Meter Number</Label>
           <div className="flex gap-2">
             <Input
-              id="meterNumber"
               value={meterNumber}
               onChange={(e) => {
                 setMeterNumber(e.target.value);
                 setMeterVerified(false);
                 setCustomerDetails(null);
               }}
-              placeholder="Enter meter or account number"
+              placeholder="Enter number"
+              className="h-12 flex-1 border-slate-200"
               required
             />
             <Button
               type="button"
               onClick={verifyMeterNumber}
               disabled={!provider || !meterNumber || !meterType || isVerifying}
+              className={`h-12 px-6 transition-colors ${meterVerified ? "bg-green-600 hover:bg-green-700" : "bg-blue-950"}`}
             >
               {isVerifying ? (
-                <>
-                  <Loader className="mr-2 h-4 w-4 animate-spin" />
-                  Verifying...
-                </>
+                <Loader className="animate-spin h-4 w-4" />
               ) : meterVerified ? (
-                <>
-                  <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                  Verified
-                </>
+                <CheckCircle className="h-4 w-4" />
               ) : (
                 "Verify"
               )}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Your meter or account number. Verify before purchasing.
-          </p>
+          {customerDetails && (
+            <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 p-3 rounded-lg border border-green-100 animate-in fade-in slide-in-from-top-1">
+              <UserCheck className="h-4 w-4" />
+              <span className="font-bold uppercase tracking-tight">
+                {customerDetails.Customer_Name ||
+                  customerDetails.name ||
+                  "Verified Customer"}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="meterType">Meter Type *</Label>
-          <Select value={meterType} onValueChange={setMeterType} required>
-            <SelectTrigger id="meterType">
-              <SelectValue placeholder="Select meter type" />
-            </SelectTrigger>
-            <SelectContent>
-              {METER_TYPES.map((type) => (
-                <SelectItem key={type.id} value={type.id}>
-                  {type.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="amount">Amount (₦) *</Label>
-          <Input
-            id="amount"
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="Enter amount"
-            min="1000"
-            max="100000"
-            required
-          />
-          <p className="text-xs text-muted-foreground">
-            Minimum: ₦1,000, Maximum: ₦100,000
-          </p>
+          <Label className="text-blue-950 font-semibold">Amount (₦)</Label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium font-mono">
+              ₦
+            </span>
+            <Input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Min ₦1,000"
+              className="h-12 pl-8 border-slate-200"
+              required
+            />
+          </div>
         </div>
 
         {getElectricityAmount() > 0 && (
-          <div className="bg-muted p-4 rounded-lg space-y-3">
-            <div className="flex justify-between text-sm">
-              <span>Electricity Amount:</span>
-              <span className="font-medium">
+          <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl space-y-2 shadow-inner">
+            <div className="flex justify-between text-xs text-slate-500 uppercase font-bold tracking-widest">
+              <span>Electricity Value</span>
+              <span className="text-blue-950">
                 ₦{getElectricityAmount().toLocaleString()}
               </span>
             </div>
-            {getServiceCharge() > 0 && (
-              <div className="flex justify-between text-sm">
-                <span>Service Charge ({electricityRates.serviceCharge}%):</span>
-                <span className="font-medium">
-                  ₦{getServiceCharge().toLocaleString()}
-                </span>
-              </div>
-            )}
-            <div className="border-t pt-2">
-              <div className="flex justify-between">
-                <span className="font-semibold">Total to be charged:</span>
-                <span className="font-bold text-lg">
-                  ₦{getTotalAmount().toLocaleString()}
-                </span>
-              </div>
+            <div className="flex justify-between text-xs text-slate-500 uppercase font-bold tracking-widest">
+              <span>Service Charge ({electricityRates.serviceCharge}%)</span>
+              <span className="text-blue-950">
+                ₦{getServiceCharge().toLocaleString()}
+              </span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              ₦{getElectricityAmount().toLocaleString()} will be sent to your
-              meter.{" "}
-              {getServiceCharge() > 0 &&
-                "Service charge will be deducted from your wallet."}
-            </p>
+            <Separator className="my-1" />
+            <div className="flex justify-between items-center pt-1">
+              <span className="text-blue-950 font-bold">Total Deduction</span>
+              <span className="text-xl font-black text-blue-950 tracking-tighter">
+                ₦{getTotalAmount().toLocaleString()}
+              </span>
+            </div>
           </div>
         )}
 
-        <Button type="submit" className="w-full" disabled={isSubmitDisabled()}>
+        <Button
+          type="submit"
+          className="w-full h-14 text-lg font-bold bg-blue-950 hover:bg-blue-900 shadow-lg shadow-blue-950/10 transition-all active:scale-[0.98]"
+          disabled={isSubmitDisabled()}
+        >
           {isSubmitting ? (
-            <>
-              <Loader className="mr-2 h-4 w-4 animate-spin" />
-              Processing...
-            </>
+            <div className="flex items-center gap-2">
+              <Loader className="h-5 w-5 animate-spin" />
+              <span>Processing Payment...</span>
+            </div>
           ) : (
-            "Purchase Electricity"
+            <div className="flex items-center gap-2">
+              <span>Pay Electricity Bill</span>
+              <ArrowRight className="h-5 w-5" />
+            </div>
           )}
         </Button>
       </form>
@@ -506,58 +430,31 @@ function ElectricityForm({ user, router }) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-orange-500" />
-              Insufficient Balance
+            <div className="mx-auto bg-orange-100 p-3 rounded-full mb-2">
+              <AlertTriangle className="h-6 w-6 text-orange-500" />
+            </div>
+            <DialogTitle className="text-center text-xl text-blue-950">
+              Balance Too Low
             </DialogTitle>
-            <DialogDescription>
-              Your wallet balance is insufficient for this transaction.
+            <DialogDescription className="text-center">
+              This transaction requires ₦{getTotalAmount().toLocaleString()}.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="bg-muted p-4 rounded-lg">
-              <p className="text-sm">
-                <span className="font-medium">Electricity Amount:</span> ₦
-                {getElectricityAmount().toLocaleString()}
-              </p>
-              {getServiceCharge() > 0 && (
-                <p className="text-sm">
-                  <span className="font-medium">Service Charge:</span> ₦
-                  {getServiceCharge().toLocaleString()}
-                </p>
-              )}
-              <p className="text-sm">
-                <span className="font-medium">Total Required:</span> ₦
-                {getTotalAmount().toLocaleString()}
-              </p>
-              <p className="text-sm">
-                <span className="font-medium">Current Balance:</span> ₦
-                {walletBalance.toLocaleString()}
-              </p>
-              <p className="text-sm text-red-600">
-                <span className="font-medium">Shortfall:</span> ₦
-                {(getTotalAmount() - walletBalance).toLocaleString()}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                onClick={() => setShowInsufficientModal(false)}
-                variant="outline"
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  setShowInsufficientModal(false);
-                  router.push("/dashboard/wallet");
-                }}
-                className="flex-1"
-              >
-                Fund Wallet
-              </Button>
-            </div>
-          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setShowInsufficientModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="w-full bg-blue-950"
+              onClick={() => router.push("/dashboard/wallet")}
+            >
+              Top up Now
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
@@ -584,70 +481,80 @@ export default function ElectricityPage() {
 
   if (!authChecked) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <Loader className="h-8 w-8 animate-spin" />
+      <div className="flex justify-center items-center h-screen bg-slate-50">
+        <Loader className="h-10 w-10 animate-spin text-blue-950" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 mt-4">
-      <div>
-        <h1 className="text-3xl font-bold font-headline">
-          Pay Electricity Bills
-        </h1>
-        <p className="text-muted-foreground">
-          Purchase electricity units instantly. Fast, secure, and reliable.
-        </p>
-      </div>
-
-      <Card className="overflow-hidden">
-        <div className="grid md:grid-cols-2">
-          <div className="p-6 md:p-8">
-            <CardHeader className="px-0">
-              <CardTitle>Electricity Bill Payment</CardTitle>
-              <CardDescription>
-                Select your provider and enter your meter details.
-              </CardDescription>
-            </CardHeader>
-            <ElectricityForm user={user} router={router} />
-          </div>
-
-          <div className="bg-muted/50 p-8 md:p-12 flex flex-col justify-center">
-            <div
-              className="relative aspect-video mb-8 rounded-lg overflow-hidden bg-cover bg-center bg-no-repeat"
-              style={{
-                backgroundImage: "url('/electricity.png')",
-              }}
-            />
-            <h3 className="text-xl font-semibold mb-4 text-secondary-foreground">
-              Supported Providers
-            </h3>
-            <p className="text-muted-foreground mb-4">
-              Pay bills for Ikeja, Eko, Kano, Portharcourt, Jos, Ibadan, and
-              more.
+    <div className="min-h-screen bg-slate-50/50 py-8 md:py-12 px-4">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="space-y-4">
+          <Link
+            href="/dashboard/tools"
+            className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-blue-950 group"
+          >
+            <ChevronLeft className="w-5 h-5 mr-1 group-hover:-translate-x-1 transition-transform" />{" "}
+            Back to Services
+          </Link>
+          <div className="text-left">
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-blue-950 font-headline">
+              Electricity <span className="text-orange-400">Bills</span>
+            </h1>
+            <p className="mt-1 text-slate-600 italic">
+              Fast, secure, and reliable energy top-ups for all DisCos.
             </p>
-            <ul className="space-y-2 text-sm">
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Instant meter crediting </span>
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Secure wallet integration</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Support for prepaid and postpaid meters</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Real-time transaction tracking</span>
-              </li>
-            </ul>
           </div>
         </div>
-      </Card>
+
+        <Card className="overflow-hidden border-none shadow-2xl ring-1 ring-slate-200">
+          <div className="grid md:grid-cols-5 lg:grid-cols-2">
+            <div className="flex flex-col md:col-span-2 lg:col-span-1 bg-blue-950 p-8 md:p-10 justify-center relative overflow-hidden order-first md:order-last">
+              <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-orange-400 rounded-full opacity-10 blur-3xl"></div>
+              <div className="relative z-10 border border-white/10 rounded-2xl overflow-hidden aspect-video shadow-2xl mb-8">
+                <div className="absolute inset-0 bg-gradient-to-t from-blue-950/80 to-transparent z-10"></div>
+                <img
+                  src="/electricity.png"
+                  alt="Electricity Illustration"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2">
+                  <div className="bg-orange-400 p-1.5 rounded-full">
+                    <Zap className="h-4 w-4 text-blue-950" />
+                  </div>
+                  <span className="text-white font-bold text-sm tracking-wide uppercase">
+                    Power Units
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-5 relative z-10">
+                <h3 className="text-white text-xl font-bold">
+                  Why top up here?
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-blue-100 text-sm">
+                    <CheckCircle className="h-4 w-4 text-orange-400" />
+                    <span>Instant token delivery via SMS & Email</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-blue-100 text-sm">
+                    <CheckCircle className="h-4 w-4 text-orange-400" />
+                    <span>Secure 24/7 bill processing</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-blue-100 text-sm">
+                    <CheckCircle className="h-4 w-4 text-orange-400" />
+                    <span>Support for all major Nigerian DisCos</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 md:p-10 md:col-span-3 lg:col-span-1 bg-white">
+              <ElectricityForm user={user} router={router} />
+            </div>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

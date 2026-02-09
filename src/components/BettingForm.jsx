@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, onSnapshot, collection } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
+import Link from "next/link";
 import {
   Card,
-  CardContent,
   CardHeader,
   CardTitle,
   CardDescription,
@@ -27,8 +27,12 @@ import {
   Loader,
   AlertTriangle,
   Wallet,
-  DollarSign,
   Phone,
+  ChevronLeft,
+  CreditCard,
+  ArrowRight,
+  ShieldCheck,
+  UserCheck,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
@@ -38,16 +42,17 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 
 const BETTING_SERVICES = [
-  { id: "1xBet", name: "1xBet" }, // Capital 'B'
-  { id: "BangBet", name: "BangBet" }, // Capital 'B'
-  { id: "Bet9ja", name: "Bet9ja" }, // Capital 'B'
-  { id: "BetKing", name: "BetKing" }, // Capital 'K'
-  { id: "BetLand", name: "BetLand" }, // Capital 'L'
-  { id: "BetLion", name: "BetLion" }, // Capital 'L'
-  { id: "BetWay", name: "BetWay" }, // Capital 'W'
+  { id: "1xBet", name: "1xBet" },
+  { id: "BangBet", name: "BangBet" },
+  { id: "Bet9ja", name: "Bet9ja" },
+  { id: "BetKing", name: "BetKing" },
+  { id: "BetLand", name: "BetLand" },
+  { id: "BetLion", name: "BetLion" },
+  { id: "BetWay", name: "BetWay" },
   { id: "CloudBet", name: "CloudBet" },
   { id: "LiveScoreBet", name: "LiveScoreBet" },
   { id: "MerryBet", name: "MerryBet" },
@@ -73,9 +78,7 @@ function BettingForm({ user, router }) {
   const [customerName, setCustomerName] = useState("");
   const { toast } = useToast();
 
-  // Add this ref to track initial load
   const initialLoadRef = useRef(true);
-
   const isAuthenticated = !!user;
 
   useEffect(() => {
@@ -85,55 +88,40 @@ function BettingForm({ user, router }) {
     }
   }, [user]);
 
-  // TRANSACTION NOTICE - Fixed to prevent initial load toasts
   useEffect(() => {
     if (!user) return;
-
     const unsubscribe = onSnapshot(
       collection(firestore, "users", user.uid, "transactions"),
       (snapshot) => {
         snapshot.docChanges().forEach((change) => {
-          // Skip the initial load - only process new changes after first load
           if (initialLoadRef.current) {
             initialLoadRef.current = false;
             return;
           }
-
           if (change.type === "added" || change.type === "modified") {
             const txn = change.doc.data();
-            // Only show toasts for recent transactions (last 5 minutes)
             const transactionTime = txn.createdAt?.toDate?.() || new Date();
             const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-
-            if (transactionTime < fiveMinutesAgo) {
-              return; // Skip old transactions
-            }
-
-            // Handle betting transactions specifically
+            if (transactionTime < fiveMinutesAgo) return;
             if (txn.type === "betting" && txn.status === "success") {
               toast({
                 title: "Betting Account Funded!",
-                description: `₦${txn.amountToVTU?.toLocaleString()} credited to ${
-                  txn.service
-                } account successfully.`,
+                description: `₦${txn.amountToVTU?.toLocaleString()} credited to ${txn.service} account successfully.`,
               });
-              fetchWalletBalance(); // Refresh balance
+              fetchWalletBalance();
             } else if (txn.type === "betting" && txn.status === "pending") {
               toast({
                 title: "Transaction Pending",
-                description: `Your ${txn.service} funding is being processed. Please wait for confirmation.`,
-                variant: "default",
+                description: `Your ${txn.service} funding is being processed.`,
               });
             }
           }
         });
       },
     );
-
     return () => unsubscribe();
   }, [user, toast]);
 
-  // Reset initialLoadRef when component unmounts or user changes
   useEffect(() => {
     return () => {
       initialLoadRef.current = true;
@@ -143,16 +131,9 @@ function BettingForm({ user, router }) {
   const fetchWalletBalance = async () => {
     try {
       const userDoc = await getDoc(doc(firestore, "users", user.uid));
-      if (userDoc.exists()) {
-        setWalletBalance(userDoc.data().walletBalance || 0);
-      }
+      if (userDoc.exists()) setWalletBalance(userDoc.data().walletBalance || 0);
     } catch (error) {
-      console.error("Error fetching wallet balance:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load wallet balance",
-        variant: "destructive",
-      });
+      console.error(error);
     }
   };
 
@@ -167,7 +148,7 @@ function BettingForm({ user, router }) {
         });
       }
     } catch (error) {
-      console.error("Error fetching betting rates:", error);
+      console.error(error);
     }
   };
 
@@ -178,9 +159,7 @@ function BettingForm({ user, router }) {
       const auth = getAuth();
       const currentUser = auth.currentUser;
       if (!currentUser) throw new Error("User not authenticated");
-
       const token = await currentUser.getIdToken(true);
-
       const response = await fetch(
         "https://higestdata-proxy.onrender.com/api/betting/verify",
         {
@@ -189,28 +168,18 @@ function BettingForm({ user, router }) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            service: provider,
-            userid: customerId,
-          }),
+          body: JSON.stringify({ service: provider, userid: customerId }),
         },
       );
-
       const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Verification failed");
-      }
-
+      if (!response.ok) throw new Error(result.error || "Verification failed");
       if (result.success) {
         setCustomerVerified(true);
-        // Extract customer name from response if available
-        const customerName =
-          result.data?.description?.Customer || "Verified Customer";
-        setCustomerName(customerName);
+        const name = result.data?.description?.Customer || "Verified Customer";
+        setCustomerName(name);
         toast({
           title: "Account Verified",
-          description: `${provider} account for ${customerName} verified successfully.`,
+          description: `${provider} account for ${name} verified.`,
         });
       } else {
         setCustomerVerified(false);
@@ -226,8 +195,7 @@ function BettingForm({ user, router }) {
       setCustomerName("");
       toast({
         title: "Verification Error",
-        description:
-          error.message || "Unable to verify account ID. Please try again.",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -235,10 +203,7 @@ function BettingForm({ user, router }) {
     }
   };
 
-  const getBettingAmount = () => {
-    return parseFloat(amount || 0);
-  };
-
+  const getBettingAmount = () => parseFloat(amount || 0);
   const getServiceCharge = () => {
     const bettingAmount = getBettingAmount();
     const serviceCharge = parseFloat(bettingRates.serviceCharge) || 0;
@@ -246,14 +211,10 @@ function BettingForm({ user, router }) {
       ? (bettingAmount * serviceCharge) / 100
       : serviceCharge;
   };
-
-  const getTotalAmount = () => {
-    return getBettingAmount() + getServiceCharge();
-  };
+  const getTotalAmount = () => getBettingAmount() + getServiceCharge();
 
   const isSubmitDisabled = () => {
     const bettingAmount = getBettingAmount();
-    const totalAmount = getTotalAmount();
     return (
       !isAuthenticated ||
       !provider ||
@@ -262,7 +223,7 @@ function BettingForm({ user, router }) {
       !bettingAmount ||
       bettingAmount < 100 ||
       bettingAmount > 100000 ||
-      walletBalance < totalAmount ||
+      walletBalance < getTotalAmount() ||
       isSubmitting ||
       isVerifying
     );
@@ -270,73 +231,20 @@ function BettingForm({ user, router }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!isAuthenticated) {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to continue.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!isAuthenticated) return;
     const bettingAmount = getBettingAmount();
     const totalAmount = getTotalAmount();
-
-    if (!bettingAmount || bettingAmount <= 0) {
-      toast({
-        title: "Invalid Amount",
-        description: "Please enter a valid amount (₦100–₦100,000).",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (bettingAmount < 100 || bettingAmount > 100000) {
-      toast({
-        title: "Amount Out of Range",
-        description: "Amount must be between ₦100 and ₦100,000.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     if (walletBalance < totalAmount) {
       setShowInsufficientModal(true);
       return;
     }
-
-    if (!customerVerified) {
-      toast({
-        title: "Account Not Verified",
-        description: "Please verify your betting account before proceeding.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!customerVerified) return;
     setIsSubmitting(true);
-
     try {
       const auth = getAuth();
       const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error("User not authenticated");
-
       const token = await currentUser.getIdToken(true);
       const reference = `BET_${currentUser.uid}_${Date.now()}`;
-
-      // Updated transaction data to match backend expectations
-      const transactionData = {
-        service: provider,
-        userid: customerId,
-        amount: bettingAmount,
-        ref: reference,
-        phone: phone || undefined, // Optional parameter
-      };
-
-      console.log("Sending betting transaction:", transactionData);
-
-      // Call VTU Africa betting funding endpoint
       const response = await fetch(
         "https://higestdata-proxy.onrender.com/api/betting/fund",
         {
@@ -345,23 +253,22 @@ function BettingForm({ user, router }) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(transactionData),
+          body: JSON.stringify({
+            service: provider,
+            userid: customerId,
+            amount: bettingAmount,
+            ref: reference,
+            phone: phone || undefined,
+          }),
         },
       );
-
       const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Transaction failed");
-      }
-
+      if (!response.ok) throw new Error(result.error || "Transaction failed");
       if (result.success) {
         toast({
           title: "Success!",
-          description: `₦${bettingAmount.toLocaleString()} credited to ${provider} account successfully!`,
+          description: `₦${bettingAmount.toLocaleString()} credited successfully!`,
         });
-
-        // Reset form
         setProvider("");
         setCustomerId("");
         setAmount("");
@@ -370,25 +277,18 @@ function BettingForm({ user, router }) {
         setCustomerName("");
         fetchWalletBalance();
       } else if (result.status === "pending") {
-        // Handle pending transactions
         toast({
           title: "Transaction Processing",
-          description:
-            result.message ||
-            "Your transaction is being processed. Please wait for confirmation.",
-          variant: "default",
+          description: result.message || "Please wait for confirmation.",
         });
-
-        // Don't reset form for pending transactions
         fetchWalletBalance();
       } else {
         throw new Error(result.error || "Transaction failed");
       }
     } catch (error) {
-      console.error("Transaction error:", error);
       toast({
         title: "Transaction Failed",
-        description: error.message || "Please try again.",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -396,7 +296,6 @@ function BettingForm({ user, router }) {
     }
   };
 
-  // Reset verification when provider or customer ID changes
   useEffect(() => {
     if (customerVerified) {
       setCustomerVerified(false);
@@ -406,40 +305,48 @@ function BettingForm({ user, router }) {
 
   return (
     <>
-      <div className="bg-primary/5 p-4 rounded-lg mb-6">
-        <div className="flex items-center gap-2 mb-2">
-          <Wallet className="h-4 w-4" />
-          <span className="text-sm font-medium">Wallet Balance</span>
+      {/* Wallet Card */}
+      <div className="relative overflow-hidden bg-blue-950 rounded-xl p-5 mb-8 shadow-md border border-blue-900">
+        <div className="absolute top-[-20%] right-[-5%] opacity-10">
+          <Wallet className="h-24 w-24 text-white" />
         </div>
-        <p className="text-2xl font-bold">₦{walletBalance.toLocaleString()}</p>
+        <div className="relative z-10 flex flex-col gap-1">
+          <div className="flex items-center gap-2 text-blue-300">
+            <CreditCard className="h-4 w-4" />
+            <span className="text-xs font-semibold uppercase tracking-wider">
+              Wallet Balance
+            </span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-sm font-medium text-orange-400">₦</span>
+            <span className="text-3xl font-bold text-white tracking-tight">
+              {walletBalance.toLocaleString()}
+            </span>
+          </div>
+        </div>
       </div>
 
       {getTotalAmount() > walletBalance && getBettingAmount() > 0 && (
-        <Alert variant="destructive" className="mb-6">
+        <Alert
+          variant="destructive"
+          className="mb-6 bg-red-50 border-red-200 text-red-800"
+        >
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Insufficient Balance</AlertTitle>
-          <AlertDescription>
-            Your wallet balance (₦{walletBalance.toLocaleString()}) is less than
-            the required amount (₦{getTotalAmount().toLocaleString()}). Please
-            fund your wallet to proceed.
+          <AlertTitle className="font-bold">Insufficient Balance</AlertTitle>
+          <AlertDescription className="text-xs">
+            Total Required: ₦{getTotalAmount().toLocaleString()}
           </AlertDescription>
         </Alert>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="provider">Betting Provider *</Label>
-          <Select
-            value={provider}
-            onValueChange={(value) => {
-              setProvider(value);
-              setCustomerVerified(false);
-              setCustomerName("");
-            }}
-            required
-          >
-            <SelectTrigger id="provider">
-              <SelectValue placeholder="Choose betting provider" />
+          <Label className="text-blue-950 font-semibold">
+            Betting Provider
+          </Label>
+          <Select value={provider} onValueChange={setProvider} required>
+            <SelectTrigger className="h-12 border-slate-200 focus:ring-blue-950">
+              <SelectValue placeholder="Choose provider" />
             </SelectTrigger>
             <SelectContent>
               {BETTING_SERVICES.map((betting) => (
@@ -452,128 +359,109 @@ function BettingForm({ user, router }) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="customerId">Account ID *</Label>
+          <Label className="text-blue-950 font-semibold">
+            Account ID / Username
+          </Label>
           <div className="flex gap-2">
             <Input
-              id="customerId"
               value={customerId}
-              onChange={(e) => {
-                setCustomerId(e.target.value);
-                setCustomerVerified(false);
-                setCustomerName("");
-              }}
-              placeholder="Enter your betting account ID"
+              onChange={(e) => setCustomerId(e.target.value)}
+              placeholder="Enter ID"
               required
+              className="h-12 flex-1 border-slate-200 focus:ring-blue-950"
             />
             <Button
               type="button"
               onClick={verifyCustomerId}
               disabled={!provider || !customerId || isVerifying}
-              variant={customerVerified ? "outline" : "default"}
+              className={`h-12 px-6 ${customerVerified ? "bg-green-600 hover:bg-green-700" : "bg-blue-950"}`}
             >
               {isVerifying ? (
-                <>
-                  <Loader className="mr-2 h-4 w-4 animate-spin" />
-                  Verifying...
-                </>
+                <Loader className="animate-spin h-4 w-4" />
               ) : customerVerified ? (
-                <>
-                  <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                  Verified
-                </>
+                <CheckCircle className="h-4 w-4" />
               ) : (
                 "Verify"
               )}
             </Button>
           </div>
           {customerName && (
-            <p className="text-sm text-green-600 font-medium">
-              ✓ Verified: {customerName}
-            </p>
+            <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 p-3 rounded-lg border border-green-100">
+              <UserCheck className="h-4 w-4" />
+              <span className="font-bold uppercase tracking-tight">
+                {customerName}
+              </span>
+            </div>
           )}
-          <p className="text-xs text-muted-foreground">
-            Your betting account ID or username. Verify before funding.
-          </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="phone">
-            Phone Number{" "}
-            <span className="text-muted-foreground">(Optional)</span>
+          <Label className="text-blue-950 font-semibold">
+            Phone Number (Optional)
           </Label>
-          <div className="flex items-center gap-2">
-            <Phone className="h-4 w-4 text-muted-foreground" />
+          <div className="relative">
+            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
-              id="phone"
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="08012345678"
+              className="h-12 pl-10 border-slate-200 focus:ring-blue-950"
             />
           </div>
-          <p className="text-xs text-muted-foreground">
-            Your phone number (optional but recommended for some providers)
-          </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="amount">Amount (₦) *</Label>
-          <Input
-            id="amount"
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="Enter amount"
-            min="100"
-            max="100000"
-            required
-          />
-          <p className="text-xs text-muted-foreground">
-            Minimum: ₦100, Maximum: ₦100,000
-          </p>
+          <Label className="text-blue-950 font-semibold">Amount to Fund</Label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">
+              ₦
+            </span>
+            <Input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Min ₦100"
+              className="h-12 pl-8 border-slate-200"
+              required
+            />
+          </div>
         </div>
 
         {getBettingAmount() > 0 && (
-          <div className="bg-muted p-4 rounded-lg space-y-3">
-            <div className="flex justify-between text-sm">
-              <span>Betting Amount:</span>
-              <span className="font-medium">
-                ₦{getBettingAmount().toLocaleString()}
+          <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl space-y-2">
+            <div className="flex justify-between text-xs text-slate-500 uppercase font-bold tracking-widest">
+              <span>Subtotal</span>
+              <span>₦{getBettingAmount().toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-xs text-slate-500 uppercase font-bold tracking-widest">
+              <span>Service Fee</span>
+              <span>₦{getServiceCharge().toLocaleString()}</span>
+            </div>
+            <div className="border-t border-slate-200 pt-2 flex justify-between items-center">
+              <span className="text-blue-950 font-bold">Total Charge</span>
+              <span className="text-xl font-black text-blue-950">
+                ₦{getTotalAmount().toLocaleString()}
               </span>
             </div>
-            {getServiceCharge() > 0 && (
-              <div className="flex justify-between text-sm">
-                <span>Service Charge:</span>
-                <span className="font-medium">
-                  ₦{getServiceCharge().toLocaleString()}
-                </span>
-              </div>
-            )}
-            <div className="border-t pt-2">
-              <div className="flex justify-between">
-                <span className="font-semibold">Total to be charged:</span>
-                <span className="font-bold text-lg">
-                  ₦{getTotalAmount().toLocaleString()}
-                </span>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              ₦{getBettingAmount().toLocaleString()} will be credited to your
-              betting account.{" "}
-              {getServiceCharge() > 0 &&
-                "Service charge will be deducted from your wallet."}
-            </p>
           </div>
         )}
 
-        <Button type="submit" className="w-full" disabled={isSubmitDisabled()}>
+        <Button
+          type="submit"
+          className="w-full h-14 text-lg font-bold bg-blue-950 hover:bg-blue-900 shadow-lg shadow-blue-950/10 transition-all active:scale-[0.98]"
+          disabled={isSubmitDisabled()}
+        >
           {isSubmitting ? (
-            <>
-              <Loader className="mr-2 h-4 w-4 animate-spin" />
-              Processing...
-            </>
+            <div className="flex items-center gap-2">
+              <Loader className="h-5 w-5 animate-spin" />
+              <span>Processing...</span>
+            </div>
           ) : (
-            "Fund Betting Account"
+            <div className="flex items-center gap-2">
+              <span>Fund Account</span>
+              <ArrowRight className="h-5 w-5" />
+            </div>
           )}
         </Button>
       </form>
@@ -584,58 +472,31 @@ function BettingForm({ user, router }) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-orange-500" />
+            <div className="mx-auto bg-orange-100 p-3 rounded-full mb-2">
+              <AlertTriangle className="h-6 w-6 text-orange-500" />
+            </div>
+            <DialogTitle className="text-center text-xl text-blue-950">
               Insufficient Balance
             </DialogTitle>
-            <DialogDescription>
-              Your wallet balance is insufficient for this transaction.
+            <DialogDescription className="text-center">
+              Total required: ₦{getTotalAmount().toLocaleString()}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="bg-muted p-4 rounded-lg">
-              <p className="text-sm">
-                <span className="font-medium">Betting Amount:</span> ₦
-                {getBettingAmount().toLocaleString()}
-              </p>
-              {getServiceCharge() > 0 && (
-                <p className="text-sm">
-                  <span className="font-medium">Service Charge:</span> ₦
-                  {getServiceCharge().toLocaleString()}
-                </p>
-              )}
-              <p className="text-sm">
-                <span className="font-medium">Total Required:</span> ₦
-                {getTotalAmount().toLocaleString()}
-              </p>
-              <p className="text-sm">
-                <span className="font-medium">Current Balance:</span> ₦
-                {walletBalance.toLocaleString()}
-              </p>
-              <p className="text-sm text-red-600">
-                <span className="font-medium">Shortfall:</span> ₦
-                {(getTotalAmount() - walletBalance).toLocaleString()}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                onClick={() => setShowInsufficientModal(false)}
-                variant="outline"
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  setShowInsufficientModal(false);
-                  router.push("/dashboard/wallet");
-                }}
-                className="flex-1"
-              >
-                Fund Wallet
-              </Button>
-            </div>
-          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setShowInsufficientModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="w-full bg-blue-950"
+              onClick={() => router.push("/dashboard/wallet")}
+            >
+              Fund Wallet
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
@@ -662,71 +523,76 @@ export default function BettingPage() {
 
   if (!authChecked) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <Loader className="h-8 w-8 animate-spin" />
+      <div className="flex justify-center items-center h-screen bg-slate-50">
+        <Loader className="h-10 w-10 animate-spin text-blue-950" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 mt-4">
-      <div>
-        <h1 className="text-3xl font-bold font-headline">
-          Fund Your Betting Accounts
-        </h1>
-        <p className="text-muted-foreground">
-          Top up your favorite betting platforms instantly. Fast, secure, and
-          reliable.
-        </p>
-      </div>
-
-      <Card className="overflow-hidden">
-        <div className="grid md:grid-cols-2">
-          <div className="p-6 md:p-8">
-            <CardHeader className="px-0">
-              <CardTitle>Fund Betting Account</CardTitle>
-              <CardDescription>
-                Select your betting provider and enter your account details.
-              </CardDescription>
-            </CardHeader>
-            <BettingForm user={user} router={router} />
-          </div>
-
-          <div className="bg-muted/50 Image p-8 md:p-12 flex flex-col justify-center">
-            <div
-              className="relative aspect-video mb-8 rounded-lg overflow-hidden bg-cover bg-center bg-no-repeat"
-              style={{
-                backgroundImage: "url('/betting.jpg')",
-              }}
-            />
-            <h3 className="text-xl font-semibold mb-4 text-secondary-foreground">
-              Supported Platforms
-            </h3>
-            <p className="text-muted-foreground mb-4">
-              Fund your accounts on Bet9ja, BetKing, 1xBet, BetWay, MerryBet,
-              NairaBet, and other top platforms instantly.
+    <div className="min-h-screen bg-slate-50/50 py-8 md:py-12 px-4">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="space-y-4">
+          <Link
+            href="/dashboard/tools"
+            className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-blue-950 group"
+          >
+            <ChevronLeft className="w-5 h-5 mr-1 group-hover:-translate-x-1 transition-transform" />{" "}
+            Back to Services
+          </Link>
+          <div className="text-left">
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-blue-950 font-headline">
+              Betting{" "}
+              <span className="text-orange-400 text-nowrap">Funding</span>
+            </h1>
+            <p className="mt-1 text-slate-600">
+              Fund your account across all major platforms instantly.
             </p>
-            <ul className="space-y-2 text-sm">
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Instant account funding</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Secure wallet integration</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Support for 16+ betting platforms</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-primary" />
-                <span>Account verification before funding</span>
-              </li>
-            </ul>
           </div>
         </div>
-      </Card>
+
+        <Card className="overflow-hidden border-none shadow-2xl ring-1 ring-slate-200">
+          <div className="grid md:grid-cols-5 lg:grid-cols-2">
+            <div className="flex flex-col md:col-span-2 lg:col-span-1 bg-blue-950 p-8 md:p-10 justify-center relative overflow-hidden order-first md:order-last">
+              <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-orange-400 rounded-full opacity-10 blur-3xl"></div>
+              <div className="relative z-10 border border-white/10 rounded-2xl overflow-hidden aspect-video shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-t from-blue-950/80 to-transparent z-10"></div>
+                <img
+                  src="/betting.jpg"
+                  alt="Betting Illustration"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2">
+                  <div className="bg-orange-400 p-1.5 rounded-full">
+                    <ShieldCheck className="h-4 w-4 text-blue-950" />
+                  </div>
+                  <span className="text-white font-bold text-sm tracking-wide uppercase">
+                    Secure Payouts
+                  </span>
+                </div>
+              </div>
+              <div className="mt-8 space-y-6 relative z-10">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="h-5 w-5 text-orange-400" />
+                  <span className="text-blue-100 text-sm">
+                    Verified account details
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="h-5 w-5 text-orange-400" />
+                  <span className="text-blue-100 text-sm">
+                    Instant wallet-to-betting credit
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 md:p-10 md:col-span-3 lg:col-span-1 bg-white">
+              <BettingForm user={user} router={router} />
+            </div>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

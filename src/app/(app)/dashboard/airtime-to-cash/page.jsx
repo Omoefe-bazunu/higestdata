@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, onSnapshot, collection } from "firebase/firestore";
 import { firestore } from "@/lib/firebaseConfig";
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -31,6 +32,9 @@ import {
   CheckCircle2,
   XCircle,
   Info,
+  ChevronLeft,
+  Copy,
+  Zap,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
@@ -41,27 +45,31 @@ const NETWORKS = [
   {
     id: "mtn",
     name: "MTN",
-    transferCode: "*600*recipient number*amount*pin#",
-    changePinCode: "*600*default pin*new pin*new pin#",
+    transferCode: "*600*recipient*amount*pin#",
+    changePinCode: "*600*default*new*new#",
+    color: "bg-yellow-400",
   },
   {
     id: "airtel",
     name: "Airtel",
-    transferCode: "Dial *432*1*amount*phone*pin#",
-    changePinCode: "Contact customer care",
+    transferCode: "*432*1*amount*phone*pin#",
+    changePinCode: "Call 111",
+    color: "bg-red-600",
   },
   {
     id: "glo",
     name: "Glo",
-    transferCode: "*131*recipient number*amount*pin#",
-    changePinCode: "*132*default pin*new pin*new pin#",
+    transferCode: "*131*recipient*amount*pin#",
+    changePinCode: "*132*default*new*new#",
     maxAmount: 1000,
+    color: "bg-green-600",
   },
   {
     id: "9mobile",
     name: "9mobile",
     transferCode: "*223*pin*amount*number#",
-    changePinCode: "*247*default pin*new pin#",
+    changePinCode: "*247*default*new#",
+    color: "bg-green-900",
   },
 ];
 
@@ -90,7 +98,6 @@ function AirtimeToCashForm({ user, router }) {
     }
   }, [user]);
 
-  // Timer countdown effect
   useEffect(() => {
     if (timeRemaining > 0) {
       const timer = setInterval(() => {
@@ -110,14 +117,12 @@ function AirtimeToCashForm({ user, router }) {
   const fetchConversionRates = async () => {
     try {
       const response = await fetch(
-        "https://higestdata-proxy.onrender.com/api/airtime-cash/rates"
+        "https://higestdata-proxy.onrender.com/api/airtime-cash/rates",
       );
       const result = await response.json();
-      if (result.success) {
-        setConversionRates(result.data || {});
-      }
+      if (result.success) setConversionRates(result.data || {});
     } catch (error) {
-      console.error("Error fetching conversion rates:", error);
+      console.error(error);
     }
   };
 
@@ -127,7 +132,7 @@ function AirtimeToCashForm({ user, router }) {
         firestore,
         "users",
         user.uid,
-        "transactions"
+        "transactions",
       );
       return onSnapshot(transactionsRef, (snapshot) => {
         const transactions = snapshot.docs
@@ -135,12 +140,12 @@ function AirtimeToCashForm({ user, router }) {
           .filter((txn) => txn.type === "airtime_cash")
           .sort(
             (a, b) =>
-              (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
+              (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0),
           );
         setTransactionHistory(transactions);
       });
     } catch (error) {
-      console.error("Error fetching transaction history:", error);
+      console.error(error);
     }
   };
 
@@ -148,14 +153,9 @@ function AirtimeToCashForm({ user, router }) {
     if (!network) return;
     setIsVerifying(true);
     setServiceData(null);
-
     try {
       const auth = getAuth();
-      const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error("User not authenticated");
-
-      const token = await currentUser.getIdToken(true);
-
+      const token = await auth.currentUser.getIdToken(true);
       const response = await fetch(
         "https://higestdata-proxy.onrender.com/api/airtime-cash/verify",
         {
@@ -165,30 +165,26 @@ function AirtimeToCashForm({ user, router }) {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ network }),
-        }
+        },
       );
-
       const result = await response.json();
-
       if (result.success) {
         setServiceData(result.data);
         toast({
-          title: "Service Available",
-          description: `${network.toUpperCase()} airtime to cash service is available`,
+          title: "Service Verified",
+          description: "You can now proceed with conversion.",
         });
       } else {
-        setServiceData(null);
         toast({
-          title: "Service Unavailable",
-          description: result.error || "Service not available for this network",
+          title: "Offline",
+          description: result.error || "Service currently unavailable.",
           variant: "destructive",
         });
       }
     } catch (error) {
-      setServiceData(null);
       toast({
-        title: "Verification Failed",
-        description: "Unable to verify service availability",
+        title: "Error",
+        description: "Verification failed",
         variant: "destructive",
       });
     } finally {
@@ -196,26 +192,12 @@ function AirtimeToCashForm({ user, router }) {
     }
   };
 
-  const getNetworkConfig = () => {
-    return NETWORKS.find((n) => n.id === network);
-  };
-
-  const getConversionRate = () => {
-    return conversionRates[network]?.rate || 0.7;
-  };
-
-  const getAmountToReceive = () => {
-    const amt = parseFloat(amount) || 0;
-    const rate = getConversionRate();
-    return amt * rate;
-  };
-
-  const getServiceFee = () => {
-    const amt = parseFloat(amount) || 0;
-    const rate = getConversionRate();
-    return amt * (1 - rate);
-  };
-
+  const getNetworkConfig = () => NETWORKS.find((n) => n.id === network);
+  const getConversionRate = () => conversionRates[network]?.rate || 0.7;
+  const getAmountToReceive = () =>
+    (parseFloat(amount) || 0) * getConversionRate();
+  const getServiceFee = () =>
+    (parseFloat(amount) || 0) * (1 - getConversionRate());
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -224,17 +206,14 @@ function AirtimeToCashForm({ user, router }) {
 
   const isSubmitDisabled = () => {
     const amt = parseFloat(amount) || 0;
-    const networkConfig = getNetworkConfig();
-    const maxAmount = networkConfig?.maxAmount || 10000;
-
+    const max = getNetworkConfig()?.maxAmount || 10000;
     return (
       !isAuthenticated ||
       !network ||
       !sender ||
       !senderNumber ||
-      !amt ||
       amt < 100 ||
-      amt > maxAmount ||
+      amt > max ||
       !serviceData ||
       isSubmitting ||
       isVerifying
@@ -243,58 +222,11 @@ function AirtimeToCashForm({ user, router }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!isAuthenticated) {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to continue.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const amt = parseFloat(amount);
-    const networkConfig = getNetworkConfig();
-    const maxAmount = networkConfig?.maxAmount || 10000;
-
-    if (!amt || amt < 100 || amt > maxAmount) {
-      toast({
-        title: "Invalid Amount",
-        description: `Please enter an amount between ₦100 and ₦${maxAmount.toLocaleString()}.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!serviceData) {
-      toast({
-        title: "Service Unavailable",
-        description:
-          "Please verify service availability for this network first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsSubmitting(true);
-
     try {
       const auth = getAuth();
-      const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error("User not authenticated");
-
-      const token = await currentUser.getIdToken(true);
-      const ref = `A2C_${currentUser.uid}_${Date.now()}`;
-
-      const transactionPayload = {
-        network,
-        sender,
-        sendernumber: senderNumber,
-        amount: amt,
-        ref,
-        sitephone: serviceData.phoneNumber, // Use phone from verification
-      };
-
+      const token = await auth.currentUser.getIdToken(true);
+      const ref = `A2C_${auth.currentUser.uid}_${Date.now()}`;
       const response = await fetch(
         "https://higestdata-proxy.onrender.com/api/airtime-cash/convert",
         {
@@ -303,41 +235,36 @@ function AirtimeToCashForm({ user, router }) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(transactionPayload),
-        }
+          body: JSON.stringify({
+            network,
+            sender,
+            sendernumber: senderNumber,
+            amount: parseFloat(amount),
+            ref,
+            sitephone: serviceData.phoneNumber,
+          }),
+        },
       );
-
       const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Conversion failed");
-      }
-
+      if (!response.ok) throw new Error(result.error || "Conversion failed");
       if (result.success) {
         setCurrentTransaction({
-          reference: result.data.reference,
-          amount: amt,
+          ...result.data,
+          amount: parseFloat(amount),
           network: network.toUpperCase(),
           phoneNumber: serviceData.phoneNumber,
-          expectedCredit: result.data.expectedCredit,
         });
         setShowInstructions(true);
-        setTimeRemaining(30 * 60); // 30 minutes
-
+        setTimeRemaining(30 * 60);
         toast({
-          title: "Request Submitted!",
-          description: "Please transfer airtime within 30 minutes",
+          title: "Request Initialized",
+          description: "Follow instructions to complete.",
         });
-
-        // Don't reset form yet - keep it visible with instructions
-      } else {
-        throw new Error(result.error || "Conversion failed");
       }
     } catch (error) {
-      console.error("Conversion error:", error);
       toast({
-        title: "Conversion Failed",
-        description: error.message || "Please try again.",
+        title: "Failed",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -357,61 +284,49 @@ function AirtimeToCashForm({ user, router }) {
   };
 
   return (
-    <>
-      <div className="grid md:grid-cols-2 gap-8">
-        <div className="space-y-6">
-          {!showInstructions ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ArrowRightLeft className="h-5 w-5" />
-                  Convert Airtime to Cash
-                </CardTitle>
-                <CardDescription>
-                  Convert your airtime to cash instantly
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <Alert className="px-4 bg-red-600 text-white">
-                  <AlertTitle>Important Notes</AlertTitle>
-                  <AlertDescription className="text-xs space-y-1">
-                    <p>1. Minimum: ₦100 | Maximum: ₦10,000 (Glo: ₦1,000)</p>
-                    <p>2. Transfer airtime within 30 minutes</p>
-                    <p>
-                      3. Transfer airtime to the number provided before filling
-                      and submitting the form
-                    </p>
-                    <p>
-                      4. Only airtime transfers accepted (no recharge cards)
-                    </p>
-                    <p>5. Ensure you have transfer PIN set up</p>
-                  </AlertDescription>
-                </Alert>
+    <div className="grid md:grid-cols-5 gap-8">
+      <div className="md:col-span-3 space-y-6">
+        {!showInstructions ? (
+          <Card className="border-none shadow-xl ring-1 ring-slate-200 overflow-hidden">
+            <div className="bg-blue-950 p-4 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ArrowRightLeft className="h-5 w-5 text-orange-400" />
+                <h3 className="font-bold">New Conversion</h3>
+              </div>
+              <Badge className="bg-orange-400 text-blue-950 hover:bg-orange-300">
+                Instant Credit
+              </Badge>
+            </div>
+            <CardContent className="p-6 space-y-6">
+              <Alert className="bg-amber-50 border-amber-200 text-amber-900">
+                <Info className="h-4 w-4 text-amber-700" />
+                <AlertDescription className="text-xs font-medium leading-relaxed">
+                  Only airtime transfers are accepted. <strong>Do not</strong>{" "}
+                  buy a recharge card. Transfer within 30 mins of submission.
+                </AlertDescription>
+              </Alert>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="network">Select Network *</Label>
+                    <Label className="text-blue-950 font-semibold">
+                      Network
+                    </Label>
                     <div className="flex gap-2">
                       <Select
                         value={network}
-                        onValueChange={(value) => {
-                          setNetwork(value);
+                        onValueChange={(v) => {
+                          setNetwork(v);
                           setServiceData(null);
                         }}
-                        required
                       >
-                        <SelectTrigger id="network">
-                          <SelectValue placeholder="Choose your network" />
+                        <SelectTrigger className="h-12 border-slate-200">
+                          <SelectValue placeholder="Network" />
                         </SelectTrigger>
                         <SelectContent>
                           {NETWORKS.map((net) => (
                             <SelectItem key={net.id} value={net.id}>
                               {net.name}
-                              {net.maxAmount && (
-                                <span className="text-xs text-muted-foreground ml-2">
-                                  (Max: ₦{net.maxAmount})
-                                </span>
-                              )}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -421,319 +336,272 @@ function AirtimeToCashForm({ user, router }) {
                         onClick={verifyServiceAvailability}
                         disabled={!network || isVerifying}
                         variant="outline"
+                        className="h-12 px-4 border-blue-950 text-blue-950"
                       >
                         {isVerifying ? (
                           <Loader className="h-4 w-4 animate-spin" />
                         ) : (
-                          "Verify"
+                          <Zap className="h-4 w-4" />
                         )}
                       </Button>
                     </div>
-                    {serviceData && (
-                      <Alert className="mt-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        <AlertTitle className="text-green-600">
-                          Service Available
-                        </AlertTitle>
-                        <AlertDescription className="text-xs">
-                          Transfer to:{" "}
-                          <strong>{serviceData.phoneNumber}</strong>
-                        </AlertDescription>
-                      </Alert>
-                    )}
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="sender">Your Full Name *</Label>
+                    <Label className="text-blue-950 font-semibold">
+                      Amount (₦)
+                    </Label>
                     <Input
-                      id="sender"
-                      value={sender}
-                      onChange={(e) => setSender(e.target.value)}
-                      placeholder="Enter your full name"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="senderNumber">Your Phone Number *</Label>
-                    <Input
-                      id="senderNumber"
-                      value={senderNumber}
-                      onChange={(e) => setSenderNumber(e.target.value)}
-                      placeholder="Phone number sending airtime"
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Number you'll transfer airtime from
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="amount">Amount to Convert (₦) *</Label>
-                    <Input
-                      id="amount"
                       type="number"
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
-                      placeholder="Enter amount"
-                      min="100"
-                      max={getNetworkConfig()?.maxAmount || 10000}
+                      placeholder="e.g. 1000"
+                      className="h-12 border-slate-200"
+                    />
+                  </div>
+                </div>
+
+                {serviceData && (
+                  <div className="p-3 bg-green-50 border border-green-100 rounded-lg flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      <span className="text-sm font-bold text-green-700 uppercase tracking-tight">
+                        System Ready
+                      </span>
+                    </div>
+                    <span className="text-xs text-green-600 font-medium">
+                      Recipient: {serviceData.phoneNumber}
+                    </span>
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-blue-950 font-semibold">
+                      Sender's Full Name
+                    </Label>
+                    <Input
+                      value={sender}
+                      onChange={(e) => setSender(e.target.value)}
+                      placeholder="Name on bank account"
+                      className="h-12 border-slate-200"
                       required
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Min: ₦100 | Max: ₦
-                      {(
-                        getNetworkConfig()?.maxAmount || 10000
-                      ).toLocaleString()}
-                    </p>
                   </div>
-
-                  {amount && parseFloat(amount) >= 100 && (
-                    <Card className="bg-muted">
-                      <CardContent className="pt-4 space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span>Airtime to Send:</span>
-                          <span className="font-semibold">
-                            ₦{parseFloat(amount).toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span>Conversion Rate:</span>
-                          <Badge variant="outline">
-                            {(getConversionRate() * 100).toFixed(0)}%
-                          </Badge>
-                        </div>
-                        <div className="flex justify-between text-sm text-red-600">
-                          <span>Service Fee:</span>
-                          <span>-₦{getServiceFee().toLocaleString()}</span>
-                        </div>
-                        <Separator />
-                        <div className="flex justify-between font-bold text-base">
-                          <span>You Receive:</span>
-                          <span className="text-green-600">
-                            ₦{getAmountToReceive().toLocaleString()}
-                          </span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isSubmitDisabled()}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader className="mr-2 h-4 w-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      "Proceed to Convert"
-                    )}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="border-orange-500">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-orange-600">
-                  <Clock className="h-5 w-5" />
-                  Transfer Airtime Now
-                </CardTitle>
-                <CardDescription>
-                  Time remaining:{" "}
-                  <strong className="text-lg">
-                    {formatTime(timeRemaining)}
-                  </strong>
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Alert>
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>Action Required</AlertTitle>
-                  <AlertDescription>
-                    Transfer <strong>₦{currentTransaction?.amount}</strong>{" "}
-                    airtime to{" "}
-                    <strong>{currentTransaction?.phoneNumber}</strong> within 30
-                    minutes
-                  </AlertDescription>
-                </Alert>
-
-                <Card className="bg-blue-50 border-blue-200">
-                  <CardContent className="pt-4">
-                    <h4 className="font-semibold mb-2 flex items-center gap-2">
-                      <Smartphone className="h-4 w-4" />
-                      {currentTransaction?.network} Transfer Instructions
-                    </h4>
-                    <div className="text-sm space-y-2">
-                      <p>
-                        1. Dial:{" "}
-                        <code className="bg-white px-2 py-1 rounded">
-                          {getNetworkConfig()?.transferCode}
-                        </code>
-                      </p>
-                      <p>
-                        2. Enter recipient:{" "}
-                        <strong>{currentTransaction?.phoneNumber}</strong>
-                      </p>
-                      <p>
-                        3. Enter amount:{" "}
-                        <strong>₦{currentTransaction?.amount}</strong>
-                      </p>
-                      <p>4. Enter your transfer PIN</p>
-                      <p>5. Confirm the transfer</p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <div className="space-y-2 text-sm">
-                  <p>
-                    <strong>Expected Credit:</strong> ₦
-                    {currentTransaction?.expectedCredit?.toLocaleString()}
-                  </p>
-                  <p>
-                    <strong>Reference:</strong> {currentTransaction?.reference}
-                  </p>
+                  <div className="space-y-2">
+                    <Label className="text-blue-950 font-semibold">
+                      Sending Phone Number
+                    </Label>
+                    <Input
+                      value={senderNumber}
+                      onChange={(e) => setSenderNumber(e.target.value)}
+                      placeholder="The number having the airtime"
+                      className="h-12 border-slate-200"
+                      required
+                    />
+                  </div>
                 </div>
 
-                <Alert variant="destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription className="text-xs">
-                    Do not close this page. Your wallet will be credited
-                    automatically once we receive the airtime.
-                  </AlertDescription>
-                </Alert>
+                {amount && parseFloat(amount) >= 100 && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 shadow-inner">
+                    <div className="flex justify-between text-xs text-slate-500 font-bold uppercase tracking-widest">
+                      <span>Conversion Rate</span>
+                      <span className="text-blue-950">
+                        {(getConversionRate() * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs text-red-500 font-bold uppercase tracking-widest">
+                      <span>Service Charge</span>
+                      <span>-₦{getServiceFee().toLocaleString()}</span>
+                    </div>
+                    <Separator className="my-2" />
+                    <div className="flex justify-between items-center">
+                      <span className="text-blue-950 font-bold">
+                        You Receive
+                      </span>
+                      <span className="text-2xl font-black text-green-600 tracking-tighter">
+                        ₦{getAmountToReceive().toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <Button
-                  onClick={resetForm}
-                  variant="outline"
-                  className="w-full"
+                  type="submit"
+                  className="w-full h-14 text-lg font-bold bg-blue-950 hover:bg-blue-900 shadow-lg shadow-blue-950/10 active:scale-[0.98] transition-all"
+                  disabled={isSubmitDisabled()}
                 >
-                  Cancel & Start New Conversion
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Transfer Instructions Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>How to Transfer Airtime</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {NETWORKS.map((net) => (
-                <div key={net.id} className="p-3 border rounded-lg space-y-1">
-                  <h4 className="font-semibold">{net.name}</h4>
-                  <p className="text-xs">
-                    <strong>Transfer:</strong> {net.transferCode}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    <strong>Change PIN:</strong> {net.changePinCode}
-                  </p>
-                  {net.maxAmount && (
-                    <Badge variant="secondary" className="text-xs">
-                      Max: ₦{net.maxAmount}
-                    </Badge>
+                  {isSubmitting ? (
+                    <>
+                      <Loader className="mr-2 h-5 w-5 animate-spin" />{" "}
+                      Processing...
+                    </>
+                  ) : (
+                    "Start Conversion"
                   )}
-                </div>
-              ))}
+                </Button>
+              </form>
             </CardContent>
           </Card>
-        </div>
-
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Conversion Rates</CardTitle>
-              <CardDescription>Current rates by network</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {NETWORKS.map((net) => {
-                  const rate = conversionRates[net.id];
-                  return (
-                    <div
-                      key={net.id}
-                      className="flex justify-between items-center p-3 border rounded-lg"
-                    >
-                      <div>
-                        <span className="font-medium">{net.name}</span>
-                        <p className="text-xs text-muted-foreground">
-                          {rate?.charge || 30}% charge
-                        </p>
-                      </div>
-                      <Badge variant={rate?.enabled ? "success" : "secondary"}>
-                        {((rate?.rate || 0.7) * 100).toFixed(0)}% to you
-                      </Badge>
-                    </div>
-                  );
-                })}
+        ) : (
+          <Card className="border-none shadow-2xl overflow-hidden animate-in zoom-in-95">
+            <div className="bg-orange-400 p-6 text-blue-950 flex flex-col items-center text-center">
+              <Clock className="h-10 w-10 mb-2 animate-pulse" />
+              <h2 className="text-2xl font-black uppercase tracking-tighter leading-none">
+                Awaiting Transfer
+              </h2>
+              <p className="text-sm font-bold mt-1 opacity-80 uppercase tracking-widest">
+                Expires in {formatTime(timeRemaining)}
+              </p>
+            </div>
+            <CardContent className="p-6 space-y-6">
+              <div className="bg-blue-950 rounded-2xl p-6 text-white text-center space-y-2 shadow-xl">
+                <p className="text-blue-300 text-xs font-bold uppercase tracking-widest">
+                  Transfer Exactly
+                </p>
+                <p className="text-5xl font-black text-orange-400">
+                  ₦{currentTransaction?.amount}
+                </p>
+                <div className="pt-2">
+                  <p className="text-blue-200 text-xs uppercase font-bold tracking-widest">
+                    To Recipient
+                  </p>
+                  <p className="text-xl font-bold tracking-tight">
+                    {currentTransaction?.phoneNumber}
+                  </p>
+                </div>
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Conversions</CardTitle>
-              <CardDescription>Your transaction history</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {transactionHistory.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p className="text-sm">No conversions yet</p>
+              <div className="space-y-4">
+                <h4 className="text-blue-950 font-bold flex items-center gap-2">
+                  <Smartphone className="h-4 w-4" /> USSD Command
+                </h4>
+                <div className="p-4 bg-slate-100 rounded-xl border-2 border-dashed border-slate-300 relative group">
+                  <code className="text-blue-950 font-mono text-sm break-all">
+                    {getNetworkConfig()?.transferCode}
+                  </code>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-950"
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        getNetworkConfig()?.transferCode,
+                      );
+                      toast({ title: "Copied!" });
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {transactionHistory.slice(0, 10).map((txn) => (
-                    <div
-                      key={txn.id}
-                      className="flex items-start justify-between p-3 border rounded-lg"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">
-                            {txn.network?.toUpperCase()}
-                          </span>
-                          <Badge
-                            variant={
-                              txn.status === "completed"
-                                ? "success"
-                                : txn.status === "processing"
-                                ? "secondary"
-                                : "destructive"
-                            }
-                            className="text-xs"
-                          >
-                            {txn.status}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Sent: ₦{txn.amount?.toLocaleString()} → Received:{" "}
-                          {txn.creditAmount
-                            ? `₦${txn.creditAmount.toLocaleString()}`
-                            : "Pending"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {txn.createdAt?.toDate()?.toLocaleString()}
-                        </p>
-                      </div>
-                      {txn.status === "completed" && (
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      )}
-                      {txn.status === "failed" && (
-                        <XCircle className="h-5 w-5 text-red-600" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+              </div>
+
+              <Alert className="bg-blue-50 border-blue-100 text-blue-900">
+                <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-xs leading-relaxed">
+                  Your wallet will be credited with{" "}
+                  <strong>
+                    ₦{currentTransaction?.expectedCredit?.toLocaleString()}
+                  </strong>{" "}
+                  automatically once the network confirms the transfer.
+                </AlertDescription>
+              </Alert>
+
+              <Button
+                onClick={resetForm}
+                variant="ghost"
+                className="w-full text-slate-400 hover:text-red-600"
+              >
+                Cancel and Start New
+              </Button>
             </CardContent>
           </Card>
-        </div>
+        )}
       </div>
-    </>
+
+      <div className="md:col-span-2 space-y-6">
+        <Card className="border-none shadow-md ring-1 ring-slate-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-blue-950">Live Rates</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {NETWORKS.map((net) => {
+              const rate = conversionRates[net.id];
+              return (
+                <div
+                  key={net.id}
+                  className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2 h-8 rounded-full ${net.color}`} />
+                    <div>
+                      <p className="font-bold text-blue-950 leading-none">
+                        {net.name}
+                      </p>
+                      <p className="text-[10px] text-slate-400 uppercase font-bold mt-1">
+                        {rate?.charge || 30}% Fee
+                      </p>
+                    </div>
+                  </div>
+                  <Badge className="bg-blue-50 text-blue-700 border-blue-100">
+                    {((rate?.rate || 0.7) * 100).toFixed(0)}% Value
+                  </Badge>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-md ring-1 ring-slate-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-blue-950">History</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+            {transactionHistory.length === 0 ? (
+              <div className="text-center py-10 opacity-30 flex flex-col items-center">
+                <Clock className="h-8 w-8 mb-2" />
+                <p className="text-xs font-bold uppercase tracking-widest">
+                  No transactions yet
+                </p>
+              </div>
+            ) : (
+              transactionHistory.slice(0, 5).map((txn) => (
+                <div
+                  key={txn.id}
+                  className="p-3 border-b border-slate-50 last:border-0 group"
+                >
+                  <div className="flex justify-between items-start mb-1">
+                    <p className="font-bold text-blue-950 text-sm tracking-tight">
+                      {txn.network?.toUpperCase()}
+                    </p>
+                    <span
+                      className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
+                        txn.status === "completed"
+                          ? "bg-green-100 text-green-700"
+                          : txn.status === "processing"
+                            ? "bg-orange-100 text-orange-700"
+                            : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {txn.status}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <div className="text-[10px] text-slate-400 font-medium">
+                      <p>{txn.createdAt?.toDate()?.toLocaleDateString()}</p>
+                      <p>Ref: {txn.id.slice(-8)}</p>
+                    </div>
+                    <p className="text-sm font-black text-blue-950">
+                      ₦{txn.amount?.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }
 
@@ -757,22 +625,35 @@ export default function AirtimeToCashPage() {
 
   if (!authChecked) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <Loader className="h-8 w-8 animate-spin" />
+      <div className="flex justify-center items-center h-screen bg-slate-50">
+        <Loader className="h-10 w-10 animate-spin text-blue-950" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 mt-4">
-      <div>
-        <h1 className="text-3xl font-bold font-headline">Airtime to Cash</h1>
-        <p className="text-muted-foreground">
-          Convert your airtime to cash instantly and get credited to your wallet
-        </p>
-      </div>
+    <div className="min-h-screen bg-slate-50/50 py-8 md:py-12 px-4">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="space-y-4">
+          <Link
+            href="/dashboard/tools"
+            className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-blue-950 group"
+          >
+            <ChevronLeft className="w-5 h-5 mr-1 group-hover:-translate-x-1 transition-transform" />{" "}
+            Back to Services
+          </Link>
+          <div className="text-left">
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-blue-950 font-headline">
+              Airtime to <span className="text-orange-400">Cash</span>
+            </h1>
+            <p className="mt-1 text-slate-600">
+              Convert excess airtime into real money in your wallet instantly.
+            </p>
+          </div>
+        </div>
 
-      <AirtimeToCashForm user={user} router={router} />
+        <AirtimeToCashForm user={user} router={router} />
+      </div>
     </div>
   );
 }

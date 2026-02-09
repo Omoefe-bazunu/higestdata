@@ -69,7 +69,7 @@
     --border: 227 10% 25%;
     --input: 227 10% 25%;
     --ring: 227 68% 60%;
-    
+
     --chart-1: 227 68% 60%;
     --chart-2: 278 28% 61%;
     --chart-3: 197 37% 54%;
@@ -85,4 +85,50 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* banner */
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  display: inline-flex;
+  animation: marquee 35s linear infinite;
+}
+
+/* Optional: pause on hover so users can read specific details */
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+@keyframes mesh-gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.mesh-bg {
+  background: linear-gradient(-45deg, #f0f4ff, #ffffff, #fff7ed, #f1f5f9);
+  background-size: 400% 400%;
+  animation: mesh-gradient 15s ease infinite;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
 }

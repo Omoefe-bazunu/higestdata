@@ -17,7 +17,7 @@ export default function Header() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 bg-blue-950 text-white border-b border-gray-300">
+      <header className="fixed top-10 left-0 right-0 z-50 bg-blue-950 text-white border-b border-gray-300">
         <div className="mx-auto px-4 py-5" style={{ maxWidth: "1280px" }}>
           <div className="flex items-center justify-between">
             {/* Logo */}
@@ -220,9 +220,6 @@ export default function Header() {
           </div>
         )}
       </header>
-
-      {/* Spacer for fixed header */}
-      {/* <div style={{ height: "88px" }}></div> */}
     </>
   );
 }

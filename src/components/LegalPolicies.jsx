@@ -17,7 +17,7 @@ export default function LegalPolicies() {
   return (
     <>
       <section className=" text-center px-6 shadow-sm bg-blue-950">
-        <div className="max-w-7xl mx-auto px-6 lg:px-12 py-20">
+        <div className="max-w-7xl mx-auto px-6 lg:px-12 py-28">
           <motion.div
             initial={{ opacity: 0, y: -30 }}
             whileInView={{ opacity: 1, y: 0 }}

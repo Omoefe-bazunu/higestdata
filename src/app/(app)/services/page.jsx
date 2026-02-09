@@ -86,7 +86,7 @@ export default function Services() {
   return (
     <>
       <section className="bg-[#eef0f3] text-blue-950 overflow-x-hidden">
-        <div className="max-w-7xl mx-auto px-6 lg:px-12 py-20">
+        <div className="max-w-7xl mx-auto px-6 lg:px-12 py-28">
           {/* Section Header */}
           <motion.div
             initial={{ opacity: 0, y: -30 }}

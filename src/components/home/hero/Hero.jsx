@@ -6,7 +6,7 @@ import Link from "next/link";
 export default function Hero() {
   return (
     <section
-      className="h-fit text-center text-white py-20"
+      className="h-fit text-center text-white pt-32 pb-20 relative overflow-hidden"
       style={{
         backgroundImage: `url('/herobg1.jpg')`,
         backgroundSize: "cover",
