@@ -235,12 +235,15 @@ export default function GiftCardsPage() {
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // --- 6. Submission Handler ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!isValid || !user) return;
     setIsSubmitting(true);
     setFormState({});
+
     try {
+      // Create Base Record
       const submissionData = {
         userId: user.uid,
         giftCardId: selectedCardId,
@@ -257,20 +260,30 @@ export default function GiftCardsPage() {
         imageCount: cardImages.length,
         imageUrls: [],
       };
+
       const docRef = await addDoc(
         collection(firestore, "giftCardSubmissions"),
         submissionData,
       );
+
+      // Upload Images
       const uploadPromises = cardImages.map(async (file, i) => {
-        const storagePath = `gift-cards/${user.uid}/${docRef.id}/${Date.now()}_${i}`;
+        const storagePath = `gift-cards/${user.uid}/${
+          docRef.id
+        }/${Date.now()}_${i}`;
         const storageRef = ref(storage, storagePath);
         const snap = await uploadBytes(storageRef, file);
         return getDownloadURL(snap.ref);
       });
+
       const imageUrls = await Promise.all(uploadPromises);
+
+      // Update Record with Images
       await updateDoc(doc(firestore, "giftCardSubmissions", docRef.id), {
         imageUrls,
       });
+
+      // Create Transaction Record
       await addDoc(collection(firestore, "users", user.uid, "transactions"), {
         userId: user.uid,
         description: `Sold ${selectedCardData.name} ${selectedCurrency}${faceValue}`,
@@ -282,6 +295,21 @@ export default function GiftCardsPage() {
         relatedSubmissionId: docRef.id,
         relatedSubmissionType: "giftCard",
       });
+
+      // Send Notification (Fire & Forget)
+      const userDoc = await getDoc(doc(firestore, "users", user.uid));
+      fetch("/api/giftcard-notify-admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...submissionData,
+          submissionId: docRef.id,
+          userEmail: userDoc.data()?.email,
+          imageCount: imageUrls.length,
+        }),
+      }).catch((err) => console.error("Notify Error", err));
+
+      // Success Reset
       setFormState({
         message:
           "Trade submitted successfully! Your order will be processed shortly.",
