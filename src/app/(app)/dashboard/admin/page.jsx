@@ -51,6 +51,9 @@ import AdminUsersManagement from "@/components/admin/UsersData";
 import AirtimeToCashRatesPage from "@/components/admin/airtime-to-cash-rates-tab";
 import BulkSmsRate from "@/components/admin/bulksms-rates-tab";
 import SmmAdmin from "@/components/admin/smm-admin";
+import DeletionRequestsPage from "@/components/admin/DeletionRequests";
+import WalletAdjustment from "@/components/admin/WalletAdjustment";
+import BannerManager from "@/components/admin/BannerManager";
 
 export default function AdminDashboard() {
   const [activeMenu, setActiveMenu] = useState("transactions");
@@ -91,6 +94,9 @@ export default function AdminDashboard() {
     { id: "pending-requests", label: "Pending", icon: Clock },
     { id: "bulk-email", label: "Bulk Email", icon: Mail },
     { id: "smm-rates", label: "SMM Admin", icon: Globe },
+    { id: "deletion-requests", label: "Deletion Requests", icon: ShieldAlert },
+    { id: "wallet-adjustment", label: "Wallet Adjustment", icon: Settings },
+    { id: "banner-manager", label: "Banner Manager", icon: LayoutDashboard },
   ];
 
   const handleAdminAuth = async (e) => {
@@ -273,6 +279,9 @@ export default function AdminDashboard() {
               {activeMenu === "pending-requests" && <PendingRequestsTab />}
               {activeMenu === "bulk-email" && <NewsletterSender />}
               {activeMenu === "smm-rates" && <SmmAdmin userToken={userToken} />}
+              {activeMenu === "deletion-requests" && <DeletionRequestsPage />}
+              {activeMenu === "wallet-adjustment" && <WalletAdjustment />}
+              {activeMenu === "banner-manager" && <BannerManager />}
             </div>
           </main>
         </div>

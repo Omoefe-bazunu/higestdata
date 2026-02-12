@@ -25,18 +25,19 @@ export default function RootLayout({ children }) {
           <Toaster />
         </AuthProviderWrapper>
 
-        {/* ✅ Smartsupp Live Chat Integration */}
-        <Script id="smartsupp-chat" strategy="afterInteractive">
+        {/* Tawk.to Live Chat */}
+        <Script id="tawkto-chat" strategy="afterInteractive">
           {`
-            var _smartsupp = _smartsupp || {};
-            _smartsupp.key = '6456ce9dd4d0875e98086283706bb7147cb179d3';
-            window.smartsupp||(function(d) {
-              var s,c,o=smartsupp=function(){ o._.push(arguments)};o._=[];
-              s=d.getElementsByTagName('script')[0];c=d.createElement('script');
-              c.type='text/javascript';c.charset='utf-8';c.async=true;
-              c.src='https://www.smartsuppchat.com/loader.js?';s.parentNode.insertBefore(c,s);
-            })(document);
-          `}
+    var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
+    (function(){
+      var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
+      s1.async=true;
+      s1.src='https://embed.tawk.to/698bd77f813e191c30f8b1f4/default';
+      s1.charset='UTF-8';
+      s1.setAttribute('crossorigin','*');
+      s0.parentNode.insertBefore(s1,s0);
+    })();
+  `}
         </Script>
       </body>
     </html>

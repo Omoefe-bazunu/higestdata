@@ -14,7 +14,6 @@ import {
   XCircle,
   Upload,
   Key,
-  LogOut,
   User as UserIcon,
   Mail,
   Phone,
@@ -37,6 +36,10 @@ export default function UserProfile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleteStatus, setDeleteStatus] = useState(null); // null | 'pending' | 'approved' | 'rejected'
+  const [deleteRejectedReason, setDeleteRejectedReason] = useState("");
+  const [submitingDelete, setSubmitingDelete] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -51,6 +54,11 @@ export default function UserProfile() {
           setUserData(data);
           setName(data.name || "");
           setPhoneNumber(data.phoneNumber || "");
+          if (data.deletionRequest) {
+            setDeleteStatus(data.deletionRequest.status);
+            setDeleteReason(data.deletionRequest.reason || "");
+            setDeleteRejectedReason(data.deletionRequest.rejectedReason || "");
+          }
         }
       } catch (error) {
         console.error("Error fetching user data:", error);
@@ -101,6 +109,38 @@ export default function UserProfile() {
     }
   };
 
+  const handleRequestDeletion = async (e) => {
+    e.preventDefault();
+    if (!deleteReason.trim()) return;
+    setSubmitingDelete(true);
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/account/request-deletion`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${await user.getIdToken()}`,
+          },
+          body: JSON.stringify({ reason: deleteReason }),
+        },
+      );
+      const data = await res.json();
+      if (data.success) {
+        setDeleteStatus("pending");
+        toast.success(
+          "Deletion request submitted. You'll be notified of the decision.",
+        );
+      } else {
+        toast.error(data.error || "Failed to submit request");
+      }
+    } catch (err) {
+      toast.error("Something went wrong");
+    } finally {
+      setSubmitingDelete(false);
+    }
+  };
+
   const handlePasswordReset = async () => {
     if (!user?.email) return;
 
@@ -146,16 +186,6 @@ export default function UserProfile() {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await auth.signOut();
-      router.push("/");
-    } catch (error) {
-      console.error("Error logging out:", error);
-      toast.error("Failed to logout");
-    }
-  };
-
   if (loading) {
     return (
       <section className="flex flex-col items-center justify-center min-h-screen bg-white py-20">
@@ -183,8 +213,8 @@ export default function UserProfile() {
     >
       <div className="max-w-7xl mx-auto">
         {/* Header Section */}
-        <div className="bg-gradient-to-r from-blue-950 to-blue-800 rounded-2xl p-8 mb-10 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="text-center md:text-left">
+        <div className="bg-gradient-to-r from-blue-950 to-blue-800 rounded-2xl p-8 mb-10 shadow-xl flex flex-row items-center justify-center">
+          <div className="text-center ">
             <h1 className="text-3xl md:text-4xl font-extrabold text-white">
               My Profile
             </h1>
@@ -192,13 +222,13 @@ export default function UserProfile() {
               Manage your account and verification
             </p>
           </div>
-          <button
+          {/* <button
             onClick={handleLogout}
             className="flex items-center gap-2 px-6 py-3 bg-white text-gray-700 hover:bg-red-500 hover:text-white rounded-xl transition-all font-bold shadow-lg"
           >
             <LogOut className="w-5 h-5" />
             <span>Logout</span>
-          </button>
+          </button> */}
         </div>
 
         {/* Main Grid: User Info & Verification Status */}
@@ -419,6 +449,7 @@ export default function UserProfile() {
             </div>
 
             {/* Name */}
+            {/* Name */}
             <form onSubmit={handleUpdateName} className="space-y-2">
               <Label
                 htmlFor="name"
@@ -427,7 +458,9 @@ export default function UserProfile() {
                 <UserIcon className="w-4 h-4 text-blue-900" />
                 Full Name
               </Label>
-              <div className="flex gap-2">
+              <div
+                className={`${userData.kycStatus !== "approved" ? "pointer-events-none opacity-70" : ""} flex gap-2`}
+              >
                 <Input
                   id="name"
                   value={name}
@@ -438,12 +471,21 @@ export default function UserProfile() {
                 />
                 <Button
                   type="submit"
-                  disabled={saving || name === userData.name}
+                  disabled={
+                    saving ||
+                    name === userData.name ||
+                    userData.kycStatus !== "approved"
+                  }
                   className="bg-blue-900 hover:bg-blue-800 text-white"
                 >
                   {saving ? "Saving..." : "Save"}
                 </Button>
               </div>
+              {userData.kycStatus !== "approved" && (
+                <p className="text-xs text-gray-400">
+                  Name can only be edited after KYC approval.
+                </p>
+              )}
             </form>
 
             {/* Phone Number */}
@@ -476,6 +518,82 @@ export default function UserProfile() {
             </form>
           </div>
         </div>
+      </div>
+      {/* Data Deletion Request Section */}
+      <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg p-8 border border-red-100 mb-12">
+        <h3 className="text-2xl font-black text-gray-900 mb-2">
+          Request Account Deletion
+        </h3>
+        <p className="text-gray-500 text-sm mb-6">
+          Submit a request to delete your account and all associated data. An
+          admin will review your request.
+        </p>
+
+        {deleteStatus === "pending" && (
+          <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-4">
+            <Clock className="text-yellow-500 w-5 h-5 shrink-0" />
+            <div>
+              <p className="font-bold text-yellow-800">Request Pending</p>
+              <p className="text-sm text-yellow-600">
+                Your deletion request is under review. You will be notified once
+                a decision is made.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {deleteStatus === "approved" && (
+          <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+            <CheckCircle className="text-green-500 w-5 h-5 shrink-0" />
+            <div>
+              <p className="font-bold text-green-800">Request Approved</p>
+              <p className="text-sm text-green-600">
+                Your account deletion has been approved and will be processed
+                shortly.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {deleteStatus === "rejected" && (
+          <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+            <XCircle className="text-red-500 w-5 h-5 shrink-0" />
+            <div>
+              <p className="font-bold text-red-800">Request Rejected</p>
+              <p className="text-sm text-red-600">
+                Reason: {deleteRejectedReason || "No reason provided."}
+              </p>
+              <p className="text-xs text-red-400 mt-1">
+                You may submit a new request below.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {(!deleteStatus || deleteStatus === "rejected") && (
+          <form onSubmit={handleRequestDeletion} className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-gray-700 font-semibold">
+                Reason for Deletion
+              </Label>
+              <textarea
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder="Please explain why you want your account deleted..."
+                required
+                rows={4}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"
+              />
+            </div>
+            <Button
+              type="submit"
+              disabled={submitingDelete || !deleteReason.trim()}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold"
+            >
+              {submitingDelete ? "Submitting..." : "Submit Deletion Request"}
+            </Button>
+          </form>
+        )}
       </div>
     </div>
   );

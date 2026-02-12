@@ -50,11 +50,14 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { ExternalLink } from "lucide-react";
 
 export default function GiftCardsPage() {
   const [giftCards, setGiftCards] = useState([]);
   const [authChecked, setAuthChecked] = useState(false);
   const [user, setUser] = useState(null);
+  const [banners, setBanners] = useState([]);
+  const [currentBanner, setCurrentBanner] = useState(0);
 
   const [selectedCardId, setSelectedCardId] = useState("");
   const [selectedType, setSelectedType] = useState("");
@@ -127,6 +130,25 @@ export default function GiftCardsPage() {
     }
     fetchData();
   }, [authChecked, user, toast]);
+
+  //Get Banners
+  useEffect(() => {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/banners`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success) setBanners(data.data.filter((b) => b.active));
+      })
+      .catch(() => {});
+  }, []);
+
+  // Auto-rotate banners
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentBanner((prev) => (prev + 1) % banners.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [banners.length]);
 
   const selectedCardData = useMemo(
     () => giftCards.find((c) => c.id === selectedCardId),
@@ -358,6 +380,56 @@ export default function GiftCardsPage() {
             </p>
           </div>
         </div>
+        {/* Banner Section */}
+        {banners.length > 0 && (
+          <div className="relative w-full rounded-2xl overflow-hidden shadow-lg">
+            {/* Banner Image */}
+
+            <a
+              href={banners[currentBanner]?.ctaLink || "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block relative"
+            >
+              <img
+                src={banners[currentBanner]?.imageUrl}
+                alt="Promotion"
+                className="w-full h-[120px] sm:h-[160px] md:h-[200px] object-cover transition-all duration-500"
+              />
+              {/* CTA Button overlay */}
+              <div className="absolute bottom-4 right-4">
+                <span
+                  style={{
+                    backgroundColor:
+                      banners[currentBanner]?.ctaColor || "#f97316",
+                    color: banners[currentBanner]?.ctaTextColor || "#ffffff",
+                  }}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl font-bold text-sm shadow-lg"
+                >
+                  {banners[currentBanner]?.ctaText || "Learn More"}
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </span>
+              </div>
+            </a>
+
+            {/* Dots navigation */}
+            {banners.length > 1 && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                {banners.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentBanner(i)}
+                    className={`rounded-full transition-all ${
+                      i === currentBanner
+                        ? "bg-white w-4 h-2"
+                        : "bg-white/50 w-2 h-2"
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="grid lg:grid-cols-5 gap-8">
           {/* Main Form Section */}
