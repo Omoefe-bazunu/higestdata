@@ -67,7 +67,7 @@ export default function AdminDashboard() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [userToken, setUserToken] = useState("");
 
-  const { user, logout, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -256,13 +256,6 @@ export default function AdminDashboard() {
                 );
               })}
             </nav>
-
-            <button
-              onClick={logout}
-              className="flex items-center gap-3 px-4 py-4 text-red-500 font-bold text-[10px] uppercase tracking-widest mt-auto border-t border-slate-100 hover:bg-red-50 transition-all"
-            >
-              <LogOut size={18} /> Sign Out
-            </button>
           </aside>
 
           {/* MAIN CONTENT */}

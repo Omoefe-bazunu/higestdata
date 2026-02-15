@@ -6,8 +6,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || "/icon-192x192.png",
-      badge: data.badge || "/icon-192x192.png",
+      icon: data.icon || "/logow.png",
+      badge: "/logow.png",
       data: { url: data.url || "/" },
       vibrate: [200, 100, 200],
     }),
@@ -22,7 +22,6 @@ self.addEventListener("notificationclick", (event) => {
     clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clientList) => {
-        // If app is already open, focus it
         for (const client of clientList) {
           if (client.url.includes(self.location.origin) && "focus" in client) {
             client.focus();
@@ -30,7 +29,6 @@ self.addEventListener("notificationclick", (event) => {
             return;
           }
         }
-        // Otherwise open new tab
         if (clients.openWindow) return clients.openWindow(url);
       }),
   );
