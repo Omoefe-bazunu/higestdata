@@ -39,6 +39,15 @@ export default function RootLayout({ children }) {
     })();
   `}
         </Script>
+        <Script id="register-sw" strategy="afterInteractive">
+          {`
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('SW registered'))
+        .catch(err => console.error('SW error:', err));
+    }
+  `}
+        </Script>
       </body>
     </html>
   );

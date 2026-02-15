@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import NotificationBell from "../NotificationBell";
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -80,6 +81,7 @@ export default function Header() {
             <div className="hidden md:flex items-center gap-3">
               {user ? (
                 <>
+                  <NotificationBell />
                   <button
                     onClick={() => router.push("/dashboard")}
                     className="px-8 py-2 bg-orange-500 text-white rounded-full hover:bg-orange-600 transition-colors"
@@ -174,6 +176,9 @@ export default function Header() {
               <div className="pt-4 border-t border-gray-700 space-y-3">
                 {user ? (
                   <>
+                    <div className="flex justify-start">
+                      <NotificationBell />
+                    </div>
                     <button
                       onClick={() => {
                         router.push("/dashboard");

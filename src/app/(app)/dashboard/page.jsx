@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import WithdrawalModal from "@/components/WithdrawalModal";
 import FundingModal from "@/components/FundingModal";
+import { Bell } from "lucide-react";
 
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -75,6 +76,8 @@ export default function DashboardPage() {
     };
     fetchUserData();
   }, [user]);
+
+  const handleNotifications = () => router.push("/dashboard/notifications");
 
   const recheckVerification = async () => {
     if (!user) return;
@@ -240,7 +243,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div
               onClick={handleBusinessTools}
               className="bg-white/95 rounded-2xl shadow-lg p-6 flex flex-col items-start justify-between hover:border-blue-900 border-2 border-transparent transition-all duration-300 cursor-pointer group"
@@ -296,6 +299,25 @@ export default function DashboardPage() {
               </div>
               <button className="w-full bg-gray-100 text-blue-900 font-bold py-3 rounded-xl group-hover:bg-blue-900 group-hover:text-white transition-all">
                 View Transactions
+              </button>
+            </div>
+            <div
+              onClick={handleNotifications}
+              className="bg-white/95 rounded-2xl shadow-lg p-6 flex flex-col items-start justify-between hover:border-blue-900 border-2 border-transparent transition-all duration-300 cursor-pointer group"
+            >
+              <div className="mb-6">
+                <div className="bg-orange-100 w-14 h-14 rounded-xl flex items-center justify-center mb-4 group-hover:bg-orange-400 transition-colors">
+                  <Bell className="w-8 h-8 text-orange-400 group-hover:text-white" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-800">
+                  Notifications
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  View announcements and updates from Highest Data.
+                </p>
+              </div>
+              <button className="w-full bg-gray-100 text-orange-400 font-bold py-3 rounded-xl group-hover:bg-orange-400 group-hover:text-white transition-all">
+                View Notifications
               </button>
             </div>
           </div>

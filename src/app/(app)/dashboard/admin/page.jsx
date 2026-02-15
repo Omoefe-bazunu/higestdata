@@ -24,6 +24,7 @@ import {
   Loader2,
   Clock,
   Settings,
+  BellIcon,
 } from "lucide-react";
 
 import {
@@ -54,6 +55,7 @@ import SmmAdmin from "@/components/admin/smm-admin";
 import DeletionRequestsPage from "@/components/admin/DeletionRequests";
 import WalletAdjustment from "@/components/admin/WalletAdjustment";
 import BannerManager from "@/components/admin/BannerManager";
+import PushNotificationSender from "@/components/admin/pushNotificationSender";
 
 export default function AdminDashboard() {
   const [activeMenu, setActiveMenu] = useState("transactions");
@@ -97,6 +99,12 @@ export default function AdminDashboard() {
     { id: "deletion-requests", label: "Deletion Requests", icon: ShieldAlert },
     { id: "wallet-adjustment", label: "Wallet Adjustment", icon: Settings },
     { id: "banner-manager", label: "Banner Manager", icon: LayoutDashboard },
+    {
+      id: "push-notifications",
+      label: "Push Notifications",
+      icon: BellIcon,
+      component: PushNotificationSender,
+    },
   ];
 
   const handleAdminAuth = async (e) => {
@@ -282,6 +290,9 @@ export default function AdminDashboard() {
               {activeMenu === "deletion-requests" && <DeletionRequestsPage />}
               {activeMenu === "wallet-adjustment" && <WalletAdjustment />}
               {activeMenu === "banner-manager" && <BannerManager />}
+              {activeMenu === "push-notifications" && (
+                <PushNotificationSender />
+              )}
             </div>
           </main>
         </div>
